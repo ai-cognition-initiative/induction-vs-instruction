@@ -1,0 +1,7 @@
+.claude/skills/*
+.env
+**/__pycache__/
+.venv/
+logs/
+*.pyc
+*.cpython-313.pyc
