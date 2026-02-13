@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import argparse
 
+import numpy as np
 import pandas as pd
-from inspect_ai.analysis import evals_df
+from inspect_ai.analysis import evals_df, samples_df
 
 
 def add_pairing_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -11,7 +12,7 @@ def add_pairing_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
 
-    df["condition_pair"] = df["task_arg_condition"].map(
+    df["condition_pair"] = df["metadata_condition"].map(
         {
             "value_pattern": "value",
             "value_target": "value",
@@ -28,7 +29,14 @@ def add_pairing_columns(df: pd.DataFrame) -> pd.DataFrame:
         "factual_target": False,
     }
 
-    df["instruction_aligned"] = df["task_arg_condition"].map(condition_to_aligned)
+    df["instruction_aligned"] = df["metadata_condition"].map(condition_to_aligned)
+
+    # For neutral conditions, use hint as the factor (only if hint is boolean)
+    neutral_mask = df["condition_pair"] == "neutral"
+    hint_is_bool = df["metadata_hint"].apply(lambda x: isinstance(x, (bool, np.bool_)))
+    df.loc[neutral_mask & hint_is_bool, "instruction_aligned"] = df.loc[
+        neutral_mask & hint_is_bool, "metadata_hint"
+    ]
 
     return df
 
@@ -36,13 +44,47 @@ def add_pairing_columns(df: pd.DataFrame) -> pd.DataFrame:
 def prepare_data(log_dir: str, output_path: str):
     """Prepare eval logs for visualization."""
 
-    df = evals_df(log_dir)
+    samples = samples_df(log_dir)
+    evals = evals_df(log_dir)
 
+    # Join samples with evals to get model
+    df = samples.merge(evals[["eval_id", "model"]], on="eval_id")
+
+    # Add pairing columns first
     df = add_pairing_columns(df)
 
-    df.to_parquet(output_path)
+    # Drop rows where condition_pair is NA (unknown conditions like token_pattern)
+    df = df.dropna(subset=["condition_pair"])
 
-    print(f"Saved {len(df)} rows to {output_path}")
+    # Drop rows where instruction_aligned is NA (neutral without boolean hint)
+    df = df.dropna(subset=["instruction_aligned"])
+
+    # Drop rows where score_pattern_match is NA (uses different scorer)
+    df = df[df["score_pattern_match"].notna()]
+
+    # Compute score as binary: I (instruction) = 1, C (pattern) = 0
+    df["score_binary"] = (df["score_pattern_match"] == "I").astype(int)
+
+    # Aggregate by model, condition_pair, n_turns, instruction_aligned
+    agg = (
+        df.groupby(
+            ["model", "condition_pair", "metadata_n_turns", "instruction_aligned"]
+        )
+        .agg(score_value=("score_binary", "mean"), count=("score_binary", "count"))
+        .reset_index()
+    )
+
+    # Compute binomial standard error: sqrt(p*(1-p)/n)
+    agg["score_stderr"] = np.sqrt(
+        agg["score_value"] * (1 - agg["score_value"]) / agg["count"]
+    )
+
+    # Rename for consistency with inspect_viz expectations
+    agg = agg.rename(columns={"metadata_n_turns": "task_arg_n_turns"})
+
+    agg.to_parquet(output_path)
+
+    print(f"Saved {len(agg)} rows to {output_path}")
 
 
 if __name__ == "__main__":
