@@ -1,14 +1,12 @@
-# Reporting
+# Reporting commands
 # Generate visualization notebooks for eval logs
 
-# List available log folders
+[group("reporting")]
 logs:
     @echo "Available log folders:"
     @ls -1 logs/ 2>/dev/null || echo "  (none)"
 
-# Generate report for a log folder
-# Usage: just report <folder> [protocol]
-# Example: just report olmo-32b-static behavioral
+[group("reporting")]
 report folder protocol="behavioral":
     @echo "Generating report for logs/{{folder}} (protocol: {{protocol}})"
     @mkdir -p outputs/viz outputs/notebooks/{{folder}}
@@ -21,17 +19,17 @@ report folder protocol="behavioral":
         -P data_path:outputs/viz/{{folder}}.parquet
     @echo "Report generated at outputs/notebooks/{{folder}}/"
 
-# Preview a report
+[group("reporting")]
 preview folder protocol="behavioral":
     @quarto preview notebooks/{{protocol}}_analysis.qmd \
         --execute \
         -P data_path:outputs/viz/{{folder}}.parquet
 
-# Publish report to GitHub Pages
+[group("reporting")]
 publish folder protocol="behavioral":
     quarto publish gh-pages outputs/notebooks/{{folder}}/{{protocol}}_analysis.html
 
-# Clean generated reports
+[group("reporting")]
 clean-reports:
     rm -rf outputs/notebooks/*
     rm -rf outputs/viz/*
