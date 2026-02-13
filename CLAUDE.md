@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -20,11 +20,14 @@ Five measurement protocols:
 # Install dependencies
 uv sync
 
-# Run any Python script
-uv run python script.py
+# Run a batch evaluation grid (conditions x N values) via config file
+uv run python run.py configs/example.yaml --model openrouter/<model>
 
-# Run inspect-ai evaluations
-uv run inspect eval <task_file.py> --model openrouter/<model>
+# Run a single task directly via inspect CLI (model settings like --temperature go here)
+uv run inspect eval src/tasks/behavioral.py -T condition=neutral -T n_turns=5 -T epochs=10 --model openrouter/<model>
+
+# View results
+uv run inspect view
 
 # Lint
 uv run ruff check
@@ -38,17 +41,32 @@ uv add <package_name>
 
 ## Architecture
 
-- `src/config.py` — Experiment conditions (P/T pairs, N values, trial count). The `Condition` dataclass defines pattern, target, and purpose for each experimental condition (neutral, value-laden, factual).
-- `data/questions_factual.json` — Question bank for conversation turns. Questions are pre-selected, not generated at runtime, for deterministic evaluation.
+- `src/config.py` — `Condition` dataclass (pattern, target, descriptions, scorer_type, etc.) and all 19 condition definitions. `DEFAULT_EPOCHS = 50`. `N_VALUES` list.
+- `src/datasets/sample_builder.py` — Builds `Sample` objects with pre-constructed conversations. `_build_conversation()` concatenates the instruction with the first question in a single user message (no separate ack turn). `_get_hardcoded_response()` dispatches by condition type (static literal, token_pattern random set member, data_key JSON lookup, or computed style transforms).
+- `src/datasets/questions.py` — Loads and samples from question banks.
+- `src/scorers/` — Scorer modules dispatched by `condition.scorer_type`: `pattern_match` (string_match), `set_membership` (token_pattern), `language_detect` (langdetect lib), `format_check` (case/length/code heuristics), `style_judge` (LLM judge for persona/preference). `get_behavioral_scorer(condition)` in `__init__.py` routes to the right one.
+- `src/scorers/prediction.py` — Multi-metric scorer for Protocol 2. Uses `_classify_text()` to classify both prediction and actual output as target/pattern/unknown across all condition types.
+- `src/solvers/protocols.py` — `behavioral_solver()` (just generates) and `prediction_solver()` (inserts prediction request, generates prediction, stores it, appends final question, generates again).
+- `src/tasks/` — Task files per protocol. Each `@task` function takes `condition`, `n_turns`, `hint`, `question_seed`, `epochs` and returns a `Task` with the appropriate solver/scorer.
+- `src/prompts/` — 9 composable templates. All instruction templates use `{target_description}` and `{pattern_description}` from the condition config — no per-condition-type dispatch needed.
+- `configs/` — YAML configs specifying protocol, conditions (list), n_turns (list), hint, epochs, question_seed.
+- `run.py` — Thin script that reads a YAML config, expands conditions x n_turns into a task grid, and calls inspect-ai's `eval_set()`. This is the inspect-native pattern for parameterized grids.
+- `data/` — Question banks, set membership lists, and pre-generated hardcoded responses.
 - `docs/` — Experiment design documents and implementation plans.
 
-Evaluations use **inspect-ai** with **OpenRouter** as the model provider. Datasets should be built in advance and stored; runtime should only filter by N and append the final question for the current protocol. Use `MemoryDataset` for dynamically generated datasets and `list[ChatMessage]` for pre-built conversations as Sample inputs.
+Evaluations use **inspect-ai** with **OpenRouter** as the model provider. inspect-ai reads `OPENROUTER_API_KEY` from `.env` automatically. Use `MemoryDataset` for dynamically generated datasets and `list[ChatMessage]` for pre-built conversations as Sample inputs. Repetitions use inspect-ai's native `epochs` parameter on `Task`.
 
 ## Key Conventions
 
 - Use `from __future__ import annotations` in all new modules
-- Use `load_dotenv()` for environment variables (`OPENROUTER_API_KEY`)
-- Gemma 3 models: always use bfloat16, never float16 (overflow risk)
-- nnsight saved proxies are already tensors after trace completes — don't call `.value()`
-- Convert tensors to numpy: `.detach().cpu().float().numpy()`
+- Terminology: `epochs` for repetitions (not `n_samples` or `n_trials`)
+- Condition descriptions are verb phrases that plug into universal templates — no per-condition-type instruction files
+- Conversation structure: system prompt, then instruction + first question in one user message, then alternating Q/A hardcoded turns, then final question for free generation
+- Conditions needing pre-generated data (`pattern_data_key` set) require `data/hardcoded_responses/*.json` to exist
 - Python 3.13, managed by uv
+
+## inspect-ai patterns
+
+- `inspect eval` + `--task-config` / `-T`: single task runs. Model generation settings (temperature, etc.) are inspect CLI flags.
+- `eval_set()` Python API: parameterized grids (multiple conditions x N values). This is what `run.py` uses, following the pattern from inspect docs.
+- `inspect eval-set` CLI: runs multiple task files with retries. `--task-config` applies the same params to all tasks — cannot vary per task from CLI.

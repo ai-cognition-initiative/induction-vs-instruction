@@ -46,7 +46,9 @@
       "Bash(git add:*)",
       "mcp__inspect-ai-docs__list_doc_sources",
       "mcp__inspect-ai-docs__fetch_docs",
-      "Bash(uv run ruff check:*)"
+      "Bash(uv run ruff check:*)",
+      "Bash(uv run inspect eval --help:*)",
+      "Bash(uv run:*)"
     ],
     "deny": [],
     "ask": []
