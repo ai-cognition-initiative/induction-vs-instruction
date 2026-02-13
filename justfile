@@ -1,6 +1,9 @@
 # Reporting commands
 # Generate visualization notebooks for eval logs
 
+# Convert Windows backslashes to forward slashes for shell compatibility
+root := replace(justfile_directory(), "\\", "/")
+
 [group("reporting")]
 logs:
     @echo "Available log folders:"
@@ -14,16 +17,16 @@ report folder protocol="behavioral":
         --log-dir logs/{{folder}} \
         --output outputs/viz/{{folder}}.parquet
     @quarto render notebooks/{{protocol}}_analysis.qmd \
-        --output-dir outputs/notebooks/{{folder}} \
+        --output-dir {{root}}/outputs/notebooks/{{folder}} \
         --execute \
-        -P data_path:outputs/viz/{{folder}}.parquet
+        -P data_path:{{root}}/outputs/viz/{{folder}}.parquet
     @echo "Report generated at outputs/notebooks/{{folder}}/"
 
 [group("reporting")]
 preview folder protocol="behavioral":
     @quarto preview notebooks/{{protocol}}_analysis.qmd \
         --execute \
-        -P data_path:outputs/viz/{{folder}}.parquet
+        -P data_path:{{root}}/outputs/viz/{{folder}}.parquet
 
 [group("reporting")]
 publish folder protocol="behavioral":
