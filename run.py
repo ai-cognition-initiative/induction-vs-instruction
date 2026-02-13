@@ -5,25 +5,31 @@ This follows the inspect-ai pattern for parameterized grids:
 https://inspect.aisi.org.uk/eval-sets.html
 
 Usage:
-    uv run python run.py <config.yaml> --model <model> [--log-dir <dir>]
+    uv run python run.py <config.yaml> --model <model> [--eval-set-name <name>] [--log-dir <dir>]
 
 Examples:
     uv run python run.py configs/example.yaml \
         --model openrouter/google/gemini-2.0-flash-001
 
     uv run python run.py configs/example.yaml \
+        --model openrouter/google/gemini-2.0-flash-001 \
+        --eval-set-name my-experiment
+
+    uv run python run.py configs/example.yaml \
         --model openrouter/google/gemini-2.0-flash-001,openrouter/anthropic/claude-3.5-haiku \
-        --log-dir logs/my-run
+        --log-dir custom-logs/my-run
 
 For single condition/N runs, use inspect eval directly:
     uv run inspect eval src/tasks/behavioral.py \
         -T condition=neutral -T n_turns=5 \
         --model openrouter/google/gemini-2.0-flash-001
 """
+
 from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime
 from itertools import product
 
 import yaml
@@ -42,7 +48,16 @@ def main():
     parser = argparse.ArgumentParser(description="Run parameterized evaluation grids")
     parser.add_argument("config", help="Path to YAML config file")
     parser.add_argument("--model", required=True, help="Model(s), comma-separated")
-    parser.add_argument("--log-dir", default=None, help="Log directory")
+    parser.add_argument(
+        "--eval-set-name",
+        default=None,
+        help="Name for eval set (logs saved to logs/<name>)",
+    )
+    parser.add_argument(
+        "--log-dir",
+        default=None,
+        help="Explicit log directory (overrides --eval-set-name)",
+    )
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -81,7 +96,14 @@ def main():
     ]
 
     models = [m.strip() for m in args.model.split(",")]
-    log_dir = args.log_dir or f"logs/{protocol}"
+
+    if args.log_dir:
+        log_dir = args.log_dir
+    elif args.eval_set_name:
+        log_dir = f"logs/{args.eval_set_name}"
+    else:
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        log_dir = f"logs/{timestamp}"
 
     print(f"Protocol: {protocol}")
     print(f"Conditions: {conditions}")

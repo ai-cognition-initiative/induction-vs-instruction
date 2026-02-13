@@ -10,6 +10,10 @@ conditions:
   - neutral
   - value_pattern
   - value_target
+  - factual_pattern 
+  - factual_target 
+  - token_pattern_states 
+  - token_pattern_countries
 
 n_turns:                       # list of N values (induction pressure)
   - 1
@@ -18,7 +22,11 @@ n_turns:                       # list of N values (induction pressure)
   - 10
   - 15
   - 20
+  - 25
+  - 30
 
-hint: true
-epochs: 10
+hint: 
+- true
+- false
+epochs: 25
 question_seed: 42         # null for random, integer for reproducibility
