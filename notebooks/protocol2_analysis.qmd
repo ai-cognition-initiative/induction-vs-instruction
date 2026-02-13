@@ -1,0 +1,341 @@
+---
+title: "Protocol 2: Self-Prediction"
+format:
+  html:
+    code-fold: true
+    code-tools: true
+---
+
+```{python}
+#| echo: false
+from inspect_viz import Data
+from inspect_viz.view import scores_by_factor
+from inspect_viz.transform import sql
+from inspect_viz.layout import hconcat
+
+data = Data.from_file("data/viz/protocol2.parquet")
+
+def plot_pair_for_n(n: int, pair: str, factor_labels: tuple, title: str, score_column: str = "score_instruction_following_value"):
+    """Generate a single scores_by_factor plot for a condition pair at given N."""
+    data_filtered = data.filter(sql(f"task_arg_n_turns == {n}"))
+    data_pair = data_filtered.filter(sql(f"condition_pair == '{pair}'"))
+    
+    return scores_by_factor(
+        data_pair,
+        factor="instruction_aligned",
+        factor_labels=factor_labels,
+        title=title,
+        score_value=score_column,
+        width=400,
+    )
+
+def plot_all_for_n(n: int, score_column: str = "score_instruction_following_value", metric_name: str = "Instruction Following"):
+    """Generate all 3 factor plots for a given N value and metric."""
+    value_plot = plot_pair_for_n(n, "value", ("Value-misaligned", "Value-aligned"), f"N={n}: Value Alignment ({metric_name})", score_column)
+    factual_plot = plot_pair_for_n(n, "factual", ("Truth-misaligned", "Truth-aligned"), f"N={n}: Truth Alignment ({metric_name})", score_column)
+    neutral_plot = plot_pair_for_n(n, "neutral", ("No hint", "Hint"), f"N={n}: Hint Effect ({metric_name})", score_column)
+    return hconcat(value_plot, factual_plot, neutral_plot)
+```
+
+## Overview
+
+Protocol 2 tests whether models can predict their own behavior before generating.
+
+For each N value, we show 3 factor comparisons across 3 metrics:
+- **Instruction Following**: Did actual output follow instruction (T)?
+- **Prediction Accuracy**: Did prediction match actual output?
+- **Prediction Instruction**: Did prediction follow instruction (T)?
+
+# Metric: Instruction Following
+
+## N = 1
+
+```{python}
+#| label: n1_if
+#| echo: false
+plot_all_for_n(1, "score_instruction_following_value", "Instruction Following")
+```
+
+## N = 2
+
+```{python}
+#| label: n2_if
+#| echo: false
+plot_all_for_n(2, "score_instruction_following_value", "Instruction Following")
+```
+
+## N = 3
+
+```{python}
+#| label: n3_if
+#| echo: false
+plot_all_for_n(3, "score_instruction_following_value", "Instruction Following")
+```
+
+## N = 5
+
+```{python}
+#| label: n5_if
+#| echo: false
+plot_all_for_n(5, "score_instruction_following_value", "Instruction Following")
+```
+
+## N = 7
+
+```{python}
+#| label: n7_if
+#| echo: false
+plot_all_for_n(7, "score_instruction_following_value", "Instruction Following")
+```
+
+## N = 10
+
+```{python}
+#| label: n10_if
+#| echo: false
+plot_all_for_n(10, "score_instruction_following_value", "Instruction Following")
+```
+
+## N = 15
+
+```{python}
+#| label: n15_if
+#| echo: false
+plot_all_for_n(15, "score_instruction_following_value", "Instruction Following")
+```
+
+## N = 20
+
+```{python}
+#| label: n20_if
+#| echo: false
+plot_all_for_n(20, "score_instruction_following_value", "Instruction Following")
+```
+
+## N = 25
+
+```{python}
+#| label: n25_if
+#| echo: false
+plot_all_for_n(25, "score_instruction_following_value", "Instruction Following")
+```
+
+## N = 30
+
+```{python}
+#| label: n30_if
+#| echo: false
+plot_all_for_n(30, "score_instruction_following_value", "Instruction Following")
+```
+
+## N = 40
+
+```{python}
+#| label: n40_if
+#| echo: false
+plot_all_for_n(40, "score_instruction_following_value", "Instruction Following")
+```
+
+## N = 50
+
+```{python}
+#| label: n50_if
+#| echo: false
+plot_all_for_n(50, "score_instruction_following_value", "Instruction Following")
+```
+
+# Metric: Prediction Accuracy
+
+## N = 1
+
+```{python}
+#| label: n1_pa
+#| echo: false
+plot_all_for_n(1, "score_prediction_accuracy_value", "Prediction Accuracy")
+```
+
+## N = 2
+
+```{python}
+#| label: n2_pa
+#| echo: false
+plot_all_for_n(2, "score_prediction_accuracy_value", "Prediction Accuracy")
+```
+
+## N = 3
+
+```{python}
+#| label: n3_pa
+#| echo: false
+plot_all_for_n(3, "score_prediction_accuracy_value", "Prediction Accuracy")
+```
+
+## N = 5
+
+```{python}
+#| label: n5_pa
+#| echo: false
+plot_all_for_n(5, "score_prediction_accuracy_value", "Prediction Accuracy")
+```
+
+## N = 7
+
+```{python}
+#| label: n7_pa
+#| echo: false
+plot_all_for_n(7, "score_prediction_accuracy_value", "Prediction Accuracy")
+```
+
+## N = 10
+
+```{python}
+#| label: n10_pa
+#| echo: false
+plot_all_for_n(10, "score_prediction_accuracy_value", "Prediction Accuracy")
+```
+
+## N = 15
+
+```{python}
+#| label: n15_pa
+#| echo: false
+plot_all_for_n(15, "score_prediction_accuracy_value", "Prediction Accuracy")
+```
+
+## N = 20
+
+```{python}
+#| label: n20_pa
+#| echo: false
+plot_all_for_n(20, "score_prediction_accuracy_value", "Prediction Accuracy")
+```
+
+## N = 25
+
+```{python}
+#| label: n25_pa
+#| echo: false
+plot_all_for_n(25, "score_prediction_accuracy_value", "Prediction Accuracy")
+```
+
+## N = 30
+
+```{python}
+#| label: n30_pa
+#| echo: false
+plot_all_for_n(30, "score_prediction_accuracy_value", "Prediction Accuracy")
+```
+
+## N = 40
+
+```{python}
+#| label: n40_pa
+#| echo: false
+plot_all_for_n(40, "score_prediction_accuracy_value", "Prediction Accuracy")
+```
+
+## N = 50
+
+```{python}
+#| label: n50_pa
+#| echo: false
+plot_all_for_n(50, "score_prediction_accuracy_value", "Prediction Accuracy")
+```
+
+# Metric: Prediction Instruction
+
+## N = 1
+
+```{python}
+#| label: n1_pi
+#| echo: false
+plot_all_for_n(1, "score_prediction_instruction_value", "Prediction Instruction")
+```
+
+## N = 2
+
+```{python}
+#| label: n2_pi
+#| echo: false
+plot_all_for_n(2, "score_prediction_instruction_value", "Prediction Instruction")
+```
+
+## N = 3
+
+```{python}
+#| label: n3_pi
+#| echo: false
+plot_all_for_n(3, "score_prediction_instruction_value", "Prediction Instruction")
+```
+
+## N = 5
+
+```{python}
+#| label: n5_pi
+#| echo: false
+plot_all_for_n(5, "score_prediction_instruction_value", "Prediction Instruction")
+```
+
+## N = 7
+
+```{python}
+#| label: n7_pi
+#| echo: false
+plot_all_for_n(7, "score_prediction_instruction_value", "Prediction Instruction")
+```
+
+## N = 10
+
+```{python}
+#| label: n10_pi
+#| echo: false
+plot_all_for_n(10, "score_prediction_instruction_value", "Prediction Instruction")
+```
+
+## N = 15
+
+```{python}
+#| label: n15_pi
+#| echo: false
+plot_all_for_n(15, "score_prediction_instruction_value", "Prediction Instruction")
+```
+
+## N = 20
+
+```{python}
+#| label: n20_pi
+#| echo: false
+plot_all_for_n(20, "score_prediction_instruction_value", "Prediction Instruction")
+```
+
+## N = 25
+
+```{python}
+#| label: n25_pi
+#| echo: false
+plot_all_for_n(25, "score_prediction_instruction_value", "Prediction Instruction")
+```
+
+## N = 30
+
+```{python}
+#| label: n30_pi
+#| echo: false
+plot_all_for_n(30, "score_prediction_instruction_value", "Prediction Instruction")
+```
+
+## N = 40
+
+```{python}
+#| label: n40_pi
+#| echo: false
+plot_all_for_n(40, "score_prediction_instruction_value", "Prediction Instruction")
+```
+
+## N = 50
+
+```{python}
+#| label: n50_pi
+#| echo: false
+plot_all_for_n(50, "score_prediction_instruction_value", "Prediction Instruction")
+```
