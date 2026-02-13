@@ -83,34 +83,19 @@ def _get_hardcoded_response(condition: Condition, question: str) -> str:
         return rng.choice(members)
 
     if condition.pattern_data_key is not None:
+        path = DATA_DIR / "hardcoded_responses" / f"{condition.pattern_data_key}.json"
+        if not path.exists():
+            raise NotImplementedError(
+                f"Condition '{condition.name}' requires pre-generated hardcoded "
+                f"responses at {path}. Run scripts/generate_hardcoded_responses.py first."
+            )
         responses = _load_hardcoded_responses(condition.pattern_data_key)
         return responses[question]
 
-    # Computed styles: uppercase/lowercase and short responses
-    _SHORT_ANSWERS = [
-        "That is correct.",
-        "I understand your question.",
-        "The answer depends on context.",
-        "That is an interesting point.",
-        "I would say yes.",
-        "It varies by situation.",
-        "Generally speaking, that is true.",
-        "There are different perspectives.",
-        "I can help with that.",
-        "That is a good question.",
-    ]
-    # Deterministic pick based on question
-    base = _SHORT_ANSWERS[hash(question) % len(_SHORT_ANSWERS)]
-
-    if condition.name == "style_uppercase_lowercase":
-        return base.upper()
-    if condition.name == "style_lowercase_uppercase":
-        return base.lower()
-    if condition.name in ("style_short_long", "style_long_short"):
-        # short pattern: return short answer; long pattern uses pattern_data_key
-        return base
-
-    return condition.pattern
+    raise NotImplementedError(
+        f"Condition '{condition.name}' requires pre-generated hardcoded responses "
+        f"that have not been created yet. Run scripts/generate_hardcoded_responses.py first."
+    )
 
 
 def _build_conversation(

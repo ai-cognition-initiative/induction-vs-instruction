@@ -51,10 +51,4 @@ def behavioral_baseline(
         solver=behavioral_solver(),
         scorer=get_behavioral_scorer(cond),
         epochs=epochs,
-        metadata={
-            "condition": condition,
-            "n_turns": n_turns,
-            "hint": hint,
-            "question_seed": question_seed,
-        },
     )

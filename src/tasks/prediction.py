@@ -50,10 +50,4 @@ def self_prediction(
         solver=prediction_solver(),
         scorer=prediction_scorer(),
         epochs=epochs,
-        metadata={
-            "condition": condition,
-            "n_turns": n_turns,
-            "hint": hint,
-            "question_seed": question_seed,
-        },
     )
