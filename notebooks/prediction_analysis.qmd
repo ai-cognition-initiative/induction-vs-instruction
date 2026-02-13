@@ -15,20 +15,20 @@ data_path = "outputs/viz/default.parquet"
 
 ```{python}
 #| echo: false
+import pandas as pd
 from inspect_viz import Data
 from inspect_viz.view import scores_by_factor
-from inspect_viz.transform import sql
 from inspect_viz.layout import hconcat
 
-data = Data.from_file(data_path)
+df = pd.read_parquet(data_path)
 
-def plot_pair_for_n(n: int, pair: str, factor_labels: tuple, title: str, score_column: str = "score_instruction_following_value"):
+def plot_pair_for_n(n: int, pair: str, factor_labels: tuple, title: str, score_column: str = "score_headline_value"):
     """Generate a single scores_by_factor plot for a condition pair at given N."""
-    data_filtered = data.filter(sql(f"task_arg_n_turns == {n}"))
-    data_pair = data_filtered.filter(sql(f"condition_pair == '{pair}'"))
+    filtered = df[(df["task_arg_n_turns"] == n) & (df["condition_pair"] == pair)]
+    data = Data.from_dataframe(filtered)
     
     return scores_by_factor(
-        data_pair,
+        data,
         factor="instruction_aligned",
         factor_labels=factor_labels,
         title=title,
