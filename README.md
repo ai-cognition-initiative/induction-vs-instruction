@@ -132,3 +132,25 @@ Conditions with types `language`, `persona`, `code`, `preference`, and `style_lo
 
 1. **Behavioral Baseline** (`behavioral`) — does the model follow the instruction or continue the pattern?
 2. **Self-Prediction** (`prediction`) — can the model predict what it will do before generating?
+
+## Generating reports
+
+Generate visualization notebooks from eval logs using `just`:
+
+```bash
+# List available log folders
+just logs
+
+# Generate report for a log folder
+just report olmo-32b-static behavioral
+
+# Preview the report
+just preview olmo-32b-static
+
+# Publish to GitHub Pages
+just publish olmo-32b-static
+```
+
+Reports are generated at `outputs/notebooks/<folder>/report.qmd`.
+
+Dependencies: `just`, `quarto-cli`, `inspect-viz`, `pyarrow`
