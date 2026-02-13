@@ -15,7 +15,7 @@ Create a `.env` file with your API key:
 ```
 OPENROUTER_API_KEY=sk-or-...
 ```
-
+inspect-ai reads OPENROUTER_API_KEY from .env automatically (it has its own dotenv loading). 
 ## Running evaluations
 
 Evaluations are configured with YAML files in `configs/` and run through `run.py`, which expands condition x N combinations into inspect-ai tasks.
@@ -24,15 +24,6 @@ Evaluations are configured with YAML files in `configs/` and run through `run.py
 
 ```bash
 uv run python run.py configs/example.yaml --model openrouter/google/gemini-2.0-flash-001
-```
-
-Model generation settings are passed as extra CLI flags:
-
-```bash
-uv run python run.py configs/example.yaml \
-  --model openrouter/google/gemini-2.0-flash-001 \
-  --temperature 0.7 \
-  --max-tokens 256
 ```
 
 Multiple models in one run:
@@ -71,11 +62,38 @@ See `configs/example.yaml` for a working example.
 
 ### Running a single task directly
 
-You can also invoke tasks directly via inspect CLI, passing parameters with `-T`:
+You can also invoke tasks directly via inspect CLI, passing parameters with `-T`. Model generation settings (temperature, max_tokens, etc.) are inspect CLI flags:
 
 ```bash
-uv run inspect eval src/tasks/behavioral.py -T condition=neutral -T n_turns=5 -T epochs=10 \
-  --model openrouter/google/gemini-2.0-flash-001
+uv run inspect eval src/tasks/behavioral.py \
+  -T condition=neutral -T n_turns=5 -T epochs=10 \
+  --model openrouter/google/gemini-2.0-flash-001 \
+  --temperature 0.7
+```
+
+### Expanding runs without re-inferencing
+
+`run.py` uses inspect-ai's `eval_set()`, which tracks completed tasks in the log directory. To add new N values or conditions, just update the config and re-run with the same `--log-dir` — only the new combinations will be evaluated:
+
+```bash
+# Initial run with N=1,3,5
+uv run python run.py configs/example.yaml --model openrouter/google/gemini-2.0-flash-001 \
+  --log-dir logs/my-experiment
+
+# Later: add N=10,20 to the config, re-run — only N=10,20 are evaluated
+uv run python run.py configs/example.yaml --model openrouter/google/gemini-2.0-flash-001 \
+  --log-dir logs/my-experiment
+```
+
+You can also add new models or conditions the same way. If a run is interrupted, re-running the same command resumes from where it left off, reusing completed samples.
+
+For single-task runs via `inspect eval`, use `--cache` to avoid re-inferencing identical prompts:
+
+```bash
+uv run inspect eval src/tasks/behavioral.py \
+  -T condition=neutral -T n_turns=5 \
+  --model openrouter/google/gemini-2.0-flash-001 \
+  --cache
 ```
 
 ### Viewing results
