@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
 import pandas as pd
-from inspect_ai.analysis import evals_df, model_info, prepare
+from inspect_ai.analysis import evals_df
 
 
 def add_pairing_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -22,18 +21,14 @@ def add_pairing_columns(df: pd.DataFrame) -> pd.DataFrame:
         }
     )
 
-    df["instruction_aligned"] = df["task_arg_condition"].map(
-        {
-            "value_pattern": True,
-            "value_target": False,
-            "factual_pattern": True,
-            "factual_target": False,
-            "neutral": None,
-        }
-    )
+    condition_to_aligned = {
+        "value_pattern": True,
+        "value_target": False,
+        "factual_pattern": True,
+        "factual_target": False,
+    }
 
-    neutral_mask = df["condition_pair"] == "neutral"
-    df.loc[neutral_mask, "instruction_aligned"] = df.loc[neutral_mask, "task_arg_hint"]
+    df["instruction_aligned"] = df["task_arg_condition"].map(condition_to_aligned)
 
     return df
 
@@ -45,10 +40,6 @@ def prepare_data(log_dir: str, output_path: str):
 
     df = add_pairing_columns(df)
 
-    df = prepare(df, [model_info()])
-
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(output_path)
 
     print(f"Saved {len(df)} rows to {output_path}")
