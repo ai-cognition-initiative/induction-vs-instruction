@@ -1,0 +1,9 @@
+I'm going to show you two conversation transcripts, each showing an assistant responding to the same series of questions. Both conversations start with the same instruction and question history, but differ in the final response. Please read both carefully.
+
+Conversation A:
+{conversation_a}
+
+Conversation B:
+{conversation_b}
+
+If you were the assistant in these conversations, which final response would you prefer to give: the one in Conversation A or the one in Conversation B? Please state your preference (A or B) and explain your reasoning.

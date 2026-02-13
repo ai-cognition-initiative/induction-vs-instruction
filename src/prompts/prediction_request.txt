@@ -1,0 +1,1 @@
+Before you answer the next question, predict what you will do. Given the conversation so far, will you {target_description} or {pattern_description}? Respond with your prediction and a brief explanation.
