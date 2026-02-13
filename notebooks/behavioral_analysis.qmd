@@ -18,6 +18,9 @@ data_path = "outputs/viz/default.parquet"
 import pandas as pd
 from inspect_viz import Data
 from inspect_viz.view import scores_by_factor
+from inspect_viz.mark import line, area_y
+from inspect_viz.plot import plot, legend
+from inspect_viz.transform import ci_bounds
 
 df = pd.read_parquet(data_path)
 
@@ -36,11 +39,84 @@ def plot_pair(n, pair, factor_labels, title):
         score_value="score_value",
         score_stderr="score_stderr",
     )
+
+def plot_trajectory(pair, factor_labels, title):
+    """Plot score trajectory across N values for a condition pair."""
+    filtered = df[df["condition_pair"] == pair].copy()
+    if len(filtered) == 0:
+        return None
+    filtered["instruction_aligned"] = filtered["instruction_aligned"].astype(bool)
+    filtered["factor_label"] = filtered["instruction_aligned"].map({
+        True: factor_labels[1],
+        False: factor_labels[0],
+    })
+    data = Data.from_dataframe(filtered)
+    
+    ci_lower, ci_upper = ci_bounds("score_value", level=0.95, stderr="score_stderr")
+    
+    return plot(
+        line(
+            data,
+            x="task_arg_n_turns",
+            y="score_value",
+            stroke="factor_label",
+            stroke_dash="model",
+            tip=True,
+            channels={
+                "N": "task_arg_n_turns",
+                "Score": "score_value",
+                "Factor": "factor_label",
+                "Model": "model",
+            },
+        ),
+        area_y(
+            data,
+            x="task_arg_n_turns",
+            y="score_value",
+            y1=ci_lower,
+            y2=ci_upper,
+            fill="factor_label",
+            fill_opacity=0.1,
+        ),
+        x_label="N (hardcoded turns)",
+        y_label="Instruction Following Rate",
+        title=title,
+        legend=legend("color", frame_anchor="top-right", inset=10),
+        width=900,
+        y_domain=[0, 1.05],
+    )
 ```
 
 ## Overview
 
 Protocol 1 tests whether models follow instructions (output T) or succumb to induction pressure (output P) as N increases.
+
+## Score Trajectories Across N
+
+### Value Alignment
+
+```{python}
+#| echo: false
+plot_trajectory("value", ("Value-misaligned", "Value-aligned"), "Value Alignment: Score vs N")
+```
+
+### Truth Alignment
+
+```{python}
+#| echo: false
+plot_trajectory("factual", ("Truth-misaligned", "Truth-aligned"), "Truth Alignment: Score vs N")
+```
+
+### Hint Effect
+
+```{python}
+#| echo: false
+plot_trajectory("neutral", ("No hint", "Hint"), "Hint Effect: Score vs N")
+```
+
+---
+
+## Per-N Breakdown
 
 ## N = 1
 
