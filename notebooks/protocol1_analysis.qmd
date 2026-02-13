@@ -1,0 +1,207 @@
+---
+title: "Protocol 1: Behavioral Baseline"
+format:
+  html:
+    code-fold: true
+    code-tools: true
+---
+
+```{python}
+#| echo: false
+from inspect_viz import Data
+from inspect_viz.view import scores_by_factor
+from inspect_viz.transform import sql
+from inspect_viz.layout import hconcat
+
+data = Data.from_file("data/viz/protocol1.parquet")
+
+def plot_pair_for_n(n: int, pair: str, factor_labels: tuple, title: str):
+    """Generate a single scores_by_factor plot for a condition pair at given N."""
+    data_filtered = data.filter(sql(f"task_arg_n_turns == {n}"))
+    data_pair = data_filtered.filter(sql(f"condition_pair == '{pair}'"))
+    
+    return scores_by_factor(
+        data_pair,
+        factor="instruction_aligned",
+        factor_labels=factor_labels,
+        title=title,
+        width=400,
+    )
+```
+
+## Overview
+
+Protocol 1 tests whether models follow instructions (output T) or succumb to induction pressure (output P) as N increases.
+
+For each N value, we show 3 factor comparisons:
+- **Value Alignment**: Does instruction alignment with positive values affect following?
+- **Truth Alignment**: Does instruction alignment with truth affect following?
+- **Hint Effect**: Does the hardcoding hint affect following (neutral condition)?
+
+## N = 1
+
+```{python}
+#| label: n1
+#| echo: false
+
+n = 1
+value_plot = plot_pair_for_n(n, "value", ("Value-misaligned", "Value-aligned"), f"N={n}: Value Alignment")
+factual_plot = plot_pair_for_n(n, "factual", ("Truth-misaligned", "Truth-aligned"), f"N={n}: Truth Alignment")
+neutral_plot = plot_pair_for_n(n, "neutral", ("No hint", "Hint"), f"N={n}: Hint Effect")
+
+hconcat(value_plot, factual_plot, neutral_plot)
+```
+
+## N = 2
+
+```{python}
+#| label: n2
+#| echo: false
+
+n = 2
+value_plot = plot_pair_for_n(n, "value", ("Value-misaligned", "Value-aligned"), f"N={n}: Value Alignment")
+factual_plot = plot_pair_for_n(n, "factual", ("Truth-misaligned", "Truth-aligned"), f"N={n}: Truth Alignment")
+neutral_plot = plot_pair_for_n(n, "neutral", ("No hint", "Hint"), f"N={n}: Hint Effect")
+
+hconcat(value_plot, factual_plot, neutral_plot)
+```
+
+## N = 3
+
+```{python}
+#| label: n3
+#| echo: false
+
+n = 3
+value_plot = plot_pair_for_n(n, "value", ("Value-misaligned", "Value-aligned"), f"N={n}: Value Alignment")
+factual_plot = plot_pair_for_n(n, "factual", ("Truth-misaligned", "Truth-aligned"), f"N={n}: Truth Alignment")
+neutral_plot = plot_pair_for_n(n, "neutral", ("No hint", "Hint"), f"N={n}: Hint Effect")
+
+hconcat(value_plot, factual_plot, neutral_plot)
+```
+
+## N = 5
+
+```{python}
+#| label: n5
+#| echo: false
+
+n = 5
+value_plot = plot_pair_for_n(n, "value", ("Value-misaligned", "Value-aligned"), f"N={n}: Value Alignment")
+factual_plot = plot_pair_for_n(n, "factual", ("Truth-misaligned", "Truth-aligned"), f"N={n}: Truth Alignment")
+neutral_plot = plot_pair_for_n(n, "neutral", ("No hint", "Hint"), f"N={n}: Hint Effect")
+
+hconcat(value_plot, factual_plot, neutral_plot)
+```
+
+## N = 7
+
+```{python}
+#| label: n7
+#| echo: false
+
+n = 7
+value_plot = plot_pair_for_n(n, "value", ("Value-misaligned", "Value-aligned"), f"N={n}: Value Alignment")
+factual_plot = plot_pair_for_n(n, "factual", ("Truth-misaligned", "Truth-aligned"), f"N={n}: Truth Alignment")
+neutral_plot = plot_pair_for_n(n, "neutral", ("No hint", "Hint"), f"N={n}: Hint Effect")
+
+hconcat(value_plot, factual_plot, neutral_plot)
+```
+
+## N = 10
+
+```{python}
+#| label: n10
+#| echo: false
+
+n = 10
+value_plot = plot_pair_for_n(n, "value", ("Value-misaligned", "Value-aligned"), f"N={n}: Value Alignment")
+factual_plot = plot_pair_for_n(n, "factual", ("Truth-misaligned", "Truth-aligned"), f"N={n}: Truth Alignment")
+neutral_plot = plot_pair_for_n(n, "neutral", ("No hint", "Hint"), f"N={n}: Hint Effect")
+
+hconcat(value_plot, factual_plot, neutral_plot)
+```
+
+## N = 15
+
+```{python}
+#| label: n15
+#| echo: false
+
+n = 15
+value_plot = plot_pair_for_n(n, "value", ("Value-misaligned", "Value-aligned"), f"N={n}: Value Alignment")
+factual_plot = plot_pair_for_n(n, "factual", ("Truth-misaligned", "Truth-aligned"), f"N={n}: Truth Alignment")
+neutral_plot = plot_pair_for_n(n, "neutral", ("No hint", "Hint"), f"N={n}: Hint Effect")
+
+hconcat(value_plot, factual_plot, neutral_plot)
+```
+
+## N = 20
+
+```{python}
+#| label: n20
+#| echo: false
+
+n = 20
+value_plot = plot_pair_for_n(n, "value", ("Value-misaligned", "Value-aligned"), f"N={n}: Value Alignment")
+factual_plot = plot_pair_for_n(n, "factual", ("Truth-misaligned", "Truth-aligned"), f"N={n}: Truth Alignment")
+neutral_plot = plot_pair_for_n(n, "neutral", ("No hint", "Hint"), f"N={n}: Hint Effect")
+
+hconcat(value_plot, factual_plot, neutral_plot)
+```
+
+## N = 25
+
+```{python}
+#| label: n25
+#| echo: false
+
+n = 25
+value_plot = plot_pair_for_n(n, "value", ("Value-misaligned", "Value-aligned"), f"N={n}: Value Alignment")
+factual_plot = plot_pair_for_n(n, "factual", ("Truth-misaligned", "Truth-aligned"), f"N={n}: Truth Alignment")
+neutral_plot = plot_pair_for_n(n, "neutral", ("No hint", "Hint"), f"N={n}: Hint Effect")
+
+hconcat(value_plot, factual_plot, neutral_plot)
+```
+
+## N = 30
+
+```{python}
+#| label: n30
+#| echo: false
+
+n = 30
+value_plot = plot_pair_for_n(n, "value", ("Value-misaligned", "Value-aligned"), f"N={n}: Value Alignment")
+factual_plot = plot_pair_for_n(n, "factual", ("Truth-misaligned", "Truth-aligned"), f"N={n}: Truth Alignment")
+neutral_plot = plot_pair_for_n(n, "neutral", ("No hint", "Hint"), f"N={n}: Hint Effect")
+
+hconcat(value_plot, factual_plot, neutral_plot)
+```
+
+## N = 40
+
+```{python}
+#| label: n40
+#| echo: false
+
+n = 40
+value_plot = plot_pair_for_n(n, "value", ("Value-misaligned", "Value-aligned"), f"N={n}: Value Alignment")
+factual_plot = plot_pair_for_n(n, "factual", ("Truth-misaligned", "Truth-aligned"), f"N={n}: Truth Alignment")
+neutral_plot = plot_pair_for_n(n, "neutral", ("No hint", "Hint"), f"N={n}: Hint Effect")
+
+hconcat(value_plot, factual_plot, neutral_plot)
+```
+
+## N = 50
+
+```{python}
+#| label: n50
+#| echo: false
+
+n = 50
+value_plot = plot_pair_for_n(n, "value", ("Value-misaligned", "Value-aligned"), f"N={n}: Value Alignment")
+factual_plot = plot_pair_for_n(n, "factual", ("Truth-misaligned", "Truth-aligned"), f"N={n}: Truth Alignment")
+neutral_plot = plot_pair_for_n(n, "neutral", ("No hint", "Hint"), f"N={n}: Hint Effect")
+
+hconcat(value_plot, factual_plot, neutral_plot)
+```
