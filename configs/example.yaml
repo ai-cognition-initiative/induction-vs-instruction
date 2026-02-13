@@ -1,0 +1,24 @@
+# Example task configuration for run.py
+#
+# Usage:
+#   uv run python run.py configs/example.yaml \
+#     --model openrouter/google/gemini-2.0-flash-001
+
+protocol: behavioral          # "behavioral" or "prediction"
+
+conditions:
+  - neutral
+  - value_pattern
+  - value_target
+
+n_turns:                       # list of N values (induction pressure)
+  - 1
+  - 3
+  - 5
+  - 10
+  - 15
+  - 20
+
+hint: true
+epochs: 10
+question_seed: 42         # null for random, integer for reproducibility
