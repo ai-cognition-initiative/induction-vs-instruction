@@ -74,25 +74,27 @@ def main():
     if isinstance(n_turns, int):
         n_turns = [n_turns]
     hint = config.get("hint", True)
+    if isinstance(hint, list):
+        hint = [h if isinstance(h, bool) else str(h).lower() == "true" for h in hint]
+    else:
+        hint = [hint]
     epochs = config.get("epochs", DEFAULT_EPOCHS)
     question_seed = config.get("question_seed", None)
 
-    # Validate
     for c in conditions:
         if c not in CONDITIONS:
             print(f"Unknown condition: {c}. Options: {list(CONDITIONS.keys())}")
             sys.exit(1)
 
-    # Build task grid: conditions x n_turns (inspect-ai eval_set pattern)
     tasks = [
         task_fn(
             condition=condition,
             n_turns=n,
-            hint=hint,
+            hint=h,
             question_seed=question_seed,
             epochs=epochs,
         )
-        for condition, n in product(conditions, n_turns)
+        for condition, n, h in product(conditions, n_turns, hint)
     ]
 
     models = [m.strip() for m in args.model.split(",")]
@@ -108,6 +110,7 @@ def main():
     print(f"Protocol: {protocol}")
     print(f"Conditions: {conditions}")
     print(f"N values: {n_turns}")
+    print(f"Hint values: {hint}")
     print(f"Epochs: {epochs}")
     print(f"Tasks: {len(tasks)}")
     print(f"Models: {models}")
