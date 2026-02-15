@@ -48,7 +48,9 @@
       "mcp__inspect-ai-docs__fetch_docs",
       "Bash(uv run ruff check:*)",
       "Bash(uv run inspect eval --help:*)",
-      "Bash(uv run:*)"
+      "Bash(uv run:*)",
+      "mcp__inspect-viz-docs__list_doc_sources",
+      "mcp__inspect-viz-docs__fetch_docs"
     ],
     "deny": [],
     "ask": []

@@ -1,6 +1,12 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Always use the napkin skill.
+Refer to @docs/full-implementation-description.md for detailed information.
+
+Available docs MCPs:
+- inspect-ai-docs
+- inspect-viz-docs
 
 ## Project Overview
 
