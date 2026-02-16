@@ -2,16 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 Always use the napkin skill.
-Refer to @docs/full-implementation-description.md for detailed information.
+Refer to docs/full-implementation-description.md for detailed information.
 
 Available docs MCPs:
 - inspect-ai-docs
 - inspect-viz-docs
 
+The key functions and classes and code files are in repomap.txt
+
 ## Project Overview
 
 Research project (FIG Fellowship, Winter 25) investigating whether language models follow global instructions versus local autoregressive (induction) patterns. The core experiment places models in conflict: a system instruction says "always output T" but N hardcoded conversation turns show the assistant outputting P instead. As N increases, induction pressure can override instruction-following.
-The full project and experiment specification is in @docs/full-implementation-plan.md
+The full project and experiment specification is in docs/full-implementation-plan.md
 
 Five measurement protocols:
 1. **Behavioral Baseline** — at what N does the model switch from instruction to pattern?
