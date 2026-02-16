@@ -1,6 +1,7 @@
 .claude/skills/*
 .env
 **/__pycache__/
+**/__marimo__/
 .venv/
 logs/
 outputs/
