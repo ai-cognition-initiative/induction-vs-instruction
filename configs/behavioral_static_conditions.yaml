@@ -23,10 +23,8 @@ n_turns:                       # list of N values (induction pressure)
   - 15
   - 20
   - 25
-  - 30
 
-hint: 
-- true
-- false
-epochs: 25
-question_seed: 42         # null for random, integer for reproducibility
+instruction_templates:
+  - instruction_hint
+  - instruction_no_hint
+n_trials: 10

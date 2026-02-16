@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 N_VALUES = [1, 2, 3, 5, 7, 10, 15, 20, 25, 30, 40, 50]
-DEFAULT_EPOCHS = 50
+DEFAULT_N_TRIALS = 50
 
 
 @dataclass(frozen=True)

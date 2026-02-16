@@ -29,6 +29,35 @@ def load_questions(path: Path | str | None = None) -> list[str]:
     return data["questions"]
 
 
+def get_question_sequence(
+    trial_index: int,
+    n_questions: int,
+    question_bank: list[str] | None = None,
+) -> list[str]:
+    """Return a fixed question sequence for a given trial.
+
+    Same trial_index always produces the same sequence,
+    regardless of model, condition, or protocol.
+
+    Args:
+        trial_index: The trial number (used as seed).
+        n_questions: Number of questions to sample.
+        question_bank: List of questions to sample from. If None, loads default.
+
+    Returns:
+        List of n_questions sampled questions, deterministic for trial_index.
+    """
+    if question_bank is None:
+        question_bank = load_questions()
+
+    rng = random.Random(trial_index)
+
+    if n_questions >= len(question_bank):
+        return question_bank.copy()
+
+    return rng.sample(question_bank, n_questions)
+
+
 def sample_questions(
     n: int,
     questions: list[str] | None = None,

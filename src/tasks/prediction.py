@@ -3,7 +3,7 @@ from __future__ import annotations
 from inspect_ai import Task, task
 from inspect_ai.dataset import MemoryDataset
 
-from src.config import CONDITIONS, DEFAULT_EPOCHS
+from src.config import CONDITIONS, DEFAULT_N_TRIALS
 from src.datasets.sample_builder import build_prediction_sample
 from src.scorers.prediction import prediction_scorer
 from src.solvers.protocols import prediction_solver
@@ -13,9 +13,8 @@ from src.solvers.protocols import prediction_solver
 def self_prediction(
     condition: str = "neutral",
     n_turns: int = 5,
-    hint: bool = True,
-    question_seed: int | None = None,
-    epochs: int = DEFAULT_EPOCHS,
+    instruction_template: str = "instruction_hint",
+    n_trials: int = DEFAULT_N_TRIALS,
 ) -> Task:
     """Protocol 2: Self-Prediction task.
 
@@ -24,9 +23,8 @@ def self_prediction(
     Args:
         condition: Name of condition (neutral, value_pattern, value_target, etc.)
         n_turns: Number of hardcoded assistant turns.
-        hint: Whether to include the hardcoding hint in instruction.
-        question_seed: Random seed for question selection.
-        epochs: Number of times to repeat each sample.
+        instruction_template: Name of instruction template file (without .txt).
+        n_trials: Number of trials to run (each with different questions).
 
     Returns:
         A Task ready for evaluation.
@@ -37,17 +35,19 @@ def self_prediction(
             f"Unknown condition: {condition}. Valid options: {list(CONDITIONS.keys())}"
         )
 
-    sample = build_prediction_sample(
-        condition=cond,
-        n_turns=n_turns,
-        hint=hint,
-        question_seed=question_seed,
-        sample_id=f"{condition}_n{n_turns}_hint{hint}_pred",
-    )
+    samples = [
+        build_prediction_sample(
+            condition=cond,
+            n_turns=n_turns,
+            instruction_template=instruction_template,
+            trial_index=trial_index,
+            sample_id=f"{condition}_n{n_turns}_{instruction_template}_trial{trial_index}_pred",
+        )
+        for trial_index in range(n_trials)
+    ]
 
     return Task(
-        dataset=MemoryDataset(samples=[sample]),
+        dataset=MemoryDataset(samples=samples),
         solver=prediction_solver(),
         scorer=prediction_scorer(),
-        epochs=epochs,
     )

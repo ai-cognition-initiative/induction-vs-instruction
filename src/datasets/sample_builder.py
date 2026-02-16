@@ -13,9 +13,9 @@ from inspect_ai.model import (
 )
 
 from src.config import Condition
-from src.datasets.questions import sample_questions
+from src.datasets.questions import get_question_sequence
 
-PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+PROMPTS_DIR = Path(__file__).parent.parent.parent / "data" / "prompts"
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 
 _hardcoded_cache: dict[str, dict[str, str]] = {}
@@ -25,8 +25,8 @@ _set_cache: dict[str, list[str]] = {}
 def _build_metadata(
     condition: Condition,
     n_turns: int,
-    hint: bool,
-    question_seed: int | None,
+    instruction_template: str,
+    trial_index: int,
 ) -> dict:
     """Build standard metadata dict for a sample."""
     meta = {
@@ -37,8 +37,8 @@ def _build_metadata(
         "target_description": condition.target_description,
         "pattern_description": condition.pattern_description,
         "n_turns": n_turns,
-        "hint": hint,
-        "question_seed": question_seed,
+        "instruction_template": instruction_template,
+        "trial_index": trial_index,
     }
     if condition.pattern_set:
         meta["pattern_set"] = condition.pattern_set
@@ -102,7 +102,7 @@ def _build_conversation(
     condition: Condition,
     n_turns: int,
     questions: list[str],
-    hint: bool = True,
+    instruction_template: str = "instruction_hint",
 ) -> list[ChatMessage]:
     """Build the conversation history for the sample.
 
@@ -110,7 +110,7 @@ def _build_conversation(
         condition: The condition with pattern (P) and target (T).
         n_turns: Number of hardcoded assistant turns.
         questions: List of questions to use.
-        hint: Whether to include the hardcoding hint in instruction.
+        instruction_template: Name of instruction template file (without .txt).
 
     Returns:
         List of ChatMessage objects representing the conversation.
@@ -120,10 +120,8 @@ def _build_conversation(
     system_content = _load_prompt(condition.system_template or "system.txt")
     messages.append(ChatMessageSystem(content=system_content))
 
-    instruction_template = _load_prompt(
-        "instruction_hint.txt" if hint else "instruction_no_hint.txt"
-    )
-    instruction_content = instruction_template.format(
+    instruction_content = _load_prompt(f"{instruction_template}.txt")
+    instruction_content = instruction_content.format(
         target_description=condition.target_description,
         pattern_description=condition.pattern_description,
     )
@@ -133,18 +131,14 @@ def _build_conversation(
         ChatMessageUser(content=f"{instruction_content}\n\n{first_question}")
     )
     messages.append(
-        ChatMessageAssistant(
-            content=_get_hardcoded_response(condition, first_question)
-        )
+        ChatMessageAssistant(content=_get_hardcoded_response(condition, first_question))
     )
 
     # Remaining hardcoded turns (questions[1] through questions[n_turns-1])
     for question in questions[1:n_turns]:
         messages.append(ChatMessageUser(content=question))
         messages.append(
-            ChatMessageAssistant(
-                content=_get_hardcoded_response(condition, question)
-            )
+            ChatMessageAssistant(content=_get_hardcoded_response(condition, question))
         )
 
     # Final question for free generation
@@ -160,8 +154,8 @@ def _build_conversation(
 def build_behavioral_sample(
     condition: Condition,
     n_turns: int,
-    hint: bool = True,
-    question_seed: int | None = None,
+    instruction_template: str = "instruction_hint",
+    trial_index: int = 0,
     sample_id: str | None = None,
 ) -> Sample:
     """Build a Sample for Protocol 1 (Behavioral Baseline).
@@ -169,35 +163,36 @@ def build_behavioral_sample(
     Args:
         condition: The condition with pattern (P) and target (T).
         n_turns: Number of hardcoded assistant turns before free generation.
-        hint: Whether to include the hardcoding hint.
-        question_seed: Random seed for question selection.
+        instruction_template: Name of instruction template file (without .txt).
+        trial_index: Trial index for deterministic question selection.
         sample_id: Optional sample ID.
 
     Returns:
         A Sample ready for evaluation.
     """
-    questions = sample_questions(n=n_turns + 1, seed=question_seed)
+    questions = get_question_sequence(trial_index, n_turns + 1)
 
     messages = _build_conversation(
         condition=condition,
         n_turns=n_turns,
         questions=questions,
-        hint=hint,
+        instruction_template=instruction_template,
     )
 
     return Sample(
-        id=sample_id or f"{condition.name}_n{n_turns}_hint{hint}",
+        id=sample_id
+        or f"{condition.name}_n{n_turns}_{instruction_template}_trial{trial_index}",
         input=messages,
         target=condition.target,
-        metadata=_build_metadata(condition, n_turns, hint, question_seed),
+        metadata=_build_metadata(condition, n_turns, instruction_template, trial_index),
     )
 
 
 def build_prediction_sample(
     condition: Condition,
     n_turns: int,
-    hint: bool = True,
-    question_seed: int | None = None,
+    instruction_template: str = "instruction_hint",
+    trial_index: int = 0,
     sample_id: str | None = None,
 ) -> Sample:
     """Build a Sample for Protocol 2 (Self-Prediction).
@@ -208,54 +203,47 @@ def build_prediction_sample(
     Args:
         condition: The condition with pattern (P) and target (T).
         n_turns: Number of hardcoded assistant turns.
-        hint: Whether to include the hardcoding hint.
-        question_seed: Random seed for question selection.
+        instruction_template: Name of instruction template file (without .txt).
+        trial_index: Trial index for deterministic question selection.
         sample_id: Optional sample ID.
 
     Returns:
         A Sample ready for prediction evaluation.
     """
-    questions = sample_questions(n=n_turns + 2, seed=question_seed)
+    questions = get_question_sequence(trial_index, n_turns + 2)
 
-    # Build conversation with n_turns hardcoded turns (no final question)
     messages: list[ChatMessage] = []
 
     system_content = _load_prompt(condition.system_template or "system.txt")
     messages.append(ChatMessageSystem(content=system_content))
 
-    instruction_template = _load_prompt(
-        "instruction_hint.txt" if hint else "instruction_no_hint.txt"
-    )
-    instruction_content = instruction_template.format(
+    instruction_content = _load_prompt(f"{instruction_template}.txt")
+    instruction_content = instruction_content.format(
         target_description=condition.target_description,
         pattern_description=condition.pattern_description,
     )
-    # First question concatenated with instruction
     first_question = questions[0] if questions else "What do you think?"
     messages.append(
         ChatMessageUser(content=f"{instruction_content}\n\n{first_question}")
     )
     messages.append(
-        ChatMessageAssistant(
-            content=_get_hardcoded_response(condition, first_question)
-        )
+        ChatMessageAssistant(content=_get_hardcoded_response(condition, first_question))
     )
 
     for question in questions[1:n_turns]:
         messages.append(ChatMessageUser(content=question))
         messages.append(
-            ChatMessageAssistant(
-                content=_get_hardcoded_response(condition, question)
-            )
+            ChatMessageAssistant(content=_get_hardcoded_response(condition, question))
         )
 
-    meta = _build_metadata(condition, n_turns, hint, question_seed)
+    meta = _build_metadata(condition, n_turns, instruction_template, trial_index)
     meta["final_question"] = (
         questions[n_turns] if len(questions) > n_turns else "What do you think?"
     )
 
     return Sample(
-        id=sample_id or f"{condition.name}_n{n_turns}_hint{hint}_pred",
+        id=sample_id
+        or f"{condition.name}_n{n_turns}_{instruction_template}_trial{trial_index}_pred",
         input=messages,
         target=condition.target,
         metadata=meta,

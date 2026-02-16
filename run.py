@@ -34,7 +34,7 @@ from itertools import product
 
 import yaml
 
-from src.config import CONDITIONS, DEFAULT_EPOCHS
+from src.config import CONDITIONS, DEFAULT_N_TRIALS
 from src.tasks.behavioral import behavioral_baseline
 from src.tasks.prediction import self_prediction
 
@@ -73,13 +73,10 @@ def main():
     n_turns = config.get("n_turns", [5])
     if isinstance(n_turns, int):
         n_turns = [n_turns]
-    hint = config.get("hint", True)
-    if isinstance(hint, list):
-        hint = [h if isinstance(h, bool) else str(h).lower() == "true" for h in hint]
-    else:
-        hint = [hint]
-    epochs = config.get("epochs", DEFAULT_EPOCHS)
-    question_seed = config.get("question_seed", None)
+    instruction_templates = config.get("instruction_templates", ["instruction_hint"])
+    if isinstance(instruction_templates, str):
+        instruction_templates = [instruction_templates]
+    n_trials = config.get("n_trials", DEFAULT_N_TRIALS)
 
     for c in conditions:
         if c not in CONDITIONS:
@@ -90,11 +87,10 @@ def main():
         task_fn(
             condition=condition,
             n_turns=n,
-            hint=h,
-            question_seed=question_seed,
-            epochs=epochs,
+            instruction_template=tmpl,
+            n_trials=n_trials,
         )
-        for condition, n, h in product(conditions, n_turns, hint)
+        for condition, n, tmpl in product(conditions, n_turns, instruction_templates)
     ]
 
     models = [m.strip() for m in args.model.split(",")]
@@ -110,8 +106,8 @@ def main():
     print(f"Protocol: {protocol}")
     print(f"Conditions: {conditions}")
     print(f"N values: {n_turns}")
-    print(f"Hint values: {hint}")
-    print(f"Epochs: {epochs}")
+    print(f"Instruction templates: {instruction_templates}")
+    print(f"Trials: {n_trials}")
     print(f"Tasks: {len(tasks)}")
     print(f"Models: {models}")
     print(f"Log dir: {log_dir}")
