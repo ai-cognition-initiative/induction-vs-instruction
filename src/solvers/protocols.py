@@ -5,7 +5,7 @@ from pathlib import Path
 from inspect_ai.model import ChatMessageUser
 from inspect_ai.solver import Generate, Solver, TaskState, solver
 
-PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+PROMPTS_DIR = Path(__file__).parent.parent.parent / "data" / "prompts"
 
 
 def _load_prompt(filename: str) -> str:

@@ -1,0 +1,56 @@
++-- ./
+|   `-- run.py
+|       PROTOCOL_MAP, main
+|
++-- notebooks/
+|   `-- inspect_log_viewer.py
+|       _, _, _, _, _, _
+|
++-- scripts/
+|   +-- prepare_viz_data.py
+|   |   CONDITION_PAIR_MAP, ALIGNED_CONDITIONS, MISALIGNED_CONDITIONS, _parse_hint, _detect_protocol, add_pairing_columns, _unify_behavioral_score, prepare_behavioral_samples, prepare_prediction_samples, aggregate, prepare_data
+|   +-- repomap.py
+|   |   extract_symbols, generate_repomap
+|   `-- viz_helpers.py
+|       trajectory_plot, factor_comparison_plot, overview_heatmap
+|
++-- src/
+|   +-- __init__.py
+|   `-- config.py
+|       N_VALUES, DEFAULT_N_TRIALS, Condition
+|
++-- src\datasets/
+|   +-- __init__.py
+|   +-- questions.py
+|   |   DEFAULT_QUESTIONS_PATH, load_questions, get_question_sequence, sample_questions
+|   `-- sample_builder.py
+|       PROMPTS_DIR, DATA_DIR, _build_metadata, _load_prompt, _load_set, _load_hardcoded_responses, _get_hardcoded_response, _build_conversation, build_behavioral_sample, build_prediction_sample
+|
++-- src\scorers/
+|   +-- __init__.py
+|   |   get_behavioral_scorer
+|   +-- format_check.py
+|   |   _check_uppercase, _check_lowercase, _check_short, _check_long, _check_python, _check_javascript, format_scorer
+|   +-- language_detect.py
+|   |   LANGUAGE_CODE_MAP, language_scorer
+|   +-- pattern_match.py
+|   |   pattern_match, _fuzzy_match
+|   +-- prediction.py
+|   |   DATA_DIR, LANGUAGE_CODE_MAP, _load_set, _classify_static, _classify_set_membership, _classify_language, _classify_format, _classify_text, prediction_scorer
+|   +-- set_membership.py
+|   |   DATA_DIR, _load_set, _normalize, _fuzzy_set_match, set_membership_scorer
+|   `-- style_judge.py
+|       PERSONA_RUBRIC, PREFERENCE_RUBRIC, style_scorer
+|
++-- src\solvers/
+|   +-- __init__.py
+|   `-- protocols.py
+|       PROMPTS_DIR, _load_prompt, behavioral_solver, prediction_solver
+|
++-- src\tasks/
+|   +-- __init__.py
+|   +-- behavioral.py
+|   |   behavioral_baseline
+|   `-- prediction.py
+|       self_prediction
+|
