@@ -52,7 +52,12 @@
       "mcp__inspect-viz-docs__list_doc_sources",
       "mcp__inspect-viz-docs__fetch_docs",
       "Bash(QUARTO_PYTHON=\".venv/Scripts/python.exe\" uv run quarto:*)",
-      "Bash(QUARTO_PYTHON=.venv/Scripts/python.exe uv run quarto render:*)"
+      "Bash(QUARTO_PYTHON=.venv/Scripts/python.exe uv run quarto render:*)",
+      "Bash(cmd /c \"dir C:\\\\Users\\\\hissi\\\\Documents\\\\src\\\\fig\\\\induction-vs-instruction\\\\logs 2>&1\")",
+      "Bash(cmd /c \"dir /s /b C:\\\\Users\\\\hissi\\\\Documents\\\\src\\\\fig\\\\induction-vs-instruction\\\\outputs 2>&1 | head -20\")",
+      "Bash(cmd /c \"dir /ad C:\\\\Users\\\\hissi\\\\Documents\\\\src\\\\fig\\\\induction-vs-instruction 2>&1\")",
+      "Bash(cmd /c \"dir /s /b /ad C:\\\\Users\\\\hissi\\\\Documents\\\\src\\\\fig\\\\induction-vs-instruction 2>&1 | findstr /v .venv | findstr /v __pycache__ | findstr /v .git\")",
+      "Bash(test:*)"
     ],
     "deny": [],
     "ask": []

@@ -8,6 +8,12 @@
 | 2026-02-13 | self | Tried to make `@task` accept comma-separated lists to avoid a runner script | Keep `@task` functions simple (single condition, single n_turns). Grid expansion belongs in a script calling `eval_set()`. |
 | 2026-02-16 | self | Used `Selection.crossfilter()` when `Selection.intersect()` was needed | crossfilter EXCLUDES a source's own predicate from marks sharing that source. If hint select reads from traj_data and the main line uses traj_data, crossfilter excludes the hint predicate from the main line! Use intersect when you want ALL predicates applied to ALL marks. |
 | 2026-02-16 | self | Kept iterating on broken viz without stepping back to understand the framework | After 2-3 failed attempts at the same problem, STOP and read the actual framework docs instead of guessing. |
+| 2026-02-18 | self | Passed `color_legend=False` to `plot()` — `colorLegend` is not a valid Observable Plot attribute | To hide color legend, simply omit the `legend` param from `plot()`. Don't invent PlotAttributes — check the `PlotAttributes` TypedDict. |
+| 2026-02-18 | self | Put `fx`/`fy` as plot-level kwargs — they're not valid PlotAttributes | `fx` and `fy` are mark-level channels (in MarkOptions), not plot attributes. Pass them to each mark individually. |
+| 2026-02-18 | self | Passed `legend="color"` (string) to `plot()` | `legend` param needs a `Legend` object — use `legend("color", ...)` imported from `inspect_viz.plot`. String shorthand does NOT work. |
+| 2026-02-18 | self | Used `fy_axis="top"` — invalid | `fy_axis` only accepts `"left"`, `"right"`, `"both"`, or `bool`/`None`. There is no top/bottom option for fy axis. |
+| 2026-02-18 | self | `facet_anchor` (MarkOption) is not for positioning axis labels | `facet_anchor` controls WHICH facets a mark is rendered in (e.g. annotations in only the bottom facet). It does NOT move fy/fx axis labels. |
+| 2026-02-18 | self | fy axis labels (condition names) getting cut off despite `margin_left` | No built-in way to put fy labels above rows. Solutions: (1) `fy_axis=False` + color legend to replace labels, (2) increase `margin_left` to ~200px for long names. |
 
 ## User Preferences
 - Project is single-purpose (induction vs instruction evals) - no need for extra subfolder nesting
@@ -42,6 +48,7 @@
   - CLI options: `--reasoning-effort`, `--reasoning-tokens`, `--reasoning-summary`, `--reasoning-history`
 
 ## Inspect viz
+- Quarto HTML default column is ~750px — use `#| column: screen` on specific cells for full-width plots, or `page-layout: full` in YAML for the whole notebook.
 - On Windows/MSYS2, `$(pwd)` produces `/c/Users/...` paths that Python can't read. Use relative paths for Quarto `-P` params and resolve them in the notebook.
 - `QUARTO_PYTHON` env var must point to the .venv Python for Quarto to find packages. Set it in justfile.
 - `scores_by_factor()` does NOT accept `filter_by` — but it respects the Data's built-in selection from `select()`/`slider()` inputs. So filter via inputs targeting the same Data instance.
