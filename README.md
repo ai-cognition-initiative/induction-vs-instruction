@@ -15,7 +15,78 @@ Create a `.env` file with your API key:
 ```
 OPENROUTER_API_KEY=sk-or-...
 ```
-inspect-ai reads OPENROUTER_API_KEY from .env automatically (it has its own dotenv loading). 
+inspect-ai reads OPENROUTER_API_KEY from .env automatically (it has its own dotenv loading).
+
+### Specifying OpenRouter models
+
+Use the `openrouter/` prefix with the full model identifier from [openrouter.ai/models](https://openrouter.ai/models):
+
+```bash
+# Format: openrouter/<provider>/<model>
+--model openrouter/google/gemini-2.0-flash-001
+--model openrouter/anthropic/claude-3.5-sonnet
+--model openrouter/meta-llama/llama-3.1-70b-instruct
+--model openrouter/deepseek/deepseek-chat
+```
+
+#### OpenRouter-specific options
+
+Pass OpenRouter model args with `-M`. The most useful is `provider.order` to specify which inference provider to use:
+
+```bash
+# Use a specific provider (e.g., DeepInfra for DeepSeek)
+--model openrouter/deepseek/deepseek-chat \
+-M "provider={'order': ['deepinfra']}"
+
+# Prefer Anthropic's native API, fallback to others if unavailable
+--model openrouter/anthropic/claude-3.5-sonnet \
+-M "provider={'order': ['anthropic']}"
+
+# Only allow specific providers (no fallbacks)
+--model openrouter/meta-llama/llama-3.1-70b-instruct \
+-M "provider={'only': ['together', 'fireworks']}"
+
+# Sort by throughput for fastest responses
+--model openrouter/meta-llama/llama-3.1-70b-instruct \
+-M "provider={'sort': 'throughput'}"
+
+# Sort by price for cheapest responses
+--model openrouter/meta-llama/llama-3.1-70b-instruct \
+-M "provider={'sort': 'price'}"
+
+# Disable reasoning tokens for reasoning models
+--model openrouter/deepseek/deepseek-r1 \
+-M "reasoning_enabled=false"
+```
+
+Common provider slugs: `anthropic`, `openai`, `together`, `fireworks`, `deepinfra`, `groq`, `google`. Find provider slugs on each model's page at [openrouter.ai/models](https://openrouter.ai/models).
+
+See [OpenRouter Provider Routing docs](https://openrouter.ai/docs/guides/routing/provider-selection) for all options.
+
+### Logging OpenRouter usage
+
+The `src/utils/openrouter_logging.py` module provides integration with inspect-ai's logging:
+
+```python
+from src.utils.openrouter_logging import log_openrouter_metadata, OpenRouterUsageTracker
+
+# At task start - logs model info to inspect-ai transcript
+metadata = log_openrouter_metadata(model)
+
+# Track usage across samples
+tracker = OpenRouterUsageTracker(model)
+# ... after each model call ...
+tracker.record(output.usage)
+# ... at end ...
+summary = tracker.log_summary()
+```
+
+Set `--log-level info` to see OpenRouter pricing and usage in the console:
+
+```bash
+uv run inspect eval src/tasks/behavioral.py --model openrouter/google/gemini-2.0-flash-001 --log-level info
+```
+
 ## Running evaluations
 
 Evaluations are configured with YAML files in `configs/` and run through `run.py`, which expands condition x N combinations into inspect-ai tasks.
