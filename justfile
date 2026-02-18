@@ -55,6 +55,20 @@ report folder:
     echo "Done. Reports at outputs/notebooks/{{folder}}/"
 
 [group("reporting")]
+rescore-prediction folder:
+    #!/usr/bin/env bash
+    set -e
+    echo "Rescoring prediction logs in logs/{{folder}}"
+    for f in logs/{{folder}}/*.eval; do
+        echo "  Scoring $f"
+        uv run inspect score "$f" \
+            --scorer src/scorers/prediction.py@prediction_scorer \
+            --action overwrite \
+            --overwrite
+    done
+    echo "Done."
+
+[group("reporting")]
 preview folder protocol="behavioral_analysis" evals_file="evals.parquet":
     @QUARTO_PYTHON="{{root}}/.venv/Scripts/python.exe" quarto preview notebooks/{{protocol}}.qmd \
         --execute \
@@ -67,5 +81,5 @@ clean-reports:
 
 [group("reporting")]
 token-usage:
-    @uv run python -c "from src.utils.token_usage import compute_token_usage; compute_token_usage()"
+    @uv run python src/utils/token_usage.py
     @cat logs/token_usage.md

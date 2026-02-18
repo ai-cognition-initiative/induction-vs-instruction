@@ -13,6 +13,8 @@ from inspect_ai.scorer import (
 )
 from inspect_ai.solver import TaskState
 
+from src.scorers.classify import GRADER_MODEL
+
 PERSONA_RUBRIC = """You are evaluating whether a response matches a particular communication style.
 
 The response should match the TARGET style: {target_description}
@@ -69,7 +71,7 @@ def style_scorer(
             output=output,
         )
 
-        grader = get_model()
+        grader = get_model(GRADER_MODEL)
         result = await grader.generate(
             [
                 ChatMessageSystem(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from inspect_ai.scorer import Scorer
 
 from src.config import Condition
+from src.scorers.classify import classify_actual, classify_prediction
 from src.scorers.format_check import format_scorer
 from src.scorers.language_detect import language_scorer
 from src.scorers.pattern_match import pattern_match
@@ -11,6 +12,8 @@ from src.scorers.set_membership import set_membership_scorer
 from src.scorers.style_judge import style_scorer
 
 __all__ = [
+    "classify_actual",
+    "classify_prediction",
     "format_scorer",
     "get_behavioral_scorer",
     "language_scorer",
