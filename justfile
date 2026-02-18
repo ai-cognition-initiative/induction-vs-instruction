@@ -11,29 +11,61 @@ logs:
 
 [group("reporting")]
 report folder:
-    @echo "Generating reports for logs/{{folder}}"
-    @rm -rf outputs/viz/{{folder}} outputs/notebooks/{{folder}}
-    @mkdir -p outputs/viz/{{folder}} outputs/notebooks/{{folder}}
-    @uv run python scripts/prepare_viz_data.py \
+    #!/usr/bin/env bash
+    set -e
+    echo "Generating reports for logs/{{folder}}"
+    rm -rf outputs/viz/{{folder}} outputs/notebooks/{{folder}}
+    mkdir -p outputs/viz/{{folder}} outputs/notebooks/{{folder}}
+
+    behavioral_ok=false
+    prediction_ok=false
+
+    if uv run python scripts/prepare_viz_data.py \
         --log-dir logs/{{folder}} \
-        --output-dir outputs/viz/{{folder}}
-    @QUARTO_PYTHON="{{root}}/.venv/Scripts/python.exe" quarto render notebooks/behavioral_analysis.qmd \
-        --output-dir {{root}}/outputs/notebooks/{{folder}} \
-        --execute \
-        -P evals_path:outputs/viz/{{folder}}/evals.parquet
-    # @QUARTO_PYTHON="{{root}}/.venv/Scripts/python.exe" quarto render notebooks/prediction_analysis.qmd \
-    #     --output-dir {{root}}/outputs/notebooks/{{folder}} \
-    #     --execute \
-    #     -P evals_path:outputs/viz/{{folder}}/evals.parquet
-    @echo "Reports generated at outputs/notebooks/{{folder}}/"
+        --output-dir outputs/viz/{{folder}} \
+        --protocol behavioral; then
+        behavioral_ok=true
+    else
+        echo "Skipping behavioral report (no behavioral logs in logs/{{folder}})"
+    fi
+
+    if uv run python scripts/prepare_viz_data.py \
+        --log-dir logs/{{folder}} \
+        --output-dir outputs/viz/{{folder}} \
+        --protocol prediction; then
+        prediction_ok=true
+    else
+        echo "Skipping prediction report (no prediction logs in logs/{{folder}})"
+    fi
+
+    if [ "$behavioral_ok" = "true" ]; then
+        QUARTO_PYTHON="{{root}}/.venv/Scripts/python.exe" quarto render notebooks/behavioral_analysis.qmd \
+            --output-dir {{root}}/outputs/notebooks/{{folder}} \
+            --execute \
+            -P evals_path:outputs/viz/{{folder}}/evals.parquet
+    fi
+
+    if [ "$prediction_ok" = "true" ]; then
+        QUARTO_PYTHON="{{root}}/.venv/Scripts/python.exe" quarto render notebooks/prediction_analysis.qmd \
+            --output-dir {{root}}/outputs/notebooks/{{folder}} \
+            --execute \
+            -P evals_path:outputs/viz/{{folder}}/evals_prediction.parquet
+    fi
+
+    echo "Done. Reports at outputs/notebooks/{{folder}}/"
 
 [group("reporting")]
-preview folder protocol="behavioral_analysis":
+preview folder protocol="behavioral_analysis" evals_file="evals.parquet":
     @QUARTO_PYTHON="{{root}}/.venv/Scripts/python.exe" quarto preview notebooks/{{protocol}}.qmd \
         --execute \
-        -P evals_path:outputs/viz/{{folder}}/evals.parquet
+        -P evals_path:outputs/viz/{{folder}}/{{evals_file}}
 
 [group("reporting")]
 clean-reports:
     rm -rf outputs/notebooks/*
     rm -rf outputs/viz/*
+
+[group("reporting")]
+token-usage:
+    @uv run python -c "from src.utils.token_usage import compute_token_usage; compute_token_usage()"
+    @cat logs/token_usage.md
