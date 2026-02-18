@@ -27,8 +27,8 @@
 - Use `store.set()` / `store.get()` in solvers to pass data between steps
 - Inspect-viz uses Quarto notebooks (`.qmd`) for publishing - not raw .ipynb
 - `scores_by_factor()` requires boolean factor - decompose conditions into natural pairs:
-  - `value_pattern` vs `value_target` → factor: instruction_value_aligned
-  - `factual_pattern` vs `factual_target` → factor: instruction_truth_aligned
+  - `value_aligned_cats` vs `value_misaligned_cats` → factor: instruction_value_aligned
+  - `factual_aligned_earth` vs `factual_misaligned_earth` → factor: instruction_truth_aligned
   - `neutral` → use hint as factor
 
 ## Inspect-AI Patterns
@@ -74,6 +74,18 @@
 - `Selection.crossfilter()`: each source's OWN predicate is EXCLUDED from itself. Designed for reciprocal filtering (e.g., two histograms filtering each other). If an input reads from Data A and a mark also uses Data A, the input's predicate is excluded from that mark.
 - The "source" is determined by the Data instance. A `select(data=X, target=sel)` associates its clause with source X. A `line(X, filter_by=sel)` evaluates sel for source X.
 - For filtering one Data by another's inputs (e.g., neutral baseline filtered by hint selected from traj_data), use `Selection.intersect()` — the hint predicate applies to both traj_data marks AND neutral_data marks.
+
+## Condition Naming Convention
+- Instruction is always the primary reference point (instruction first in name)
+- Conditions with values/truth alignment axis: `{type}_{aligned|misaligned}_{topic}` (topic = shared subject, e.g. cats, earth)
+  - `value_aligned_cats` (T=love cats, P=hate cats), `value_misaligned_cats` (T=hate cats, P=love cats)
+  - `factual_aligned_earth` (T=earth is round, P=flat), `factual_misaligned_earth` (T=earth is flat, P=round)
+  - `preference_aligned_cats` (T=love cats weaved, P=hate cats weaved), `preference_misaligned_cats` (T=hate, P=love)
+- Conditions without alignment axis: `{type}_{instruction}_{pattern}` — instruction first
+  - `persona_casual_formal` = instruction=casual, pattern=formal
+  - `language_ru_fr` = instruction=Russian, pattern=French
+  - `token_countries_states` = instruction=EU countries, pattern=US states
+- For future binary preference extensions, same pattern: `preference_aligned_X` / `preference_misaligned_X`
 
 ## Domain Notes
 - Inspect-AI evaluation framework for testing LLM behavior under induction pressure
