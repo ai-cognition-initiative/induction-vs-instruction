@@ -22,7 +22,7 @@ def behavioral_baseline(
     under induction pressure.
 
     Args:
-        condition: Name of condition (neutral, value_pattern, value_target, etc.)
+        condition: Name of condition (neutral, value_aligned_cats, value_misaligned_cats, etc.)
         n_turns: Number of hardcoded assistant turns before free generation.
         instruction_template: Name of instruction template file (without .txt).
         n_trials: Number of trials to run (each with different questions).

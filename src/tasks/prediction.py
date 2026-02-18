@@ -21,7 +21,7 @@ def self_prediction(
     Tests whether the model can predict its own behavior before generating.
 
     Args:
-        condition: Name of condition (neutral, value_pattern, value_target, etc.)
+        condition: Name of condition (neutral, value_aligned_cats, value_misaligned_cats, etc.)
         n_turns: Number of hardcoded assistant turns.
         instruction_template: Name of instruction template file (without .txt).
         n_trials: Number of trials to run (each with different questions).
