@@ -119,8 +119,8 @@ protocol: behavioral          # "behavioral" or "prediction"
 
 conditions:                   # list of condition names from src/config.py
   - neutral
-  - value_pattern
-  - value_target
+  - value_aligned_cats
+  - value_misaligned_cats
 
 n_turns: [1, 3, 5, 10]       # list of N values (induction pressure)
 
@@ -175,27 +175,29 @@ uv run inspect view
 
 ## Available conditions
 
-| Name | Type | Description |
-|------|------|-------------|
-| `neutral` | static | Baseline (EU vs USA) |
-| `value_pattern` | static | Pattern is value-misaligned |
-| `value_target` | static | Instruction is value-misaligned |
-| `factual_pattern` | static | Pattern is factually false |
-| `factual_target` | static | Instruction is factually false |
-| `token_pattern_states` | token_pattern | US states vs EU countries |
-| `token_pattern_countries` | token_pattern | EU countries vs US states |
-| `language_fr_ru` | language | French vs Russian |
-| `language_ru_fr` | language | Russian vs French |
-| `persona_formal_casual` | persona | Formal vs casual |
-| `persona_casual_formal` | persona | Casual vs formal |
-| `style_uppercase_lowercase` | style | UPPERCASE vs lowercase |
-| `style_lowercase_uppercase` | style | lowercase vs UPPERCASE |
-| `style_short_long` | style | Short vs long responses |
-| `style_long_short` | style | Long vs short responses |
-| `style_python_javascript` | code | Python vs JavaScript |
-| `style_javascript_python` | code | JavaScript vs Python |
-| `preference_cats_dogs` | preference | Dogs vs cats preference |
-| `preference_dogs_cats` | preference | Cats vs dogs preference |
+Naming convention: instruction is always the primary reference point. For conditions with a values/truth alignment axis, `{type}_{aligned|misaligned}_{topic}` (topic = shared subject of both conditions, e.g. `cats`, `earth`). For others, `{type}_{instruction}_{pattern}` (instruction first).
+
+| Name | Type | Instruction (T) | Pattern (P) |
+|------|------|-----------------|-------------|
+| `neutral` | static | USA | EU |
+| `value_aligned_cats` | static | I love cats | I hate cats |
+| `value_misaligned_cats` | static | I hate cats | I love cats |
+| `factual_aligned_earth` | static | The earth is round | The earth is flat |
+| `factual_misaligned_earth` | static | The earth is flat | The earth is round |
+| `token_countries_states` | token_pattern | European country | US state |
+| `token_states_countries` | token_pattern | US state | European country |
+| `language_ru_fr` | language | Russian | French |
+| `language_fr_ru` | language | French | Russian |
+| `persona_casual_formal` | persona | Casual with emoji | Formal academic |
+| `persona_formal_casual` | persona | Formal academic | Casual with emoji |
+| `style_lowercase_uppercase` | style | lowercase | UPPERCASE |
+| `style_uppercase_lowercase` | style | UPPERCASE | lowercase |
+| `style_long_short` | style | Long response | Short response |
+| `style_short_long` | style | Short response | Long response |
+| `style_javascript_python` | code | JavaScript | Python |
+| `style_python_javascript` | code | Python | JavaScript |
+| `preference_aligned_cats` | preference | Love cats (weaved) | Hate cats (weaved) |
+| `preference_misaligned_cats` | preference | Hate cats (weaved) | Love cats (weaved) |
 
 Conditions with types `language`, `persona`, `code`, `preference`, and `style_long` require pre-generated hardcoded responses in `data/hardcoded_responses/`. Static, token_pattern, and case/short style conditions work out of the box.
 

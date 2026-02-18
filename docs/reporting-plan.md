@@ -64,8 +64,8 @@ Key columns for plotting:
 
 Useful columns for analysis:
 1. **`condition_pair`**: Groups conditions into natural pairs
-   - `value`: value_pattern + value_target
-   - `factual`: factual_pattern + factual_target
+   - `value`: value_aligned_cats + value_misaligned_cats
+   - `factual`: factual_aligned_earth + factual_misaligned_earth
    - `neutral`: neutral (uses hint as factor)
 
 2. **`instruction_aligned`**: Boolean factor within each pair
@@ -82,7 +82,7 @@ Useful columns for analysis:
 - inspect-viz is built on top of observable plot. You have an observable plot skill, remember to load it
 - use interactivity (dropdowns mostly): https://meridianlabs-ai.github.io/inspect_viz/components-interactivity.html
 - the neutral condition results can be used as baseline, but keep in mind they also vary by the "instructiom" arg
-- Aside from the neutral condition, all the others are paired: e.g. value_pattern, value_target.. there is already a utility function that groups the pairs together. this is useful for faceting and splitting plots and for interactivity. But always remember that all conditions have multiple "instruction" values
+- Aside from the neutral condition, all the others are paired: e.g. value_aligned_cats, value_misaligned_cats.. there is already a utility function that groups the pairs together. this is useful for faceting and splitting plots and for interactivity. But always remember that all conditions have multiple "instruction" values
 - Always use evals_df unless instructed otherwise. evals_df, coompared to samples_df, already averages results across samples
 - Never average across conditions or across instructions unless explicitly asked in the plot list
 
@@ -91,7 +91,7 @@ Note: You MUST be able to see the observable plot pages in order to perform thes
 
 - a labeled multi line chart: https://observablehq.com/@observablehq/plot-labeled-multi-line-chart with two dropdowns to select content: condition and instruction. then one labeled line per model
 - a bullet graph: https://observablehq.com/@observablehq/plot-bullet-graph. You should show a set of KxV bullet graphs, where K is the number of conditions except neutral, and V is the number of instruction settings. The plots should be concatenated horizontally for instruction and vertically for condition. The "background data" (the grey bar) should be the accuracy score for the neutral condition. On the y axis, the model
-- the same bullet graph as above, but instead of showing neutral as a background, you should split according to the pair (eg value_pattern )
+- the same bullet graph as above, but instead of showing neutral as a background, you should split according to the pair (eg value_aligned_cats + value_misaligned_cats)
 
 - A heatmap like the one that's already implemented, N on the x axis, condition + instruction combo on the y, dropdown to pick model
 
@@ -101,8 +101,8 @@ Note: You MUST be able to see the observable plot pages in order to perform thes
 
 | Pair | Factor | True (Aligned) | False (Misaligned) |
 |------|--------|----------------|-------------------|
-| **Value** | Instruction value-aligned | `value_pattern` (T="I love cats") | `value_target` (T="I hate cats") |
-| **Truth** | Instruction truth-aligned | `factual_pattern` (T="earth is round") | `factual_target` (T="earth is flat") |
+| **Value** | Instruction value-aligned | `value_aligned_cats` (T="I love cats") | `value_misaligned_cats` (T="I hate cats") |
+| **Truth** | Instruction truth-aligned | `factual_aligned_earth` (T="earth is round") | `factual_misaligned_earth` (T="earth is flat") |
 | **Neutral** | Has hardcoding hint | `hint=True` | `hint=False` |
 
 **Key insight:** Each pair isolates a single dimension of variation. The comparison tells us whether instruction alignment (with values/truth) or hint awareness affects instruction-following rates.
