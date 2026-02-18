@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -10,49 +11,59 @@ from inspect_ai.analysis import EvalModel, EvalScores, EvalTask, evals_df
 # --- Condition pairing logic ---
 
 CONDITION_PAIR_MAP = {
-    "value_pattern": "value",
-    "value_target": "value",
-    "factual_pattern": "factual",
-    "factual_target": "factual",
+    "value_aligned_cats": "value",
+    "value_misaligned_cats": "value",
+    "factual_aligned_earth": "factual",
+    "factual_misaligned_earth": "factual",
     "neutral": "neutral",
-    "token_pattern_states": "token_pattern",
-    "token_pattern_countries": "token_pattern",
-    "language_fr_ru": "language",
+    "token_countries_states": "token",
+    "token_states_countries": "token",
     "language_ru_fr": "language",
-    "persona_formal_casual": "persona",
+    "language_fr_ru": "language",
     "persona_casual_formal": "persona",
-    "style_uppercase_lowercase": "style_case",
+    "persona_formal_casual": "persona",
     "style_lowercase_uppercase": "style_case",
-    "style_short_long": "style_length",
+    "style_uppercase_lowercase": "style_case",
     "style_long_short": "style_length",
-    "style_python_javascript": "style_code",
+    "style_short_long": "style_length",
     "style_javascript_python": "style_code",
-    "preference_cats_dogs": "preference",
-    "preference_dogs_cats": "preference",
+    "style_python_javascript": "style_code",
+    "preference_aligned_cats": "preference",
+    "preference_misaligned_cats": "preference",
 }
 
 ALIGNED_CONDITIONS = {
-    "value_pattern",
-    "factual_pattern",
-    "token_pattern_states",
-    "language_fr_ru",
-    "persona_formal_casual",
-    "style_uppercase_lowercase",
-    "style_short_long",
-    "style_python_javascript",
-    "preference_cats_dogs",
-}
-
-MISALIGNED_CONDITIONS = {
-    "value_target",
-    "factual_target",
-    "token_pattern_countries",
+    "value_aligned_cats",
+    "factual_aligned_earth",
+    "token_countries_states",
     "language_ru_fr",
     "persona_casual_formal",
     "style_lowercase_uppercase",
     "style_long_short",
     "style_javascript_python",
-    "preference_dogs_cats",
+    "preference_aligned_cats",
+}
+
+MISALIGNED_CONDITIONS = {
+    "value_misaligned_cats",
+    "factual_misaligned_earth",
+    "token_states_countries",
+    "language_fr_ru",
+    "persona_formal_casual",
+    "style_uppercase_lowercase",
+    "style_short_long",
+    "style_python_javascript",
+    "preference_misaligned_cats",
+}
+
+# Prediction metric column rename map
+PREDICTION_SCORE_RENAME = {
+    "score_instruction_following_accuracy": "score_instruction_following",
+    "score_instruction_following_stderr": "stderr_instruction_following",
+    "score_prediction_accuracy_accuracy": "score_prediction_accuracy",
+    "score_prediction_accuracy_stderr": "stderr_prediction_accuracy",
+    "score_prediction_instruction_accuracy": "score_prediction_instruction",
+    "score_prediction_instruction_stderr": "stderr_prediction_instruction",
 }
 
 
@@ -72,7 +83,6 @@ def add_pairing_columns(df: pd.DataFrame) -> pd.DataFrame:
 def _coalesce_scores(df: pd.DataFrame) -> pd.DataFrame:
     """Unify multiple score_*_accuracy columns into a single score + score_stderr."""
     acc_cols = [c for c in df.columns if c.endswith("_accuracy")]
-    stderr_cols = [c for c in df.columns if c.endswith("_stderr")]
 
     # Coalesce: take first non-null accuracy value per row
     df["score"] = pd.NA
@@ -92,14 +102,18 @@ def _coalesce_scores(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def prepare_data(log_dir: str, output_dir: str) -> None:
-    """Prepare eval logs for visualization — outputs evals.parquet."""
+def _rename_prediction_scores(df: pd.DataFrame) -> pd.DataFrame:
+    """Rename prediction metric columns to clean names."""
+    return df.rename(columns=PREDICTION_SCORE_RENAME)
+
+
+def _common_prep(log_dir: str, output_dir: str) -> tuple[pd.DataFrame, Path]:
+    """Load evals_df, apply common renames and sorting. Returns (df, out_path)."""
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
     evals = evals_df(logs=log_dir, columns=EvalTask + EvalModel + EvalScores)
 
-    # Rename task_arg columns to clean names
     df = evals.rename(columns={
         "task_arg_condition": "condition",
         "task_arg_n_turns": "n_turns",
@@ -109,30 +123,74 @@ def prepare_data(log_dir: str, output_dir: str) -> None:
     # Shorten model names (strip provider prefixes like "openrouter/google/")
     df["model"] = df["model"].str.replace(r"^openrouter/[^/]+/", "", regex=True)
 
-    # Coalesce score columns
-    df = _coalesce_scores(df)
-
     # Add pairing columns
     df = add_pairing_columns(df)
 
-    # Convert n_turns to string for widget compatibility
-    # Sort numerically first so line marks connect properly
+    # Sort by numeric n_turns, convert to string for widget compatibility
     df["_sort"] = pd.to_numeric(df["n_turns"], errors="coerce")
     df = df.sort_values(["model", "condition", "instruction", "_sort"])
     df["n_turns"] = df["_sort"].astype(int).astype(str)
     df = df.drop(columns=["_sort"])
 
-    # Select output columns
+    return df, out
+
+
+def prepare_behavioral(log_dir: str, output_dir: str) -> None:
+    """Prepare behavioral eval logs — outputs evals.parquet."""
+    df, out = _common_prep(log_dir, output_dir)
+
+    acc_cols = [c for c in df.columns if c.endswith("_accuracy")]
+    if not acc_cols:
+        print("No score columns found — this log directory may not contain behavioral logs.")
+        sys.exit(1)
+
+    df = _coalesce_scores(df)
+    df = df.dropna(subset=["score"])
+
+    if df.empty:
+        print("No behavioral scores found — skipping.")
+        sys.exit(1)
+
     output_cols = [
         "model", "condition", "condition_pair",
         "instruction_aligned", "instruction", "n_turns", "score", "score_stderr",
     ]
     df = df[output_cols].reset_index(drop=True)
 
-    # Drop rows with no score
-    df = df.dropna(subset=["score"])
-
     path = out / "evals.parquet"
+    df.to_parquet(path, index=False)
+    print(f"Saved {len(df)} rows to {path}")
+    print(f"  Models: {df['model'].nunique()}")
+    print(f"  Conditions: {sorted(df['condition'].unique())}")
+    print(f"  Instructions: {sorted(df['instruction'].unique())}")
+    print(f"  N values: {sorted(df['n_turns'].unique(), key=int)}")
+
+
+def prepare_prediction(log_dir: str, output_dir: str) -> None:
+    """Prepare prediction eval logs — outputs evals_prediction.parquet (wide, 3 metrics)."""
+    df, out = _common_prep(log_dir, output_dir)
+
+    required_col = "score_prediction_accuracy_accuracy"
+    if required_col not in df.columns:
+        print(f"Missing {required_col!r} — this log directory may not contain prediction logs.")
+        sys.exit(1)
+
+    df = _rename_prediction_scores(df)
+
+    output_cols = [
+        "model", "condition", "condition_pair", "instruction_aligned", "instruction", "n_turns",
+        "score_instruction_following", "stderr_instruction_following",
+        "score_prediction_accuracy", "stderr_prediction_accuracy",
+        "score_prediction_instruction", "stderr_prediction_instruction",
+    ]
+    df = df[output_cols].reset_index(drop=True)
+    df = df.dropna(subset=["score_instruction_following"])
+
+    if df.empty:
+        print("No prediction scores found — skipping.")
+        sys.exit(1)
+
+    path = out / "evals_prediction.parquet"
     df.to_parquet(path, index=False)
     print(f"Saved {len(df)} rows to {path}")
     print(f"  Models: {df['model'].nunique()}")
@@ -145,5 +203,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare eval data for visualization")
     parser.add_argument("--log-dir", type=str, required=True)
     parser.add_argument("--output-dir", type=str, required=True)
+    parser.add_argument(
+        "--protocol", choices=["behavioral", "prediction"], default="behavioral",
+        help="Which protocol's logs to prepare (default: behavioral)",
+    )
     args = parser.parse_args()
-    prepare_data(args.log_dir, args.output_dir)
+
+    if args.protocol == "behavioral":
+        prepare_behavioral(args.log_dir, args.output_dir)
+    else:
+        prepare_prediction(args.log_dir, args.output_dir)

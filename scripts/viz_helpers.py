@@ -210,6 +210,76 @@ def paired_bullet_graph(
     )
 
 
+def calibration_line_chart(
+    data: Data,
+    label_data: Data,
+    *,
+    selection: Selection | None = None,
+    actual_col: str = "score_instruction_following",
+    predicted_col: str = "score_prediction_instruction",
+    title: str = "Instruction Following: Actual (solid) vs Predicted (dashed)",
+    width: int = 900,
+    height: int = 400,
+    x_domain: list[str] | None = None,
+):
+    """Calibration chart: actual IF rate (solid) vs predicted IF rate (dashed).
+
+    Both lines share the same color per model so the gap is immediately visible.
+    Text labels at the rightmost N mark the actual (solid) lines.
+
+    Args:
+        data: Main data source (wide format with both score columns).
+        label_data: Data filtered to max n_turns for text labels.
+        selection: Shared Selection for condition/instruction filtering.
+        actual_col: Column for actual instruction-following rate (solid line).
+        predicted_col: Column for predicted instruction-following rate (dashed line).
+    """
+    return plot(
+        line(
+            data,
+            x="n_turns",
+            y=actual_col,
+            stroke="model",
+            filter_by=selection,
+            marker=True,
+            tip=True,
+            channels={"N": "n_turns", "Actual IF": actual_col, "Model": "model"},
+        ),
+        line(
+            data,
+            x="n_turns",
+            y=predicted_col,
+            stroke="model",
+            stroke_dasharray="4 2",
+            filter_by=selection,
+            marker=True,
+            tip=True,
+            channels={"N": "n_turns", "Predicted IF": predicted_col, "Model": "model"},
+        ),
+        text(
+            label_data,
+            x="n_turns",
+            y=actual_col,
+            text="model",
+            filter_by=selection,
+            fill="model",
+            stroke="white",
+            stroke_width=4,
+            dx=5,
+            line_anchor="middle",
+            styles={"text_anchor": "start", "font_size": 11, "font_weight": 600},
+        ),
+        x_label="N (hardcoded turns)",
+        y_label="Rate",
+        title=title,
+        width=width,
+        height=height,
+        y_domain=[0, 1.05],
+        x_domain=x_domain,
+        margin_right=200,
+    )
+
+
 def overview_heatmap(
     data: Data,
     *,
