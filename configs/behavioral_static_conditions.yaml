@@ -8,12 +8,12 @@ protocol: behavioral          # "behavioral" or "prediction"
 
 conditions:
   - neutral
-  - value_pattern
-  - value_target
-  - factual_pattern 
-  - factual_target 
-  - token_pattern_states 
-  - token_pattern_countries
+  - value_aligned_cats
+  - value_misaligned_cats
+  - factual_aligned_earth
+  - factual_misaligned_earth
+  - token_countries_states
+  - token_states_countries
 
 n_turns:                       # list of N values (induction pressure)
   - 1
@@ -25,9 +25,8 @@ n_turns:                       # list of N values (induction pressure)
   - 25
   - 30
   - 35
-  - 40
 
 instruction_templates:
   - instruction_hint
   - instruction_no_hint
-n_trials: 10
+n_trials: 25
