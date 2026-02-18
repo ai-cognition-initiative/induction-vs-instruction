@@ -5,251 +5,171 @@ format:
     code-fold: true
     code-tools: true
 params:
-  data_path: "outputs/viz/default.parquet"
+  evals_path: "outputs/viz/default/evals.parquet"
 ---
 
 ```{python}
 #| tags: [parameters]
-data_path = "outputs/viz/default.parquet"
+evals_path = "outputs/viz/default/evals.parquet"
 ```
 
 ```{python}
 #| echo: false
+import sys
+from pathlib import Path
+
 import pandas as pd
-from inspect_viz import Data
-from inspect_viz.view import scores_by_factor
-from inspect_viz.mark import line, area_y
-from inspect_viz.plot import plot, legend
-from inspect_viz.transform import ci_bounds
 
-df = pd.read_parquet(data_path)
+project_root = Path(".").resolve().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
-def plot_pair(n, pair, factor_labels, title):
-    filtered = df[(df["task_arg_n_turns"] == n) & (df["condition_pair"] == pair)].copy()
-    if len(filtered) == 0:
-        return None
-    filtered["instruction_aligned"] = filtered["instruction_aligned"].astype(bool)
-    data = Data.from_dataframe(filtered)
-    return scores_by_factor(
-        data,
-        factor="instruction_aligned",
-        factor_labels=factor_labels,
-        title=title,
-        width=900,
-        score_value="score_value",
-        score_stderr="score_stderr",
-    )
+def _resolve_path(p: str) -> str:
+    pp = Path(p)
+    if pp.is_absolute() and pp.exists():
+        return str(pp)
+    candidate = project_root / p
+    if candidate.exists():
+        return str(candidate)
+    candidate = Path(".").resolve() / p
+    if candidate.exists():
+        return str(candidate)
+    return p
 
-def plot_trajectory(pair, factor_labels, title):
-    """Plot score trajectory across N values for a condition pair."""
-    filtered = df[df["condition_pair"] == pair].copy()
-    if len(filtered) == 0:
-        return None
-    filtered["instruction_aligned"] = filtered["instruction_aligned"].astype(bool)
-    filtered["factor_label"] = filtered["instruction_aligned"].map({
-        True: factor_labels[1],
-        False: factor_labels[0],
-    })
-    data = Data.from_dataframe(filtered)
-    
-    ci_lower, ci_upper = ci_bounds("score_value", level=0.95, stderr="score_stderr")
-    
-    return plot(
-        line(
-            data,
-            x="task_arg_n_turns",
-            y="score_value",
-            stroke="factor_label",
-            stroke_dash="model",
-            tip=True,
-            channels={
-                "N": "task_arg_n_turns",
-                "Score": "score_value",
-                "Factor": "factor_label",
-                "Model": "model",
-            },
-        ),
-        area_y(
-            data,
-            x="task_arg_n_turns",
-            y="score_value",
-            y1=ci_lower,
-            y2=ci_upper,
-            fill="factor_label",
-            fill_opacity=0.1,
-        ),
-        x_label="N (hardcoded turns)",
-        y_label="Instruction Following Rate",
-        title=title,
-        legend=legend("color", frame_anchor="top-right", inset=10),
-        width=900,
-        y_domain=[0, 1.05],
-    )
+evals_path_resolved = _resolve_path(evals_path)
+_evals_df = pd.read_parquet(evals_path_resolved)
+_out_dir = Path(evals_path_resolved).parent
+
+# N values sorted numerically (stored as strings)
+n_domain = sorted(_evals_df["n_turns"].unique(), key=lambda x: int(x))
+max_n = n_domain[-1]
+
+# --- Derived datasets ---
+
+# Label data: only rows at max n_turns (for text labels at rightmost point)
+_label_df = _evals_df[_evals_df["n_turns"] == max_n].copy()
+_label_path = str(_out_dir / "_labels.parquet")
+_label_df.to_parquet(_label_path, index=False)
+
+from inspect_viz import Data, Selection
+from inspect_viz.input import select
+from inspect_viz.layout import hconcat
+
+from scripts.viz_helpers import labeled_line_chart, bullet_graph, paired_bullet_graph
+
+# --- Bullet graph data: neutral baseline cross-joined with non-neutral condition_pairs ---
+_nonneutral_df = _evals_df[_evals_df["condition"] != "neutral"].copy()
+_nonneutral_path = str(_out_dir / "_nonneutral.parquet")
+_nonneutral_df.to_parquet(_nonneutral_path, index=False)
+
+# Neutral scores need to appear in every condition facet row.
+# Cross-join neutral rows with all non-neutral condition values.
+_neutral_df = _evals_df[_evals_df["condition"] == "neutral"].copy()
+_nn_conditions = _nonneutral_df["condition"].unique()
+_baseline_rows = []
+for cond in _nn_conditions:
+    _tmp = _neutral_df.copy()
+    _tmp["condition"] = cond
+    _baseline_rows.append(_tmp)
+_baseline_df = pd.concat(_baseline_rows, ignore_index=True)
+_baseline_path = str(_out_dir / "_neutral_baseline.parquet")
+_baseline_df.to_parquet(_baseline_path, index=False)
+
+# Paired bullet graph: split nonneutral by instruction_aligned
+_aligned_df = _nonneutral_df[_nonneutral_df["instruction_aligned"] == True].copy()
+_aligned_path = str(_out_dir / "_aligned.parquet")
+_aligned_df.to_parquet(_aligned_path, index=False)
+
+_misaligned_df = _nonneutral_df[_nonneutral_df["instruction_aligned"] == False].copy()
+_misaligned_path = str(_out_dir / "_misaligned.parquet")
+_misaligned_df.to_parquet(_misaligned_path, index=False)
 ```
 
 ## Overview
 
-Protocol 1 tests whether models follow instructions (output T) or succumb to induction pressure (output P) as N increases.
+Protocol 1 tests whether models follow global instructions (output T) or succumb to local induction pressure (output P) as the number of hardcoded turns N increases.
 
-## Score Trajectories Across N
+## Labeled Line Chart {#sec-trajectory}
 
-### Value Alignment
-
-```{python}
-#| echo: false
-plot_trajectory("value", ("Value-misaligned", "Value-aligned"), "Value Alignment: Score vs N")
-```
-
-### Truth Alignment
+Each line represents a model's instruction-following rate. Text labels appear at the rightmost N value. Use the dropdowns to select a condition and instruction template.
 
 ```{python}
 #| echo: false
-plot_trajectory("factual", ("Truth-misaligned", "Truth-aligned"), "Truth Alignment: Score vs N")
-```
+line_data = Data.from_file(evals_path_resolved)
+label_data = Data.from_file(_label_path)
 
-### Hint Effect
+sel = Selection.intersect()
 
-```{python}
-#| echo: false
-plot_trajectory("neutral", ("No hint", "Hint"), "Hint Effect: Score vs N")
-```
-
----
-
-## Per-N Breakdown
-
-## N = 1
-
-```{python}
-#| echo: false
-plot_pair(1, "value", ("Value-misaligned", "Value-aligned"), "N=1: Value Alignment")
+hconcat(
+    select(line_data, label="Condition", column="condition", value="auto", target=sel, field="condition"),
+    select(line_data, label="Instruction", column="instruction", value="auto", target=sel, field="instruction"),
+)
 ```
 
 ```{python}
 #| echo: false
-plot_pair(1, "factual", ("Truth-misaligned", "Truth-aligned"), "N=1: Truth Alignment")
+#| column: page
+labeled_line_chart(
+    line_data,
+    label_data,
+    selection=sel,
+    title="Instruction Following Rate vs N",
+    x_domain=n_domain,
+    width=1000,
+)
+```
+
+## Bullet Graph: vs Neutral Baseline {#sec-bullet}
+
+Each row is a model. The grey background bar shows the neutral condition's accuracy; the colored foreground bar shows the selected condition. Faceted horizontally by instruction template and vertically by condition pair. Use the dropdown to select an N value.
+
+```{python}
+#| echo: false
+bullet_main = Data.from_file(_nonneutral_path)
+bullet_baseline = Data.from_file(_baseline_path)
+
+bullet_sel = Selection.intersect()
+
+select(bullet_main, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=bullet_sel, field="n_turns")
 ```
 
 ```{python}
 #| echo: false
-plot_pair(1, "neutral", ("No hint", "Hint"), "N=1: Hint Effect")
+#| column: page
+bullet_graph(
+    bullet_main,
+    bullet_baseline,
+    selection=bullet_sel,
+    width=1000,
+)
 ```
 
-## N = 3
+## Bullet Graph: Aligned vs Misaligned {#sec-paired-bullet}
+
+Each row is a condition pair. Within each pair, the two conditions share the same pattern P but flip which response is the instruction target T:
+
+- **Colored bar (aligned)**: instruction asks for the value/truth-consistent response (e.g., T="I love cats", P="I hate cats"). Following the instruction also agrees with the model's values.
+- **Grey bar (misaligned)**: instruction asks for the counter-conventional response (e.g., T="I hate cats", P="I love cats"). Following the instruction requires overriding both induction *and* the model's values.
+
+Use the dropdown to select an N value.
 
 ```{python}
 #| echo: false
-plot_pair(3, "value", ("Value-misaligned", "Value-aligned"), "N=3: Value Alignment")
-```
+aligned_data = Data.from_file(_aligned_path)
+misaligned_data = Data.from_file(_misaligned_path)
 
-```{python}
-#| echo: false
-plot_pair(3, "factual", ("Truth-misaligned", "Truth-aligned"), "N=3: Truth Alignment")
-```
+paired_sel = Selection.intersect()
 
-```{python}
-#| echo: false
-plot_pair(3, "neutral", ("No hint", "Hint"), "N=3: Hint Effect")
-```
-
-## N = 5
-
-```{python}
-#| echo: false
-plot_pair(5, "value", ("Value-misaligned", "Value-aligned"), "N=5: Value Alignment")
-```
-
-```{python}
-#| echo: false
-plot_pair(5, "factual", ("Truth-misaligned", "Truth-aligned"), "N=5: Truth Alignment")
+select(aligned_data, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=paired_sel, field="n_turns")
 ```
 
 ```{python}
 #| echo: false
-plot_pair(5, "neutral", ("No hint", "Hint"), "N=5: Hint Effect")
-```
-
-## N = 10
-
-```{python}
-#| echo: false
-plot_pair(10, "value", ("Value-misaligned", "Value-aligned"), "N=10: Value Alignment")
-```
-
-```{python}
-#| echo: false
-plot_pair(10, "factual", ("Truth-misaligned", "Truth-aligned"), "N=10: Truth Alignment")
-```
-
-```{python}
-#| echo: false
-plot_pair(10, "neutral", ("No hint", "Hint"), "N=10: Hint Effect")
-```
-
-## N = 15
-
-```{python}
-#| echo: false
-plot_pair(15, "value", ("Value-misaligned", "Value-aligned"), "N=15: Value Alignment")
-```
-
-```{python}
-#| echo: false
-plot_pair(15, "factual", ("Truth-misaligned", "Truth-aligned"), "N=15: Truth Alignment")
-```
-
-```{python}
-#| echo: false
-plot_pair(15, "neutral", ("No hint", "Hint"), "N=15: Hint Effect")
-```
-
-## N = 20
-
-```{python}
-#| echo: false
-plot_pair(20, "value", ("Value-misaligned", "Value-aligned"), "N=20: Value Alignment")
-```
-
-```{python}
-#| echo: false
-plot_pair(20, "factual", ("Truth-misaligned", "Truth-aligned"), "N=20: Truth Alignment")
-```
-
-```{python}
-#| echo: false
-plot_pair(20, "neutral", ("No hint", "Hint"), "N=20: Hint Effect")
-```
-
-## N = 25
-
-```{python}
-#| echo: false
-plot_pair(25, "value", ("Value-misaligned", "Value-aligned"), "N=25: Value Alignment")
-```
-
-```{python}
-#| echo: false
-plot_pair(25, "factual", ("Truth-misaligned", "Truth-aligned"), "N=25: Truth Alignment")
-```
-
-```{python}
-#| echo: false
-plot_pair(25, "neutral", ("No hint", "Hint"), "N=25: Hint Effect")
-```
-
-## N = 30
-
-```{python}
-#| echo: false
-plot_pair(30, "value", ("Value-misaligned", "Value-aligned"), "N=30: Value Alignment")
-```
-
-```{python}
-#| echo: false
-plot_pair(30, "factual", ("Truth-misaligned", "Truth-aligned"), "N=30: Truth Alignment")
-```
-
-```{python}
-#| echo: false
-plot_pair(30, "neutral", ("No hint", "Hint"), "N=30: Hint Effect")
+#| column: page
+paired_bullet_graph(
+    aligned_data,
+    misaligned_data,
+    selection=paired_sel,
+    width=1000,
+)
 ```

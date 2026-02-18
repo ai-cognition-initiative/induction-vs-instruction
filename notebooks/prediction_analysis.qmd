@@ -5,344 +5,238 @@ format:
     code-fold: true
     code-tools: true
 params:
-  data_path: "outputs/viz/default.parquet"
+  samples_path: "outputs/viz/default/samples.parquet"
+  agg_path: "outputs/viz/default/aggregated.parquet"
 ---
 
 ```{python}
 #| tags: [parameters]
-data_path = "outputs/viz/default.parquet"
+samples_path = "outputs/viz/default/samples.parquet"
+agg_path = "outputs/viz/default/aggregated.parquet"
 ```
 
 ```{python}
 #| echo: false
+import sys
+from pathlib import Path
+
+project_root = Path(".").resolve().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+def _resolve_path(p: str) -> str:
+    pp = Path(p)
+    if pp.is_absolute() and pp.exists():
+        return str(pp)
+    candidate = project_root / p
+    if candidate.exists():
+        return str(candidate)
+    candidate = Path(".").resolve() / p
+    if candidate.exists():
+        return str(candidate)
+    return p
+
+agg_path_resolved = _resolve_path(agg_path)
+samples_path_resolved = _resolve_path(samples_path)
+
 import pandas as pd
 from inspect_viz import Data
+from inspect_viz.input import select
 from inspect_viz.view import scores_by_factor
-from inspect_viz.layout import hconcat
+from inspect_viz.mark import area_y, line
+from inspect_viz.plot import legend, plot
+from inspect_viz.transform import ci_bounds
+from inspect_viz.table import table, column as tcol
+from inspect_viz.layout import vconcat, hconcat
 
-df = pd.read_parquet(data_path)
+from scripts.viz_helpers import trajectory_plot
 
-def plot_pair_for_n(n: int, pair: str, factor_labels: tuple, title: str, score_column: str = "score_headline_value"):
-    """Generate a single scores_by_factor plot for a condition pair at given N."""
-    filtered = df[(df["task_arg_n_turns"] == n) & (df["condition_pair"] == pair)]
-    data = Data.from_dataframe(filtered)
-    
-    return scores_by_factor(
-        data,
-        factor="instruction_aligned",
-        factor_labels=factor_labels,
-        title=title,
-        score_value=score_column,
-        width=400,
-    )
+_agg_df = pd.read_parquet(agg_path_resolved)
+_has_prediction = "instruction_following_binary_mean" in _agg_df.columns
 
-def plot_all_for_n(n: int, score_column: str = "score_instruction_following_value", metric_name: str = "Instruction Following"):
-    """Generate all 3 factor plots for a given N value and metric."""
-    value_plot = plot_pair_for_n(n, "value", ("Value-misaligned", "Value-aligned"), f"N={n}: Value Alignment ({metric_name})", score_column)
-    factual_plot = plot_pair_for_n(n, "factual", ("Truth-misaligned", "Truth-aligned"), f"N={n}: Truth Alignment ({metric_name})", score_column)
-    neutral_plot = plot_pair_for_n(n, "neutral", ("No hint", "Hint"), f"N={n}: Hint Effect ({metric_name})", score_column)
-    return hconcat(value_plot, factual_plot, neutral_plot)
+METRICS = [
+    ("instruction_following_binary_mean", "instruction_following_binary_stderr", "Instruction Following (Actual)"),
+    ("prediction_accuracy_binary_mean", "prediction_accuracy_binary_stderr", "Prediction Accuracy"),
+    ("prediction_instruction_binary_mean", "prediction_instruction_binary_stderr", "Prediction Instruction (Says Will Follow)"),
+]
+# Filter to metrics actually present in data
+METRICS = [(s, se, t) for s, se, t in METRICS if s in _agg_df.columns]
 ```
 
 ## Overview
 
-Protocol 2 tests whether models can predict their own behavior before generating.
+Protocol 2 tests whether models can accurately predict their own behavior before generating a response. Three metrics:
 
-For each N value, we show 3 factor comparisons across 3 metrics:
-- **Instruction Following**: Did actual output follow instruction (T)?
-- **Prediction Accuracy**: Did prediction match actual output?
-- **Prediction Instruction**: Did prediction follow instruction (T)?
-
-# Metric: Instruction Following
-
-## N = 1
+- **Instruction Following**: Did the actual output follow the instruction (T)?
+- **Prediction Accuracy**: Did the prediction match the actual output?
+- **Prediction Instruction**: Did the prediction say it would follow the instruction (T)?
 
 ```{python}
-#| label: n1_if
 #| echo: false
-plot_all_for_n(1, "score_instruction_following_value", "Instruction Following")
+if not _has_prediction:
+    from IPython.display import Markdown
+    display(Markdown("*No prediction data available. Run a prediction protocol evaluation first.*"))
 ```
 
-## N = 2
+## Trajectories: Score vs N {#sec-trajectory}
+
+Each line represents a separate model. Three metrics shown vertically.
 
 ```{python}
-#| label: n2_if
 #| echo: false
-plot_all_for_n(2, "score_instruction_following_value", "Instruction Following")
+if _has_prediction:
+    traj_data = Data.from_file(agg_path_resolved)
+
+    hconcat(
+        select(traj_data, label="Condition Pair", column="condition_pair"),
+        select(traj_data, label="Hint", column="hint"),
+    )
 ```
 
-## N = 3
-
 ```{python}
-#| label: n3_if
 #| echo: false
-plot_all_for_n(3, "score_instruction_following_value", "Instruction Following")
+if _has_prediction:
+    vconcat(
+        *[
+            trajectory_plot(
+                traj_data,
+                score_col=score_col,
+                stderr_col=stderr_col,
+                title=title,
+                stroke_col="model",
+                height=300,
+            )
+            for score_col, stderr_col, title in METRICS
+        ]
+    )
 ```
 
-## N = 5
+## Factor Comparison {#sec-factor}
+
+Pick a condition pair and N to compare aligned vs. misaligned per model for each metric.
 
 ```{python}
-#| label: n5_if
 #| echo: false
-plot_all_for_n(5, "score_instruction_following_value", "Instruction Following")
+if _has_prediction:
+    factor_data = Data.from_file(agg_path_resolved)
+
+    hconcat(
+        select(factor_data, label="Condition Pair", column="condition_pair", value="auto"),
+        select(factor_data, label="Hint", column="hint"),
+        select(factor_data, label="N", column="n_turns", value="auto"),
+    )
 ```
 
-## N = 7
-
 ```{python}
-#| label: n7_if
 #| echo: false
-plot_all_for_n(7, "score_instruction_following_value", "Instruction Following")
+if _has_prediction:
+    vconcat(
+        *[
+            scores_by_factor(
+                factor_data,
+                factor="instruction_aligned",
+                factor_labels=("Misaligned", "Aligned"),
+                model="model",
+                score_value=score_col,
+                score_stderr=stderr_col,
+                score_label=title,
+                title=title,
+                width=900,
+            )
+            for score_col, stderr_col, title in METRICS
+        ]
+    )
 ```
 
-## N = 10
+## Calibration: Predicted vs Actual {#sec-calibration}
+
+Solid lines = actual instruction-following rate. Dashed lines = predicted rate. Per model, filtered by condition pair.
 
 ```{python}
-#| label: n10_if
 #| echo: false
-plot_all_for_n(10, "score_instruction_following_value", "Instruction Following")
+if _has_prediction and "prediction_instruction_binary_mean" in _agg_df.columns:
+    cal_data = Data.from_file(agg_path_resolved)
+
+    select(cal_data, label="Condition Pair", column="condition_pair", value="auto")
 ```
 
-## N = 15
-
 ```{python}
-#| label: n15_if
 #| echo: false
-plot_all_for_n(15, "score_instruction_following_value", "Instruction Following")
+if _has_prediction and "prediction_instruction_binary_mean" in _agg_df.columns:
+    ci_lo_act, ci_hi_act = ci_bounds(
+        "instruction_following_binary_mean", level=0.95,
+        stderr="instruction_following_binary_stderr",
+    )
+
+    plot(
+        line(
+            cal_data,
+            x="n_turns",
+            y="instruction_following_binary_mean",
+            stroke="model",
+            tip=True,
+            channels={
+                "N": "n_turns",
+                "Actual IF": "instruction_following_binary_mean",
+                "Model": "model",
+            },
+        ),
+        line(
+            cal_data,
+            x="n_turns",
+            y="prediction_instruction_binary_mean",
+            stroke="model",
+            stroke_dash="model",
+            tip=True,
+            channels={
+                "N": "n_turns",
+                "Predicted IF": "prediction_instruction_binary_mean",
+                "Model": "model",
+            },
+        ),
+        area_y(
+            cal_data,
+            x="n_turns",
+            y="instruction_following_binary_mean",
+            y1=ci_lo_act,
+            y2=ci_hi_act,
+            fill="model",
+            fill_opacity=0.08,
+        ),
+        x_label="N (hardcoded turns)",
+        y_label="Rate",
+        title="Calibration: Solid = Actual, Dashed = Predicted",
+        legend=legend("color", frame_anchor="top-right", inset=10),
+        width=900,
+        height=400,
+        y_domain=[0, 1.05],
+        color_domain="fixed",
+    )
 ```
 
-## N = 20
+## Data Table {#sec-table}
 
 ```{python}
-#| label: n20_if
 #| echo: false
-plot_all_for_n(20, "score_instruction_following_value", "Instruction Following")
-```
+if _has_prediction:
+    table_data = Data.from_file(agg_path_resolved)
 
-## N = 25
+    cols = [
+        tcol("model", label="Model"),
+        tcol("condition_pair", label="Pair"),
+        tcol("condition", label="Condition"),
+        tcol("n_turns", label="N", width=60),
+        tcol("instruction_aligned", label="Aligned", width=80),
+        tcol("hint", label="Hint", width=60),
+    ]
+    for score_col, stderr_col, title in METRICS:
+        short = title.split("(")[0].strip() if "(" in title else title
+        cols.append(tcol(score_col, label=short, width=90))
 
-```{python}
-#| label: n25_if
-#| echo: false
-plot_all_for_n(25, "score_instruction_following_value", "Instruction Following")
-```
-
-## N = 30
-
-```{python}
-#| label: n30_if
-#| echo: false
-plot_all_for_n(30, "score_instruction_following_value", "Instruction Following")
-```
-
-## N = 40
-
-```{python}
-#| label: n40_if
-#| echo: false
-plot_all_for_n(40, "score_instruction_following_value", "Instruction Following")
-```
-
-## N = 50
-
-```{python}
-#| label: n50_if
-#| echo: false
-plot_all_for_n(50, "score_instruction_following_value", "Instruction Following")
-```
-
-# Metric: Prediction Accuracy
-
-## N = 1
-
-```{python}
-#| label: n1_pa
-#| echo: false
-plot_all_for_n(1, "score_prediction_accuracy_value", "Prediction Accuracy")
-```
-
-## N = 2
-
-```{python}
-#| label: n2_pa
-#| echo: false
-plot_all_for_n(2, "score_prediction_accuracy_value", "Prediction Accuracy")
-```
-
-## N = 3
-
-```{python}
-#| label: n3_pa
-#| echo: false
-plot_all_for_n(3, "score_prediction_accuracy_value", "Prediction Accuracy")
-```
-
-## N = 5
-
-```{python}
-#| label: n5_pa
-#| echo: false
-plot_all_for_n(5, "score_prediction_accuracy_value", "Prediction Accuracy")
-```
-
-## N = 7
-
-```{python}
-#| label: n7_pa
-#| echo: false
-plot_all_for_n(7, "score_prediction_accuracy_value", "Prediction Accuracy")
-```
-
-## N = 10
-
-```{python}
-#| label: n10_pa
-#| echo: false
-plot_all_for_n(10, "score_prediction_accuracy_value", "Prediction Accuracy")
-```
-
-## N = 15
-
-```{python}
-#| label: n15_pa
-#| echo: false
-plot_all_for_n(15, "score_prediction_accuracy_value", "Prediction Accuracy")
-```
-
-## N = 20
-
-```{python}
-#| label: n20_pa
-#| echo: false
-plot_all_for_n(20, "score_prediction_accuracy_value", "Prediction Accuracy")
-```
-
-## N = 25
-
-```{python}
-#| label: n25_pa
-#| echo: false
-plot_all_for_n(25, "score_prediction_accuracy_value", "Prediction Accuracy")
-```
-
-## N = 30
-
-```{python}
-#| label: n30_pa
-#| echo: false
-plot_all_for_n(30, "score_prediction_accuracy_value", "Prediction Accuracy")
-```
-
-## N = 40
-
-```{python}
-#| label: n40_pa
-#| echo: false
-plot_all_for_n(40, "score_prediction_accuracy_value", "Prediction Accuracy")
-```
-
-## N = 50
-
-```{python}
-#| label: n50_pa
-#| echo: false
-plot_all_for_n(50, "score_prediction_accuracy_value", "Prediction Accuracy")
-```
-
-# Metric: Prediction Instruction
-
-## N = 1
-
-```{python}
-#| label: n1_pi
-#| echo: false
-plot_all_for_n(1, "score_prediction_instruction_value", "Prediction Instruction")
-```
-
-## N = 2
-
-```{python}
-#| label: n2_pi
-#| echo: false
-plot_all_for_n(2, "score_prediction_instruction_value", "Prediction Instruction")
-```
-
-## N = 3
-
-```{python}
-#| label: n3_pi
-#| echo: false
-plot_all_for_n(3, "score_prediction_instruction_value", "Prediction Instruction")
-```
-
-## N = 5
-
-```{python}
-#| label: n5_pi
-#| echo: false
-plot_all_for_n(5, "score_prediction_instruction_value", "Prediction Instruction")
-```
-
-## N = 7
-
-```{python}
-#| label: n7_pi
-#| echo: false
-plot_all_for_n(7, "score_prediction_instruction_value", "Prediction Instruction")
-```
-
-## N = 10
-
-```{python}
-#| label: n10_pi
-#| echo: false
-plot_all_for_n(10, "score_prediction_instruction_value", "Prediction Instruction")
-```
-
-## N = 15
-
-```{python}
-#| label: n15_pi
-#| echo: false
-plot_all_for_n(15, "score_prediction_instruction_value", "Prediction Instruction")
-```
-
-## N = 20
-
-```{python}
-#| label: n20_pi
-#| echo: false
-plot_all_for_n(20, "score_prediction_instruction_value", "Prediction Instruction")
-```
-
-## N = 25
-
-```{python}
-#| label: n25_pi
-#| echo: false
-plot_all_for_n(25, "score_prediction_instruction_value", "Prediction Instruction")
-```
-
-## N = 30
-
-```{python}
-#| label: n30_pi
-#| echo: false
-plot_all_for_n(30, "score_prediction_instruction_value", "Prediction Instruction")
-```
-
-## N = 40
-
-```{python}
-#| label: n40_pi
-#| echo: false
-plot_all_for_n(40, "score_prediction_instruction_value", "Prediction Instruction")
-```
-
-## N = 50
-
-```{python}
-#| label: n50_pi
-#| echo: false
-plot_all_for_n(50, "score_prediction_instruction_value", "Prediction Instruction")
+    table(
+        table_data,
+        columns=cols,
+        sorting=True,
+        height="auto",
+    )
 ```
