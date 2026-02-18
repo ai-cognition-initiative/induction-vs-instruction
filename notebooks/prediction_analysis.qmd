@@ -5,20 +5,20 @@ format:
     code-fold: true
     code-tools: true
 params:
-  samples_path: "outputs/viz/default/samples.parquet"
-  agg_path: "outputs/viz/default/aggregated.parquet"
+  evals_path: "outputs/viz/default/evals_prediction.parquet"
 ---
 
 ```{python}
 #| tags: [parameters]
-samples_path = "outputs/viz/default/samples.parquet"
-agg_path = "outputs/viz/default/aggregated.parquet"
+evals_path = "outputs/viz/default/evals_prediction.parquet"
 ```
 
 ```{python}
 #| echo: false
 import sys
 from pathlib import Path
+
+import pandas as pd
 
 project_root = Path(".").resolve().parent
 if str(project_root) not in sys.path:
@@ -36,207 +36,205 @@ def _resolve_path(p: str) -> str:
         return str(candidate)
     return p
 
-agg_path_resolved = _resolve_path(agg_path)
-samples_path_resolved = _resolve_path(samples_path)
+evals_path_resolved = _resolve_path(evals_path)
+_evals_df = pd.read_parquet(evals_path_resolved)
+_out_dir = Path(evals_path_resolved).parent
 
-import pandas as pd
-from inspect_viz import Data
+# N values sorted numerically (stored as strings)
+n_domain = sorted(_evals_df["n_turns"].unique(), key=lambda x: int(x))
+max_n = n_domain[-1]
+
+# --- Wide-format label data (max n_turns) for calibration/accuracy charts ---
+_label_df = _evals_df[_evals_df["n_turns"] == max_n].copy()
+_label_path = str(_out_dir / "_pred_labels.parquet")
+_label_df.to_parquet(_label_path, index=False)
+
+# --- Melt to long format (metric column) for bullet graphs ---
+
+METRIC_LABELS = {
+    "score_instruction_following": "Instruction Following",
+    "score_prediction_accuracy":   "Prediction Accuracy",
+    "score_prediction_instruction": "Predicted: Follows Instruction",
+}
+STDERR_MAP = {
+    "score_instruction_following":  "stderr_instruction_following",
+    "score_prediction_accuracy":    "stderr_prediction_accuracy",
+    "score_prediction_instruction": "stderr_prediction_instruction",
+}
+metric_domain = list(METRIC_LABELS.values())
+
+_long_rows = []
+for score_col, label in METRIC_LABELS.items():
+    _tmp = _evals_df[[
+        "model", "condition", "condition_pair", "instruction_aligned", "instruction", "n_turns",
+    ]].copy()
+    _tmp["metric"] = label
+    _tmp["score"] = _evals_df[score_col]
+    _tmp["score_stderr"] = _evals_df[STDERR_MAP[score_col]]
+    _long_rows.append(_tmp)
+
+_long_df = pd.concat(_long_rows, ignore_index=True)
+
+# Sort by numeric n_turns for proper line connections
+_long_df["_sort"] = pd.to_numeric(_long_df["n_turns"], errors="coerce")
+_long_df = _long_df.sort_values(["model", "condition", "instruction", "metric", "_sort"])
+_long_df = _long_df.drop(columns=["_sort"])
+
+_long_path = str(_out_dir / "_pred_long.parquet")
+_long_df.to_parquet(_long_path, index=False)
+
+# --- Bullet graph derived datasets (long format) ---
+
+# Non-neutral (foreground)
+_nonneutral_long = _long_df[_long_df["condition"] != "neutral"].copy()
+_nonneutral_long_path = str(_out_dir / "_pred_nonneutral.parquet")
+_nonneutral_long.to_parquet(_nonneutral_long_path, index=False)
+
+# Neutral baseline cross-joined with all non-neutral conditions (background)
+_neutral_long = _long_df[_long_df["condition"] == "neutral"].copy()
+_nn_conditions = _nonneutral_long["condition"].unique()
+_baseline_rows = []
+for cond in _nn_conditions:
+    _tmp = _neutral_long.copy()
+    _tmp["condition"] = cond
+    _baseline_rows.append(_tmp)
+_baseline_long = pd.concat(_baseline_rows, ignore_index=True)
+_baseline_long_path = str(_out_dir / "_pred_neutral_baseline.parquet")
+_baseline_long.to_parquet(_baseline_long_path, index=False)
+
+# Aligned / misaligned split (paired bullet)
+_aligned_long = _nonneutral_long[_nonneutral_long["instruction_aligned"] == True].copy()
+_aligned_long_path = str(_out_dir / "_pred_aligned.parquet")
+_aligned_long.to_parquet(_aligned_long_path, index=False)
+
+_misaligned_long = _nonneutral_long[_nonneutral_long["instruction_aligned"] == False].copy()
+_misaligned_long_path = str(_out_dir / "_pred_misaligned.parquet")
+_misaligned_long.to_parquet(_misaligned_long_path, index=False)
+
+from inspect_viz import Data, Selection
 from inspect_viz.input import select
-from inspect_viz.view import scores_by_factor
-from inspect_viz.mark import area_y, line
-from inspect_viz.plot import legend, plot
-from inspect_viz.transform import ci_bounds
-from inspect_viz.table import table, column as tcol
-from inspect_viz.layout import vconcat, hconcat
+from inspect_viz.layout import hconcat
 
-from scripts.viz_helpers import trajectory_plot
-
-_agg_df = pd.read_parquet(agg_path_resolved)
-_has_prediction = "instruction_following_binary_mean" in _agg_df.columns
-
-METRICS = [
-    ("instruction_following_binary_mean", "instruction_following_binary_stderr", "Instruction Following (Actual)"),
-    ("prediction_accuracy_binary_mean", "prediction_accuracy_binary_stderr", "Prediction Accuracy"),
-    ("prediction_instruction_binary_mean", "prediction_instruction_binary_stderr", "Prediction Instruction (Says Will Follow)"),
-]
-# Filter to metrics actually present in data
-METRICS = [(s, se, t) for s, se, t in METRICS if s in _agg_df.columns]
+from scripts.viz_helpers import (
+    calibration_line_chart,
+    labeled_line_chart,
+    bullet_graph,
+    paired_bullet_graph,
+)
 ```
 
 ## Overview
 
-Protocol 2 tests whether models can accurately predict their own behavior before generating a response. Three metrics:
+Protocol 2 tests whether models can predict their own behavior before generating a response. Three metrics:
 
 - **Instruction Following**: Did the actual output follow the instruction (T)?
-- **Prediction Accuracy**: Did the prediction match the actual output?
-- **Prediction Instruction**: Did the prediction say it would follow the instruction (T)?
+- **Prediction Accuracy**: Did the model's prediction match its actual output?
+- **Predicted: Follows Instruction**: Did the model predict that it would follow the instruction (T)?
+
+## Calibration: Actual vs Predicted {#sec-calibration}
+
+Each line represents a model. **Solid** = actual instruction-following rate; **dashed** = predicted rate. The gap between them shows systematic over- or under-estimation of instruction-following ability.
 
 ```{python}
 #| echo: false
-if not _has_prediction:
-    from IPython.display import Markdown
-    display(Markdown("*No prediction data available. Run a prediction protocol evaluation first.*"))
-```
+line_data = Data.from_file(evals_path_resolved)
+label_data = Data.from_file(_label_path)
 
-## Trajectories: Score vs N {#sec-trajectory}
+cal_sel = Selection.intersect()
 
-Each line represents a separate model. Three metrics shown vertically.
-
-```{python}
-#| echo: false
-if _has_prediction:
-    traj_data = Data.from_file(agg_path_resolved)
-
-    hconcat(
-        select(traj_data, label="Condition Pair", column="condition_pair"),
-        select(traj_data, label="Hint", column="hint"),
-    )
+hconcat(
+    select(line_data, label="Condition", column="condition", value="auto", target=cal_sel, field="condition"),
+    select(line_data, label="Instruction", column="instruction", value="auto", target=cal_sel, field="instruction"),
+)
 ```
 
 ```{python}
 #| echo: false
-if _has_prediction:
-    vconcat(
-        *[
-            trajectory_plot(
-                traj_data,
-                score_col=score_col,
-                stderr_col=stderr_col,
-                title=title,
-                stroke_col="model",
-                height=300,
-            )
-            for score_col, stderr_col, title in METRICS
-        ]
-    )
+#| column: page
+calibration_line_chart(
+    line_data,
+    label_data,
+    selection=cal_sel,
+    x_domain=n_domain,
+    width=1000,
+)
 ```
 
-## Factor Comparison {#sec-factor}
+## Prediction Accuracy {#sec-accuracy}
 
-Pick a condition pair and N to compare aligned vs. misaligned per model for each metric.
+How often did the model correctly predict its own response (target or pattern)? Uses the same condition and instruction filters as above.
 
 ```{python}
 #| echo: false
-if _has_prediction:
-    factor_data = Data.from_file(agg_path_resolved)
-
-    hconcat(
-        select(factor_data, label="Condition Pair", column="condition_pair", value="auto"),
-        select(factor_data, label="Hint", column="hint"),
-        select(factor_data, label="N", column="n_turns", value="auto"),
-    )
+#| column: page
+labeled_line_chart(
+    line_data,
+    label_data,
+    selection=cal_sel,
+    score_col="score_prediction_accuracy",
+    title="Prediction Accuracy vs N",
+    x_domain=n_domain,
+    width=1000,
+)
 ```
+
+## Bullet Graph: vs Neutral Baseline {#sec-bullet}
+
+Each row is a model. The grey bar shows the neutral condition score for the selected metric; the colored bar shows the selected condition. Use the dropdowns to select an N value and metric.
 
 ```{python}
 #| echo: false
-if _has_prediction:
-    vconcat(
-        *[
-            scores_by_factor(
-                factor_data,
-                factor="instruction_aligned",
-                factor_labels=("Misaligned", "Aligned"),
-                model="model",
-                score_value=score_col,
-                score_stderr=stderr_col,
-                score_label=title,
-                title=title,
-                width=900,
-            )
-            for score_col, stderr_col, title in METRICS
-        ]
-    )
-```
+bullet_main = Data.from_file(_nonneutral_long_path)
+bullet_baseline = Data.from_file(_baseline_long_path)
 
-## Calibration: Predicted vs Actual {#sec-calibration}
+bullet_sel = Selection.intersect()
 
-Solid lines = actual instruction-following rate. Dashed lines = predicted rate. Per model, filtered by condition pair.
-
-```{python}
-#| echo: false
-if _has_prediction and "prediction_instruction_binary_mean" in _agg_df.columns:
-    cal_data = Data.from_file(agg_path_resolved)
-
-    select(cal_data, label="Condition Pair", column="condition_pair", value="auto")
+hconcat(
+    select(bullet_main, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=bullet_sel, field="n_turns"),
+    select(bullet_main, label="Metric", column="metric", options=metric_domain, value=metric_domain[0], target=bullet_sel, field="metric"),
+)
 ```
 
 ```{python}
 #| echo: false
-if _has_prediction and "prediction_instruction_binary_mean" in _agg_df.columns:
-    ci_lo_act, ci_hi_act = ci_bounds(
-        "instruction_following_binary_mean", level=0.95,
-        stderr="instruction_following_binary_stderr",
-    )
-
-    plot(
-        line(
-            cal_data,
-            x="n_turns",
-            y="instruction_following_binary_mean",
-            stroke="model",
-            tip=True,
-            channels={
-                "N": "n_turns",
-                "Actual IF": "instruction_following_binary_mean",
-                "Model": "model",
-            },
-        ),
-        line(
-            cal_data,
-            x="n_turns",
-            y="prediction_instruction_binary_mean",
-            stroke="model",
-            stroke_dash="model",
-            tip=True,
-            channels={
-                "N": "n_turns",
-                "Predicted IF": "prediction_instruction_binary_mean",
-                "Model": "model",
-            },
-        ),
-        area_y(
-            cal_data,
-            x="n_turns",
-            y="instruction_following_binary_mean",
-            y1=ci_lo_act,
-            y2=ci_hi_act,
-            fill="model",
-            fill_opacity=0.08,
-        ),
-        x_label="N (hardcoded turns)",
-        y_label="Rate",
-        title="Calibration: Solid = Actual, Dashed = Predicted",
-        legend=legend("color", frame_anchor="top-right", inset=10),
-        width=900,
-        height=400,
-        y_domain=[0, 1.05],
-        color_domain="fixed",
-    )
+#| column: page
+bullet_graph(
+    bullet_main,
+    bullet_baseline,
+    selection=bullet_sel,
+    width=1000,
+)
 ```
 
-## Data Table {#sec-table}
+## Bullet Graph: Aligned vs Misaligned {#sec-paired-bullet}
+
+Each row is a condition pair. Within each pair:
+
+- **Colored bar (aligned)**: instruction target agrees with the model's values or truth (following the instruction is the "natural" response).
+- **Grey bar (misaligned)**: instruction asks for the counter-conventional response (following requires overriding both induction *and* model values).
+
+Use the dropdowns to select an N value and metric.
 
 ```{python}
 #| echo: false
-if _has_prediction:
-    table_data = Data.from_file(agg_path_resolved)
+aligned_data = Data.from_file(_aligned_long_path)
+misaligned_data = Data.from_file(_misaligned_long_path)
 
-    cols = [
-        tcol("model", label="Model"),
-        tcol("condition_pair", label="Pair"),
-        tcol("condition", label="Condition"),
-        tcol("n_turns", label="N", width=60),
-        tcol("instruction_aligned", label="Aligned", width=80),
-        tcol("hint", label="Hint", width=60),
-    ]
-    for score_col, stderr_col, title in METRICS:
-        short = title.split("(")[0].strip() if "(" in title else title
-        cols.append(tcol(score_col, label=short, width=90))
+paired_sel = Selection.intersect()
 
-    table(
-        table_data,
-        columns=cols,
-        sorting=True,
-        height="auto",
-    )
+hconcat(
+    select(aligned_data, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=paired_sel, field="n_turns"),
+    select(aligned_data, label="Metric", column="metric", options=metric_domain, value=metric_domain[0], target=paired_sel, field="metric"),
+)
+```
+
+```{python}
+#| echo: false
+#| column: page
+paired_bullet_graph(
+    aligned_data,
+    misaligned_data,
+    selection=paired_sel,
+    width=1000,
+)
 ```
