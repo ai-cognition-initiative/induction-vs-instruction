@@ -88,6 +88,9 @@
 - For future binary preference extensions, same pattern: `preference_aligned_X` / `preference_misaligned_X`
 
 ## Domain Notes
+- `style_lowercase_uppercase` and `style_uppercase_lowercase` conditions need `pattern_data_key` set to `style_uppercase`/`style_lowercase` respectively — without it they fall through to NotImplementedError in `_get_hardcoded_response()`
+- Preference conditions use `questions_subjective.json` question bank (set via `question_bank` field on Condition)
+- Hardcoded response generation script: `scripts/generate_hardcoded_responses.py` — generates 9 LLM files + 2 computed (uppercase/lowercase from style_base)
 - Inspect-AI evaluation framework for testing LLM behavior under induction pressure
 - Protocol 1: Behavioral baseline (does model follow instruction or pattern?)
 - Protocol 2: Self-prediction (can model predict its own behavior?)

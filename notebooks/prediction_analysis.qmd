@@ -178,6 +178,24 @@ labeled_line_chart(
 )
 ```
 
+## Predicted: Follows Instruction {#sec-predicted-follows}
+
+How often did the model predict that it would follow the instruction (T)? Uses the same condition and instruction filters as above.
+
+```{python}
+#| echo: false
+#| column: page
+labeled_line_chart(
+    line_data,
+    label_data,
+    selection=cal_sel,
+    score_col="score_prediction_instruction",
+    title="Predicted: Follows Instruction vs N",
+    x_domain=n_domain,
+    width=1000,
+)
+```
+
 ## Bullet Graph: vs Neutral Baseline {#sec-bullet}
 
 Each row is a model. The grey bar shows the neutral condition score for the selected metric; the colored bar shows the selected condition. Use the dropdowns to select an N value and metric.

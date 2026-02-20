@@ -13,7 +13,7 @@ from inspect_ai.model import (
 )
 
 from src.config import Condition
-from src.datasets.questions import get_question_sequence
+from src.datasets.questions import get_question_sequence, load_questions
 
 PROMPTS_DIR = Path(__file__).parent.parent.parent / "data" / "prompts"
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
@@ -170,7 +170,8 @@ def build_behavioral_sample(
     Returns:
         A Sample ready for evaluation.
     """
-    questions = get_question_sequence(trial_index, n_turns + 1)
+    bank = load_questions(DATA_DIR / condition.question_bank) if condition.question_bank else None
+    questions = get_question_sequence(trial_index, n_turns + 1, question_bank=bank)
 
     messages = _build_conversation(
         condition=condition,
@@ -210,7 +211,8 @@ def build_prediction_sample(
     Returns:
         A Sample ready for prediction evaluation.
     """
-    questions = get_question_sequence(trial_index, n_turns + 2)
+    bank = load_questions(DATA_DIR / condition.question_bank) if condition.question_bank else None
+    questions = get_question_sequence(trial_index, n_turns + 2, question_bank=bank)
 
     messages: list[ChatMessage] = []
 

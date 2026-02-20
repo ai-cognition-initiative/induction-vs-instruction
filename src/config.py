@@ -21,6 +21,7 @@ class Condition:
     system_template: str | None = None
     pattern_set: str | None = None
     target_set: str | None = None
+    question_bank: str | None = None
 
 
 # Naming convention: {type}_{instruction}_{pattern} for conditions without a
@@ -157,6 +158,7 @@ CONDITIONS: dict[str, Condition] = {
         pattern_description="write in ALL UPPERCASE",
         condition_type="style",
         scorer_type="format_check",
+        pattern_data_key="style_uppercase",
     ),
     "style_uppercase_lowercase": Condition(
         name="style_uppercase_lowercase",
@@ -167,29 +169,7 @@ CONDITIONS: dict[str, Condition] = {
         pattern_description="write in all lowercase",
         condition_type="style",
         scorer_type="format_check",
-    ),
-    # --- Style: length ---
-    "style_long_short": Condition(
-        name="style_long_short",
-        pattern="short",
-        target="long",
-        purpose="Length drift: short -> long",
-        target_description="give a detailed, multi-paragraph response",
-        pattern_description="give a one-sentence response",
-        condition_type="style",
-        scorer_type="format_check",
-        target_data_key="style_long",
-    ),
-    "style_short_long": Condition(
-        name="style_short_long",
-        pattern="long",
-        target="short",
-        purpose="Length drift: long -> short",
-        target_description="give a one-sentence response",
-        pattern_description="give a detailed, multi-paragraph response",
-        condition_type="style",
-        scorer_type="format_check",
-        pattern_data_key="style_long",
+        pattern_data_key="style_lowercase",
     ),
     # --- Style: code language ---
     "style_javascript_python": Condition(
@@ -203,6 +183,7 @@ CONDITIONS: dict[str, Condition] = {
         scorer_type="format_check",
         pattern_data_key="code_python",
         target_data_key="code_javascript",
+        question_bank="questions_programming.json",
     ),
     "style_python_javascript": Condition(
         name="style_python_javascript",
@@ -215,6 +196,7 @@ CONDITIONS: dict[str, Condition] = {
         scorer_type="format_check",
         pattern_data_key="code_javascript",
         target_data_key="code_python",
+        question_bank="questions_programming.json",
     ),
     # --- Preference weaving (cats) ---
     "preference_aligned_cats": Condition(
@@ -228,6 +210,7 @@ CONDITIONS: dict[str, Condition] = {
         scorer_type="llm_judge",
         pattern_data_key="preference_hate_cats",
         target_data_key="preference_love_cats",
+        question_bank="questions_subjective.json",
     ),
     "preference_misaligned_cats": Condition(
         name="preference_misaligned_cats",
@@ -240,5 +223,6 @@ CONDITIONS: dict[str, Condition] = {
         scorer_type="llm_judge",
         pattern_data_key="preference_love_cats",
         target_data_key="preference_hate_cats",
+        question_bank="questions_subjective.json",
     ),
 }

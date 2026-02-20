@@ -1,0 +1,224 @@
+---
+title: "Combined: Behavioral vs Prediction"
+format:
+  html:
+    code-fold: true
+    code-tools: true
+params:
+  evals_path: "outputs/viz/default/evals_combined.parquet"
+---
+
+```{python}
+#| tags: [parameters]
+evals_path = "outputs/viz/default/evals_combined.parquet"
+```
+
+```{python}
+#| echo: false
+import sys
+from pathlib import Path
+
+import pandas as pd
+
+project_root = Path(".").resolve().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+def _resolve_path(p: str) -> str:
+    pp = Path(p)
+    if pp.is_absolute() and pp.exists():
+        return str(pp)
+    candidate = project_root / p
+    if candidate.exists():
+        return str(candidate)
+    candidate = Path(".").resolve() / p
+    if candidate.exists():
+        return str(candidate)
+    return p
+
+evals_path_resolved = _resolve_path(evals_path)
+_evals_df = pd.read_parquet(evals_path_resolved)
+_out_dir = Path(evals_path_resolved).parent
+
+n_domain = sorted(_evals_df["n_turns"].unique(), key=lambda x: int(x))
+max_n = n_domain[-1]
+
+_label_df = _evals_df[_evals_df["n_turns"] == max_n].copy()
+_label_path = str(_out_dir / "_combined_labels.parquet")
+_label_df.to_parquet(_label_path, index=False)
+
+from inspect_viz import Data, Selection
+from inspect_viz.input import select
+from inspect_viz.layout import hconcat
+
+from scripts.viz_helpers import labeled_line_chart
+```
+
+## Overview
+
+Compares behavioral data (Protocol 1) with prediction data (Protocol 2) to answer:
+1. **Prediction Calibration**: Does the model's prediction match its actual behavior?
+2. **Effect of Prediction**: Does the act of predicting change the model's output?
+
+## Metric 1: Predicted vs Actual Behavior
+
+Solid lines show actual instruction-following rate from Protocol 1 (behavioral baseline). Dashed lines show what the model *predicted* it would do in Protocol 2.
+
+The gap reveals calibration error: does the model know its own behavior?
+
+```{python}
+#| echo: false
+line_data = Data.from_file(evals_path_resolved)
+label_data = Data.from_file(_label_path)
+
+sel = Selection.intersect()
+
+hconcat(
+    select(line_data, label="Condition", column="condition", value="auto", target=sel, field="condition"),
+    select(line_data, label="Instruction", column="instruction", value="auto", target=sel, field="instruction"),
+)
+```
+
+```{python}
+#| echo: false
+#| column: page
+from inspect_viz.mark import line, text
+from inspect_viz.plot import plot
+
+plot(
+    line(
+        line_data,
+        x="n_turns",
+        y="behavioral_score",
+        stroke="model",
+        filter_by=sel,
+        marker=True,
+        tip=True,
+        channels={"N": "n_turns", "Actual (Protocol 1)": "behavioral_score", "Model": "model"},
+    ),
+    line(
+        line_data,
+        x="n_turns",
+        y="prediction_predicted_score",
+        stroke="model",
+        stroke_dasharray="4 2",
+        filter_by=sel,
+        marker=True,
+        tip=True,
+        channels={"N": "n_turns", "Predicted (Protocol 2)": "prediction_predicted_score", "Model": "model"},
+    ),
+    text(
+        label_data,
+        x="n_turns",
+        y="behavioral_score",
+        text="model",
+        filter_by=sel,
+        fill="model",
+        stroke="white",
+        stroke_width=4,
+        dx=5,
+        line_anchor="middle",
+        styles={"text_anchor": "start", "font_size": 11, "font_weight": 600},
+    ),
+    x_label="N (hardcoded turns)",
+    y_label="Instruction Following Rate",
+    title="Actual (solid) vs Predicted (dashed) Behavior",
+    width=1000,
+    height=400,
+    y_domain=[0, 1.05],
+    x_domain=n_domain,
+    margin_right=200,
+)
+```
+
+## Metric 2: Effect of Prediction on Output
+
+Compares actual output between protocols:
+- **Solid**: Protocol 1 (behavioral) — model generates without prediction step
+- **Dashed**: Protocol 2 (prediction) — model generates *after* making a prediction
+
+Does asking the model to predict change what it outputs?
+
+```{python}
+#| echo: false
+#| column: page
+plot(
+    line(
+        line_data,
+        x="n_turns",
+        y="behavioral_score",
+        stroke="model",
+        filter_by=sel,
+        marker=True,
+        tip=True,
+        channels={"N": "n_turns", "Protocol 1 (Behavioral)": "behavioral_score", "Model": "model"},
+    ),
+    line(
+        line_data,
+        x="n_turns",
+        y="prediction_actual_score",
+        stroke="model",
+        stroke_dasharray="4 2",
+        filter_by=sel,
+        marker=True,
+        tip=True,
+        channels={"N": "n_turns", "Protocol 2 (After Prediction)": "prediction_actual_score", "Model": "model"},
+    ),
+    text(
+        label_data,
+        x="n_turns",
+        y="behavioral_score",
+        text="model",
+        filter_by=sel,
+        fill="model",
+        stroke="white",
+        stroke_width=4,
+        dx=5,
+        line_anchor="middle",
+        styles={"text_anchor": "start", "font_size": 11, "font_weight": 600},
+    ),
+    x_label="N (hardcoded turns)",
+    y_label="Instruction Following Rate",
+    title="Protocol 1 (solid) vs Protocol 2 After Prediction (dashed)",
+    width=1000,
+    height=400,
+    y_domain=[0, 1.05],
+    x_domain=n_domain,
+    margin_right=200,
+)
+```
+
+## Calibration Error Summary
+
+Difference between predicted and actual instruction-following rate at each N. Positive = model overestimates its instruction-following; negative = underestimates.
+
+```{python}
+#| echo: false
+_evals_df["calibration_error"] = _evals_df["prediction_predicted_score"] - _evals_df["behavioral_score"]
+
+_error_path = str(_out_dir / "_combined_error.parquet")
+_evals_df.to_parquet(_error_path, index=False)
+
+error_data = Data.from_file(_error_path)
+
+plot(
+    line(
+        error_data,
+        x="n_turns",
+        y="calibration_error",
+        stroke="model",
+        filter_by=sel,
+        marker=True,
+        tip=True,
+        channels={"N": "n_turns", "Calibration Error": "calibration_error", "Model": "model"},
+    ),
+    x_label="N (hardcoded turns)",
+    y_label="Calibration Error (Predicted - Actual)",
+    title="Calibration Error vs N",
+    width=1000,
+    height=400,
+    y_domain=[-0.5, 0.5],
+    x_domain=n_domain,
+    margin_right=200,
+)
+```

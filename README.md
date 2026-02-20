@@ -94,23 +94,53 @@ Evaluations are configured with YAML files in `configs/` and run through `run.py
 ### Using a config file
 
 ```bash
-uv run python run.py configs/example.yaml --model openrouter/google/gemini-2.0-flash-001
+uv run python run.py configs/example.yaml --models-yaml models.yaml
 ```
 
-Multiple models in one run:
+Custom log directory (defaults to `logs/<timestamp>`):
 
 ```bash
 uv run python run.py configs/example.yaml \
-  --model openrouter/google/gemini-2.0-flash-001,openrouter/anthropic/claude-3.5-haiku
-```
-
-Custom log directory (defaults to `logs/<protocol>`):
-
-```bash
-uv run python run.py configs/example.yaml \
-  --model openrouter/google/gemini-2.0-flash-001 \
+  --models-yaml models.yaml \
   --log-dir logs/my-experiment
 ```
+
+### Models configuration (models.yaml)
+
+Models are defined in `models.yaml` with a top-level provider and a list of model identifiers:
+
+```yaml
+provider: openrouter
+
+models:
+  - google/gemini-2.0-flash-001
+  - anthropic/claude-3.5-haiku
+  - meta-llama/llama-3.1-70b-instruct
+
+# Optional: OpenRouter provider args (applied globally)
+provider_args:
+  sort: throughput
+```
+
+Other `provider_args` examples:
+
+```yaml
+provider_args:
+  order:
+    - anthropic
+```
+
+```yaml
+provider_args:
+  only:
+    - together
+    - fireworks
+```
+
+Provider args are OpenRouter-specific options passed via `-M`. Common options:
+- `order`: List of provider slugs to prefer (e.g., `['anthropic']`, `['deepinfra']`)
+- `only`: List of allowed providers (no fallbacks)
+- `sort`: Sort by `throughput` or `price`
 
 ### Config file format
 

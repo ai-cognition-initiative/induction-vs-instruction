@@ -188,7 +188,7 @@ Here is the model's prediction response:
 {output}
 ---
 
-Despite the model mentioning both options in its response (since the question named both), which did the model ultimately say it would do?
+Which did the model ultimately say it would do?
 
 Answer with exactly one word:
 - TARGET: if the model predicted it would follow the instruction ({target_description})

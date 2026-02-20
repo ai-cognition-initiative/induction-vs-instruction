@@ -55,6 +55,27 @@ report folder:
     echo "Done. Reports at outputs/notebooks/{{folder}}/"
 
 [group("reporting")]
+report-prediction behavioral_folder prediction_folder:
+    #!/usr/bin/env bash
+    set -e
+    echo "Generating combined report: logs/{{behavioral_folder}} (behavioral) + logs/{{prediction_folder}} (prediction)"
+    rm -rf outputs/viz/{{behavioral_folder}}_vs_{{prediction_folder}} outputs/notebooks/{{behavioral_folder}}_vs_{{prediction_folder}}
+    mkdir -p outputs/viz/{{behavioral_folder}}_vs_{{prediction_folder}} outputs/notebooks/{{behavioral_folder}}_vs_{{prediction_folder}}
+
+    uv run python scripts/prepare_viz_data.py \
+        --log-dir logs/{{behavioral_folder}} \
+        --log-dir-2 logs/{{prediction_folder}} \
+        --output-dir outputs/viz/{{behavioral_folder}}_vs_{{prediction_folder}} \
+        --protocol combined
+
+    QUARTO_PYTHON="{{root}}/.venv/Scripts/python.exe" quarto render notebooks/behavioral_vs_prediction_analysis.qmd \
+        --output-dir {{root}}/outputs/notebooks/{{behavioral_folder}}_vs_{{prediction_folder}} \
+        --execute \
+        -P evals_path:outputs/viz/{{behavioral_folder}}_vs_{{prediction_folder}}/evals_combined.parquet
+
+    echo "Done. Report at outputs/notebooks/{{behavioral_folder}}_vs_{{prediction_folder}}/"
+
+[group("reporting")]
 rescore-prediction folder:
     #!/usr/bin/env bash
     set -e

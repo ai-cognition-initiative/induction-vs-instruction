@@ -26,7 +26,8 @@ n_turns:                       # list of N values (induction pressure)
   - 30
   - 35
 
+
 instruction_templates:
   - instruction_hint
   - instruction_no_hint
-n_trials: 25
+n_trials: 15

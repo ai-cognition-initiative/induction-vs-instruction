@@ -24,8 +24,6 @@ CONDITION_PAIR_MAP = {
     "persona_formal_casual": "persona",
     "style_lowercase_uppercase": "style_case",
     "style_uppercase_lowercase": "style_case",
-    "style_long_short": "style_length",
-    "style_short_long": "style_length",
     "style_javascript_python": "style_code",
     "style_python_javascript": "style_code",
     "preference_aligned_cats": "preference",
@@ -39,7 +37,6 @@ ALIGNED_CONDITIONS = {
     "language_ru_fr",
     "persona_casual_formal",
     "style_lowercase_uppercase",
-    "style_long_short",
     "style_javascript_python",
     "preference_aligned_cats",
 }
@@ -72,8 +69,11 @@ def add_pairing_columns(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["condition_pair"] = df["condition"].map(CONDITION_PAIR_MAP)
     df["instruction_aligned"] = df["condition"].apply(
-        lambda c: True if c in ALIGNED_CONDITIONS
-        else (False if c in MISALIGNED_CONDITIONS else None)
+        lambda c: (
+            True
+            if c in ALIGNED_CONDITIONS
+            else (False if c in MISALIGNED_CONDITIONS else None)
+        )
     )
     neutral_mask = df["condition"] == "neutral"
     df.loc[neutral_mask, "instruction_aligned"] = True
@@ -114,11 +114,13 @@ def _common_prep(log_dir: str, output_dir: str) -> tuple[pd.DataFrame, Path]:
 
     evals = evals_df(logs=log_dir, columns=EvalTask + EvalModel + EvalScores)
 
-    df = evals.rename(columns={
-        "task_arg_condition": "condition",
-        "task_arg_n_turns": "n_turns",
-        "task_arg_instruction_template": "instruction",
-    })
+    df = evals.rename(
+        columns={
+            "task_arg_condition": "condition",
+            "task_arg_n_turns": "n_turns",
+            "task_arg_instruction_template": "instruction",
+        }
+    )
 
     # Shorten model names (strip provider prefixes like "openrouter/google/")
     df["model"] = df["model"].str.replace(r"^openrouter/[^/]+/", "", regex=True)
@@ -141,7 +143,9 @@ def prepare_behavioral(log_dir: str, output_dir: str) -> None:
 
     acc_cols = [c for c in df.columns if c.endswith("_accuracy")]
     if not acc_cols:
-        print("No score columns found — this log directory may not contain behavioral logs.")
+        print(
+            "No score columns found — this log directory may not contain behavioral logs."
+        )
         sys.exit(1)
 
     df = _coalesce_scores(df)
@@ -152,8 +156,14 @@ def prepare_behavioral(log_dir: str, output_dir: str) -> None:
         sys.exit(1)
 
     output_cols = [
-        "model", "condition", "condition_pair",
-        "instruction_aligned", "instruction", "n_turns", "score", "score_stderr",
+        "model",
+        "condition",
+        "condition_pair",
+        "instruction_aligned",
+        "instruction",
+        "n_turns",
+        "score",
+        "score_stderr",
     ]
     df = df[output_cols].reset_index(drop=True)
 
@@ -172,16 +182,26 @@ def prepare_prediction(log_dir: str, output_dir: str) -> None:
 
     required_col = "score_prediction_accuracy_accuracy"
     if required_col not in df.columns:
-        print(f"Missing {required_col!r} — this log directory may not contain prediction logs.")
+        print(
+            f"Missing {required_col!r} — this log directory may not contain prediction logs."
+        )
         sys.exit(1)
 
     df = _rename_prediction_scores(df)
 
     output_cols = [
-        "model", "condition", "condition_pair", "instruction_aligned", "instruction", "n_turns",
-        "score_instruction_following", "stderr_instruction_following",
-        "score_prediction_accuracy", "stderr_prediction_accuracy",
-        "score_prediction_instruction", "stderr_prediction_instruction",
+        "model",
+        "condition",
+        "condition_pair",
+        "instruction_aligned",
+        "instruction",
+        "n_turns",
+        "score_instruction_following",
+        "stderr_instruction_following",
+        "score_prediction_accuracy",
+        "stderr_prediction_accuracy",
+        "score_prediction_instruction",
+        "stderr_prediction_instruction",
     ]
     df = df[output_cols].reset_index(drop=True)
     df = df.dropna(subset=["score_instruction_following"])
@@ -199,17 +219,97 @@ def prepare_prediction(log_dir: str, output_dir: str) -> None:
     print(f"  N values: {sorted(df['n_turns'].unique(), key=int)}")
 
 
+def prepare_combined(
+    behavioral_log_dir: str, prediction_log_dir: str, output_dir: str
+) -> None:
+    """Combine behavioral and prediction logs for cross-protocol analysis.
+
+    Outputs evals_combined.parquet with columns:
+    - model, condition, condition_pair, instruction_aligned, instruction, n_turns
+    - behavioral_score, behavioral_stderr (from protocol 1)
+    - prediction_actual_score, prediction_actual_stderr (actual IF from protocol 2)
+    - prediction_predicted_score, prediction_predicted_stderr (predicted IF from protocol 2)
+    """
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    df_behavioral, _ = _common_prep(behavioral_log_dir, output_dir)
+    df_prediction, _ = _common_prep(prediction_log_dir, output_dir)
+
+    acc_cols = [c for c in df_behavioral.columns if c.endswith("_accuracy")]
+    if not acc_cols:
+        print("No score columns found in behavioral logs.")
+        sys.exit(1)
+
+    df_behavioral = _coalesce_scores(df_behavioral)
+
+    if "score_prediction_accuracy_accuracy" not in df_prediction.columns:
+        print("Missing prediction scores in prediction logs.")
+        sys.exit(1)
+
+    df_prediction = _rename_prediction_scores(df_prediction)
+
+    key_cols = ["model", "condition", "instruction", "n_turns"]
+    df_behavioral = df_behavioral[key_cols + ["score", "score_stderr"]].rename(
+        columns={"score": "behavioral_score", "score_stderr": "behavioral_stderr"}
+    )
+
+    df_prediction = df_prediction[
+        key_cols
+        + [
+            "condition_pair",
+            "instruction_aligned",
+            "score_instruction_following",
+            "stderr_instruction_following",
+            "score_prediction_instruction",
+            "stderr_prediction_instruction",
+        ]
+    ].rename(
+        columns={
+            "score_instruction_following": "prediction_actual_score",
+            "stderr_instruction_following": "prediction_actual_stderr",
+            "score_prediction_instruction": "prediction_predicted_score",
+            "stderr_prediction_instruction": "prediction_predicted_stderr",
+        }
+    )
+
+    df_combined = df_prediction.merge(df_behavioral, on=key_cols, how="inner")
+
+    if df_combined.empty:
+        print("No matching rows between behavioral and prediction logs.")
+        sys.exit(1)
+
+    path = out / "evals_combined.parquet"
+    df_combined.to_parquet(path, index=False)
+    print(f"Saved {len(df_combined)} rows to {path}")
+    print(f"  Models: {df_combined['model'].nunique()}")
+    print(f"  Conditions: {sorted(df_combined['condition'].unique())}")
+    print(f"  Instructions: {sorted(df_combined['instruction'].unique())}")
+    print(f"  N values: {sorted(df_combined['n_turns'].unique(), key=int)}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare eval data for visualization")
     parser.add_argument("--log-dir", type=str, required=True)
     parser.add_argument("--output-dir", type=str, required=True)
     parser.add_argument(
-        "--protocol", choices=["behavioral", "prediction"], default="behavioral",
+        "--protocol",
+        choices=["behavioral", "prediction", "combined"],
+        default="behavioral",
         help="Which protocol's logs to prepare (default: behavioral)",
+    )
+    parser.add_argument(
+        "--log-dir-2",
+        type=str,
+        help="Second log directory (required for 'combined' protocol)",
     )
     args = parser.parse_args()
 
     if args.protocol == "behavioral":
         prepare_behavioral(args.log_dir, args.output_dir)
-    else:
+    elif args.protocol == "prediction":
         prepare_prediction(args.log_dir, args.output_dir)
+    else:
+        if not args.log_dir_2:
+            parser.error("--log-dir-2 is required for 'combined' protocol")
+        prepare_combined(args.log_dir, args.log_dir_2, args.output_dir)

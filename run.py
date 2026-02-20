@@ -5,18 +5,17 @@ This follows the inspect-ai pattern for parameterized grids:
 https://inspect.aisi.org.uk/eval-sets.html
 
 Usage:
-    uv run python run.py <config.yaml> --model <model> [--eval-set-name <name>] [--log-dir <dir>]
+    uv run python run.py <config.yaml> --models-yaml <models.yaml> [--eval-set-name <name>] [--log-dir <dir>]
 
 Examples:
-    uv run python run.py configs/example.yaml \
-        --model openrouter/google/gemini-2.0-flash-001
+    uv run python run.py configs/example.yaml --models-yaml models.yaml
 
     uv run python run.py configs/example.yaml \
-        --model openrouter/google/gemini-2.0-flash-001 \
+        --models-yaml models.yaml \
         --eval-set-name my-experiment
 
     uv run python run.py configs/example.yaml \
-        --model openrouter/google/gemini-2.0-flash-001,openrouter/anthropic/claude-3.5-haiku \
+        --models-yaml models.yaml \
         --log-dir custom-logs/my-run
 
 For single condition/N runs, use inspect eval directly:
@@ -44,10 +43,28 @@ PROTOCOL_MAP = {
 }
 
 
+def load_models_from_yaml(path: str) -> tuple[list[str], dict]:
+    with open(path) as f:
+        models_config = yaml.safe_load(f)
+
+    provider = models_config.get("provider", "openrouter")
+    models = []
+    for model_name in models_config.get("models", []):
+        full_model = f"{provider}/{model_name}"
+        models.append(full_model)
+
+    model_args = {}
+    provider_args = models_config.get("provider_args", {})
+    if provider_args:
+        model_args["provider"] = provider_args
+
+    return models, model_args
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run parameterized evaluation grids")
     parser.add_argument("config", help="Path to YAML config file")
-    parser.add_argument("--model", required=True, help="Model(s), comma-separated")
+    parser.add_argument("--models-yaml", required=True, help="Path to models.yaml file")
     parser.add_argument(
         "--eval-set-name",
         default=None,
@@ -57,6 +74,18 @@ def main():
         "--log-dir",
         default=None,
         help="Explicit log directory (overrides --eval-set-name)",
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=None,
+        help="Model temperature",
+    )
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=2048,
+        help="Maximum output tokens (default: 2048)",
     )
     args = parser.parse_args()
 
@@ -93,7 +122,7 @@ def main():
         for condition, n, tmpl in product(conditions, n_turns, instruction_templates)
     ]
 
-    models = [m.strip() for m in args.model.split(",")]
+    models, model_args = load_models_from_yaml(args.models_yaml)
 
     if args.log_dir:
         log_dir = args.log_dir
@@ -110,15 +139,24 @@ def main():
     print(f"Trials: {n_trials}")
     print(f"Tasks: {len(tasks)}")
     print(f"Models: {models}")
+    if model_args:
+        print(f"Model args: {model_args}")
     print(f"Log dir: {log_dir}")
 
     from inspect_ai import eval_set
 
-    success, logs = eval_set(
-        tasks=tasks,
-        model=models if len(models) > 1 else models[0],
-        log_dir=log_dir,
-    )
+    eval_kwargs = {
+        "tasks": tasks,
+        "model": models,
+        "log_dir": log_dir,
+        "max_tokens": args.max_tokens,
+    }
+    if model_args:
+        eval_kwargs["model_args"] = model_args
+    if args.temperature is not None:
+        eval_kwargs["temperature"] = args.temperature
+
+    success, logs = eval_set(**eval_kwargs)
 
     if not success:
         print("Some tasks failed.", file=sys.stderr)
