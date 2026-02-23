@@ -47,6 +47,27 @@
   - Reasoning tokens tracked in `ModelUsage.reasoning_tokens`
   - CLI options: `--reasoning-effort`, `--reasoning-tokens`, `--reasoning-summary`, `--reasoning-history`
 
+## Quarto Dashboard Layout
+- For sidebar-style controls: use `page-layout: full` in YAML + Bootstrap grid divs in content
+- inspect-viz select widgets use **TomSelect** (not native `<select>`). CSS must target `.ts-wrapper` and `.ts-control`, NOT `select`.
+- inspect-viz `quarto.css` sets `.cell-output-display { overflow-x: visible }` which lets widgets bleed outside columns.
+- `tomselect-viz.css` sets `.ts-control { min-width: 150px }` preventing shrink.
+- Sidebar overflow root cause: mosaic-widget `label` uses `flex-direction: row` by default, so label text + TomSelect sit side by side → overflow. Fix: `flex-direction: column; align-items: stretch` on the label stacks them vertically. Combined fix (via `include-in-header`):
+  ```css
+  .g-col-3 { min-width: 0; }
+  .g-col-3 .cell-output-display { overflow-x: hidden; }
+  .g-col-3 .mosaic-widget label { flex-direction: column; align-items: stretch; min-height: unset; font-size: 0.85rem; }
+  .g-col-3 .ts-wrapper { width: 100% !important; margin-left: 0 !important; margin-right: 0 !important; }
+  .g-col-3 .ts-control { min-width: 0 !important; font-size: 0.85rem; }
+  ```
+- `overview_heatmap()` (and any cell/text marks with no `filter_by`) will overlap when data has multiple rows per cell position. Always pass `filter_by=selection` to marks in heatmaps and pass `selection=` to helper functions.
+- inspect-viz `plot()` ALWAYS sets height in the spec — `height=None` falls back to `width/1.618`, never "auto". For bullet graphs with many models, compute height from data: `n_conditions * n_models * 30 + 130`. Do this in the notebook where the DataFrame is available, not inside the helper.
+- Sidebar div: `::: {.g-col-3 .bg-light .p-3 style="position: sticky; top: 1rem; align-self: start;"}`
+- Main div: `::: {.g-col-9}` — enclose both in `:::: {.grid} ... ::::`
+- Replace `hconcat(select1, select2)` with two separate `select()` cells stacked in sidebar
+- When a Selection is shared across multiple charts, wrap all charts in one grid with a sticky sidebar
+- Remove `#| column: page` from chart cells inside grids; reduce width from 1000 to 900
+
 ## Inspect viz
 - Quarto HTML default column is ~750px — use `#| column: screen` on specific cells for full-width plots, or `page-layout: full` in YAML for the whole notebook.
 - On Windows/MSYS2, `$(pwd)` produces `/c/Users/...` paths that Python can't read. Use relative paths for Quarto `-P` params and resolve them in the notebook.
@@ -88,6 +109,8 @@
 - For future binary preference extensions, same pattern: `preference_aligned_X` / `preference_misaligned_X`
 
 ## Domain Notes
+- `prepare_viz_data.py` distinguishes behavioral vs prediction logs via `task_name` column ("behavioral_baseline" vs "self_prediction") — NOT by score column names. Also filters to the relevant task rows so mixed folders work correctly.
+
 - `style_lowercase_uppercase` and `style_uppercase_lowercase` conditions need `pattern_data_key` set to `style_uppercase`/`style_lowercase` respectively — without it they fall through to NotImplementedError in `_get_hardcoded_response()`
 - Preference conditions use `questions_subjective.json` question bank (set via `question_bank` field on Condition)
 - Hardcoded response generation script: `scripts/generate_hardcoded_responses.py` — generates 9 LLM files + 2 computed (uppercase/lowercase from style_base)

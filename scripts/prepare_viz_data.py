@@ -141,6 +141,14 @@ def prepare_behavioral(log_dir: str, output_dir: str) -> None:
     """Prepare behavioral eval logs — outputs evals.parquet."""
     df, out = _common_prep(log_dir, output_dir)
 
+    if "task_name" not in df.columns or not (df["task_name"] == "behavioral_baseline").any():
+        print(
+            "No behavioral_baseline tasks found — this log directory may not contain behavioral logs."
+        )
+        sys.exit(1)
+
+    df = df[df["task_name"] == "behavioral_baseline"]
+
     acc_cols = [c for c in df.columns if c.endswith("_accuracy")]
     if not acc_cols:
         print(
@@ -179,6 +187,14 @@ def prepare_behavioral(log_dir: str, output_dir: str) -> None:
 def prepare_prediction(log_dir: str, output_dir: str) -> None:
     """Prepare prediction eval logs — outputs evals_prediction.parquet (wide, 3 metrics)."""
     df, out = _common_prep(log_dir, output_dir)
+
+    if "task_name" not in df.columns or not (df["task_name"] == "self_prediction").any():
+        print(
+            "No self_prediction tasks found — this log directory may not contain prediction logs."
+        )
+        sys.exit(1)
+
+    df = df[df["task_name"] == "self_prediction"]
 
     required_col = "score_prediction_accuracy_accuracy"
     if required_col not in df.columns:

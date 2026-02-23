@@ -2,8 +2,18 @@
 title: "Protocol 1: Behavioral Baseline"
 format:
   html:
+    page-layout: full
     code-fold: true
     code-tools: true
+    include-in-header:
+      - text: |
+          <style>
+          .g-col-3 { min-width: 0; }
+          .g-col-3 .cell-output-display { overflow-x: hidden; }
+          .g-col-3 .mosaic-widget label { flex-direction: column; align-items: stretch; min-height: unset; font-size: 0.85rem; }
+          .g-col-3 .ts-wrapper { width: 100% !important; margin-left: 0 !important; margin-right: 0 !important; }
+          .g-col-3 .ts-control { min-width: 0 !important; font-size: 0.85rem; }
+          </style>
 params:
   evals_path: "outputs/viz/default/evals.parquet"
 ---
@@ -53,7 +63,6 @@ _label_df.to_parquet(_label_path, index=False)
 
 from inspect_viz import Data, Selection
 from inspect_viz.input import select
-from inspect_viz.layout import hconcat
 
 from scripts.viz_helpers import labeled_line_chart, bullet_graph, paired_bullet_graph
 
@@ -83,6 +92,11 @@ _aligned_df.to_parquet(_aligned_path, index=False)
 _misaligned_df = _nonneutral_df[_nonneutral_df["instruction_aligned"] == False].copy()
 _misaligned_path = str(_out_dir / "_misaligned.parquet")
 _misaligned_df.to_parquet(_misaligned_path, index=False)
+
+# Height for bullet graphs: ~30px per (condition × model) row + margins
+_n_models = _evals_df["model"].nunique()
+_bullet_height = _nonneutral_df["condition"].nunique() * _n_models * 30 + 130
+_paired_height = _nonneutral_df["condition_pair"].nunique() * _n_models * 30 + 130
 ```
 
 ## Overview
@@ -97,27 +111,41 @@ Each line represents a model's instruction-following rate. Text labels appear at
 #| echo: false
 line_data = Data.from_file(evals_path_resolved)
 label_data = Data.from_file(_label_path)
-
 sel = Selection.intersect()
+```
 
-hconcat(
-    select(line_data, label="Condition", column="condition", value="auto", target=sel, field="condition"),
-    select(line_data, label="Instruction", column="instruction", value="auto", target=sel, field="instruction"),
-)
+:::: {.grid}
+
+::: {.g-col-3 .bg-light .p-3 style="position: sticky; top: 1rem; align-self: start;"}
+#### Filters
+
+```{python}
+#| echo: false
+select(line_data, label="Condition", column="condition", value="auto", target=sel, field="condition")
 ```
 
 ```{python}
 #| echo: false
-#| column: page
+select(line_data, label="Instruction", column="instruction", value="auto", target=sel, field="instruction")
+```
+:::
+
+::: {.g-col-9}
+```{python}
+#| echo: false
 labeled_line_chart(
     line_data,
     label_data,
     selection=sel,
     title="Instruction Following Rate vs N",
     x_domain=n_domain,
-    width=1000,
+    width=900,
+    stderr_col="stderr",
 )
 ```
+:::
+
+::::
 
 ## Bullet Graph: vs Neutral Baseline {#sec-bullet}
 
@@ -127,22 +155,34 @@ Each row is a model. The grey background bar shows the neutral condition's accur
 #| echo: false
 bullet_main = Data.from_file(_nonneutral_path)
 bullet_baseline = Data.from_file(_baseline_path)
-
 bullet_sel = Selection.intersect()
-
-select(bullet_main, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=bullet_sel, field="n_turns")
 ```
+
+:::: {.grid}
+
+::: {.g-col-3 .bg-light .p-3 style="position: sticky; top: 1rem; align-self: start;"}
+#### Filters
 
 ```{python}
 #| echo: false
-#| column: page
+select(bullet_main, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=bullet_sel, field="n_turns")
+```
+:::
+
+::: {.g-col-9}
+```{python}
+#| echo: false
 bullet_graph(
     bullet_main,
     bullet_baseline,
     selection=bullet_sel,
-    width=1000,
+    width=900,
+    height=_bullet_height,
 )
 ```
+:::
+
+::::
 
 ## Bullet Graph: Aligned vs Misaligned {#sec-paired-bullet}
 
@@ -157,19 +197,31 @@ Use the dropdown to select an N value.
 #| echo: false
 aligned_data = Data.from_file(_aligned_path)
 misaligned_data = Data.from_file(_misaligned_path)
-
 paired_sel = Selection.intersect()
-
-select(aligned_data, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=paired_sel, field="n_turns")
 ```
+
+:::: {.grid}
+
+::: {.g-col-3 .bg-light .p-3 style="position: sticky; top: 1rem; align-self: start;"}
+#### Filters
 
 ```{python}
 #| echo: false
-#| column: page
+select(aligned_data, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=paired_sel, field="n_turns")
+```
+:::
+
+::: {.g-col-9}
+```{python}
+#| echo: false
 paired_bullet_graph(
     aligned_data,
     misaligned_data,
     selection=paired_sel,
-    width=1000,
+    width=900,
+    height=_paired_height,
 )
 ```
+:::
+
+::::

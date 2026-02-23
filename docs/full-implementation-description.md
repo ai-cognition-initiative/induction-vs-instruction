@@ -690,6 +690,7 @@ src/tasks/prediction.py                       # Protocol 2 task
 scripts/generate_hardcoded_responses.py       # One-time generation script (9 LLM + 2 computed files)
 data/questions_factual.json                   # 233 factual questions
 data/questions_subjective.json                # 204 subjective questions
+data/questions_programming.json               # 219 programming questions
 data/sets/us_states.json                      # 50 US states
 data/sets/eu_countries.json                   # 27 EU countries
 ```

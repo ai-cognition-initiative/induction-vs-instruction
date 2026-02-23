@@ -6,8 +6,10 @@ Uses inspect-viz primitives to build reusable plot components.
 from __future__ import annotations
 
 from inspect_viz import Data, Selection
-from inspect_viz.mark import bar_x, cell, line, text
+from inspect_viz.interactor import highlight, nearest_x
+from inspect_viz.mark import area, bar_x, cell, line, text
 from inspect_viz.plot import legend as make_legend, plot
+from inspect_viz.transform import ci_bounds
 
 
 def labeled_line_chart(
@@ -16,6 +18,7 @@ def labeled_line_chart(
     *,
     selection: Selection | None = None,
     score_col: str = "score",
+    stderr_col: str | None = None,
     title: str = "Score vs N",
     width: int = 900,
     height: int = 400,
@@ -28,39 +31,66 @@ def labeled_line_chart(
         label_data: Data filtered to max n_turns only. Used for text labels.
         selection: Shared Selection that filters by condition/instruction.
         score_col: Column name for the y-axis score.
+        stderr_col: Column name for stderr (optional, enables confidence band).
         title: Plot title.
         width: Plot width in pixels.
         height: Plot height in pixels.
         x_domain: Explicit x-axis domain (sorted n_turns values).
     """
+    hover_sel = Selection.single(cross=True)
+    marks = []
+
+    if stderr_col:
+        y_lower, y_upper = ci_bounds(score_col, level=0.95, stderr=stderr_col)
+        marks.append(
+            area(
+                data,
+                x1="n_turns",
+                y1=y_lower,
+                y2=y_upper,
+                fill="model",
+                fill_opacity=0.15,
+                filter_by=selection,
+                stroke=None,
+            )
+        )
+
+    marks.extend(
+        [
+            line(
+                data,
+                x="n_turns",
+                y=score_col,
+                stroke="model",
+                filter_by=selection,
+                marker=True,
+                tip=True,
+                channels={
+                    "N": "n_turns",
+                    "Score": score_col,
+                    "Model": "model",
+                },
+            ),
+            text(
+                label_data,
+                x="n_turns",
+                y=score_col,
+                text="model",
+                filter_by=selection,
+                fill="model",
+                stroke="white",
+                stroke_width=4,
+                dx=5,
+                line_anchor="middle",
+                styles={"text_anchor": "start", "font_size": 11, "font_weight": 600},
+            ),
+        ]
+    )
+
     return plot(
-        line(
-            data,
-            x="n_turns",
-            y=score_col,
-            stroke="model",
-            filter_by=selection,
-            marker=True,
-            tip=True,
-            channels={
-                "N": "n_turns",
-                "Score": score_col,
-                "Model": "model",
-            },
-        ),
-        text(
-            label_data,
-            x="n_turns",
-            y=score_col,
-            text="model",
-            filter_by=selection,
-            fill="model",
-            stroke="white",
-            stroke_width=4,
-            dx=5,
-            line_anchor="middle",
-            styles={"text_anchor": "start", "font_size": 11, "font_weight": 600},
-        ),
+        *marks,
+        nearest_x(hover_sel, channels=["stroke"], fields=["model"]),
+        highlight(by=hover_sel),
         x_label="N (hardcoded turns)",
         y_label="Instruction Following Rate",
         title=title,
@@ -217,6 +247,8 @@ def calibration_line_chart(
     selection: Selection | None = None,
     actual_col: str = "score_instruction_following",
     predicted_col: str = "score_prediction_instruction",
+    actual_stderr_col: str | None = None,
+    predicted_stderr_col: str | None = None,
     title: str = "Instruction Following: Actual (solid) vs Predicted (dashed)",
     width: int = 900,
     height: int = 400,
@@ -233,42 +265,91 @@ def calibration_line_chart(
         selection: Shared Selection for condition/instruction filtering.
         actual_col: Column for actual instruction-following rate (solid line).
         predicted_col: Column for predicted instruction-following rate (dashed line).
+        actual_stderr_col: Column for actual stderr (optional, enables confidence band).
+        predicted_stderr_col: Column for predicted stderr (optional, enables confidence band).
     """
+    hover_sel = Selection.single(cross=True)
+    marks = []
+
+    if actual_stderr_col:
+        y_lower, y_upper = ci_bounds(actual_col, level=0.95, stderr=actual_stderr_col)
+        marks.append(
+            area(
+                data,
+                x1="n_turns",
+                y1=y_lower,
+                y2=y_upper,
+                fill="model",
+                fill_opacity=0.15,
+                filter_by=selection,
+                stroke=None,
+            )
+        )
+
+    if predicted_stderr_col:
+        y_lower, y_upper = ci_bounds(
+            predicted_col, level=0.95, stderr=predicted_stderr_col
+        )
+        marks.append(
+            area(
+                data,
+                x1="n_turns",
+                y1=y_lower,
+                y2=y_upper,
+                fill="model",
+                fill_opacity=0.08,
+                filter_by=selection,
+                stroke=None,
+            )
+        )
+
+    marks.extend(
+        [
+            line(
+                data,
+                x="n_turns",
+                y=actual_col,
+                stroke="model",
+                filter_by=selection,
+                marker=True,
+                tip=True,
+                channels={"N": "n_turns", "Actual IF": actual_col, "Model": "model"},
+            ),
+            line(
+                data,
+                x="n_turns",
+                y=predicted_col,
+                stroke="model",
+                stroke_dasharray="4 2",
+                filter_by=selection,
+                marker=True,
+                tip=True,
+                channels={
+                    "N": "n_turns",
+                    "Predicted IF": predicted_col,
+                    "Model": "model",
+                },
+            ),
+            text(
+                label_data,
+                x="n_turns",
+                y=actual_col,
+                text="model",
+                filter_by=selection,
+                fill="model",
+                stroke="white",
+                stroke_width=4,
+                dx=5,
+                line_anchor="middle",
+                styles={"text_anchor": "start", "font_size": 11, "font_weight": 600},
+            ),
+        ]
+    )
+
     return plot(
-        line(
-            data,
-            x="n_turns",
-            y=actual_col,
-            stroke="model",
-            filter_by=selection,
-            marker=True,
-            tip=True,
-            channels={"N": "n_turns", "Actual IF": actual_col, "Model": "model"},
-        ),
-        line(
-            data,
-            x="n_turns",
-            y=predicted_col,
-            stroke="model",
-            stroke_dasharray="4 2",
-            filter_by=selection,
-            marker=True,
-            tip=True,
-            channels={"N": "n_turns", "Predicted IF": predicted_col, "Model": "model"},
-        ),
-        text(
-            label_data,
-            x="n_turns",
-            y=actual_col,
-            text="model",
-            filter_by=selection,
-            fill="model",
-            stroke="white",
-            stroke_width=4,
-            dx=5,
-            line_anchor="middle",
-            styles={"text_anchor": "start", "font_size": 11, "font_weight": 600},
-        ),
+        *marks,
+        nearest_x(hover_sel, channels=["stroke"], fields=["model"]),
+        highlight(by=hover_sel),
         x_label="N (hardcoded turns)",
         y_label="Rate",
         title=title,
@@ -286,6 +367,7 @@ def overview_heatmap(
     x: str = "n_turns",
     y: str = "condition",
     fill_col: str = "score",
+    selection: Selection | None = None,
     title: str = "Overview",
     width: int = 900,
     height: int = 400,
@@ -297,6 +379,7 @@ def overview_heatmap(
             x=x,
             y=y,
             fill=fill_col,
+            filter_by=selection,
             tip=True,
             inset=1,
         ),
@@ -305,6 +388,7 @@ def overview_heatmap(
             x=x,
             y=y,
             text=fill_col,
+            filter_by=selection,
             fill="white",
             font_weight=600,
         ),

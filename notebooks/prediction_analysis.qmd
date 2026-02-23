@@ -2,8 +2,18 @@
 title: "Protocol 2: Self-Prediction"
 format:
   html:
+    page-layout: full
     code-fold: true
     code-tools: true
+    include-in-header:
+      - text: |
+          <style>
+          .g-col-3 { min-width: 0; }
+          .g-col-3 .cell-output-display { overflow-x: hidden; }
+          .g-col-3 .mosaic-widget label { flex-direction: column; align-items: stretch; min-height: unset; font-size: 0.85rem; }
+          .g-col-3 .ts-wrapper { width: 100% !important; margin-left: 0 !important; margin-right: 0 !important; }
+          .g-col-3 .ts-control { min-width: 0 !important; font-size: 0.85rem; }
+          </style>
 params:
   evals_path: "outputs/viz/default/evals_prediction.parquet"
 ---
@@ -111,9 +121,13 @@ _misaligned_long = _nonneutral_long[_nonneutral_long["instruction_aligned"] == F
 _misaligned_long_path = str(_out_dir / "_pred_misaligned.parquet")
 _misaligned_long.to_parquet(_misaligned_long_path, index=False)
 
+# Height for bullet graphs: ~30px per (condition × model) row + margins
+_n_models = _evals_df["model"].nunique()
+_bullet_height = _nonneutral_long["condition"].nunique() * _n_models * 30 + 130
+_paired_height = _aligned_long["condition_pair"].nunique() * _n_models * 30 + 130
+
 from inspect_viz import Data, Selection
 from inspect_viz.input import select
-from inspect_viz.layout import hconcat
 
 from scripts.viz_helpers import (
     calibration_line_chart,
@@ -131,32 +145,44 @@ Protocol 2 tests whether models can predict their own behavior before generating
 - **Prediction Accuracy**: Did the model's prediction match its actual output?
 - **Predicted: Follows Instruction**: Did the model predict that it would follow the instruction (T)?
 
+```{python}
+#| echo: false
+line_data = Data.from_file(evals_path_resolved)
+label_data = Data.from_file(_label_path)
+cal_sel = Selection.intersect()
+```
+
+:::: {.grid}
+
+::: {.g-col-3 .bg-light .p-3 style="position: sticky; top: 1rem; align-self: start;"}
+#### Filters
+
+```{python}
+#| echo: false
+select(line_data, label="Condition", column="condition", value="auto", target=cal_sel, field="condition")
+```
+
+```{python}
+#| echo: false
+select(line_data, label="Instruction", column="instruction", value="auto", target=cal_sel, field="instruction")
+```
+:::
+
+::: {.g-col-9}
 ## Calibration: Actual vs Predicted {#sec-calibration}
 
 Each line represents a model. **Solid** = actual instruction-following rate; **dashed** = predicted rate. The gap between them shows systematic over- or under-estimation of instruction-following ability.
 
 ```{python}
 #| echo: false
-line_data = Data.from_file(evals_path_resolved)
-label_data = Data.from_file(_label_path)
-
-cal_sel = Selection.intersect()
-
-hconcat(
-    select(line_data, label="Condition", column="condition", value="auto", target=cal_sel, field="condition"),
-    select(line_data, label="Instruction", column="instruction", value="auto", target=cal_sel, field="instruction"),
-)
-```
-
-```{python}
-#| echo: false
-#| column: page
 calibration_line_chart(
     line_data,
     label_data,
     selection=cal_sel,
     x_domain=n_domain,
-    width=1000,
+    width=900,
+    actual_stderr_col="stderr_instruction_following",
+    predicted_stderr_col="stderr_prediction_instruction",
 )
 ```
 
@@ -166,7 +192,6 @@ How often did the model correctly predict its own response (target or pattern)? 
 
 ```{python}
 #| echo: false
-#| column: page
 labeled_line_chart(
     line_data,
     label_data,
@@ -174,7 +199,8 @@ labeled_line_chart(
     score_col="score_prediction_accuracy",
     title="Prediction Accuracy vs N",
     x_domain=n_domain,
-    width=1000,
+    width=900,
+    stderr_col="stderr_prediction_accuracy",
 )
 ```
 
@@ -184,7 +210,6 @@ How often did the model predict that it would follow the instruction (T)? Uses t
 
 ```{python}
 #| echo: false
-#| column: page
 labeled_line_chart(
     line_data,
     label_data,
@@ -192,9 +217,13 @@ labeled_line_chart(
     score_col="score_prediction_instruction",
     title="Predicted: Follows Instruction vs N",
     x_domain=n_domain,
-    width=1000,
+    width=900,
+    stderr_col="stderr_prediction_instruction",
 )
 ```
+:::
+
+::::
 
 ## Bullet Graph: vs Neutral Baseline {#sec-bullet}
 
@@ -204,25 +233,39 @@ Each row is a model. The grey bar shows the neutral condition score for the sele
 #| echo: false
 bullet_main = Data.from_file(_nonneutral_long_path)
 bullet_baseline = Data.from_file(_baseline_long_path)
-
 bullet_sel = Selection.intersect()
+```
 
-hconcat(
-    select(bullet_main, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=bullet_sel, field="n_turns"),
-    select(bullet_main, label="Metric", column="metric", options=metric_domain, value=metric_domain[0], target=bullet_sel, field="metric"),
-)
+:::: {.grid}
+
+::: {.g-col-3 .bg-light .p-3 style="position: sticky; top: 1rem; align-self: start;"}
+#### Filters
+
+```{python}
+#| echo: false
+select(bullet_main, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=bullet_sel, field="n_turns")
 ```
 
 ```{python}
 #| echo: false
-#| column: page
+select(bullet_main, label="Metric", column="metric", options=metric_domain, value=metric_domain[0], target=bullet_sel, field="metric")
+```
+:::
+
+::: {.g-col-9}
+```{python}
+#| echo: false
 bullet_graph(
     bullet_main,
     bullet_baseline,
     selection=bullet_sel,
-    width=1000,
+    width=900,
+    height=_bullet_height,
 )
 ```
+:::
+
+::::
 
 ## Bullet Graph: Aligned vs Misaligned {#sec-paired-bullet}
 
@@ -237,22 +280,36 @@ Use the dropdowns to select an N value and metric.
 #| echo: false
 aligned_data = Data.from_file(_aligned_long_path)
 misaligned_data = Data.from_file(_misaligned_long_path)
-
 paired_sel = Selection.intersect()
+```
 
-hconcat(
-    select(aligned_data, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=paired_sel, field="n_turns"),
-    select(aligned_data, label="Metric", column="metric", options=metric_domain, value=metric_domain[0], target=paired_sel, field="metric"),
-)
+:::: {.grid}
+
+::: {.g-col-3 .bg-light .p-3 style="position: sticky; top: 1rem; align-self: start;"}
+#### Filters
+
+```{python}
+#| echo: false
+select(aligned_data, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=paired_sel, field="n_turns")
 ```
 
 ```{python}
 #| echo: false
-#| column: page
+select(aligned_data, label="Metric", column="metric", options=metric_domain, value=metric_domain[0], target=paired_sel, field="metric")
+```
+:::
+
+::: {.g-col-9}
+```{python}
+#| echo: false
 paired_bullet_graph(
     aligned_data,
     misaligned_data,
     selection=paired_sel,
-    width=1000,
+    width=900,
+    height=_paired_height,
 )
 ```
+:::
+
+::::

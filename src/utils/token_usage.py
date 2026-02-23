@@ -158,6 +158,60 @@ def compute_token_usage(logs_dir: str = "logs", output_file: str = "token_usage.
                     f"{data['reasoning_tokens']:,} | {data['total_tokens']:,} | {data['tasks']} | ${cost:.4f} |\n"
                 )
 
+        f.write("## Final Totals\n\n")
+        f.write(
+            "| Evaluation | Input | Output | Reasoning | Total | Tasks | Cost (USD) |\n"
+        )
+        f.write(
+            "|------------|-------|--------|-----------|-------|-------|------------|\n"
+        )
+
+        grand_total = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "reasoning_tokens": 0,
+            "total_tokens": 0,
+            "tasks": 0,
+            "cost": Decimal("0"),
+        }
+
+        for eval_set, models in results.items():
+            eval_total = {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 0,
+                "tasks": 0,
+                "cost": Decimal("0"),
+            }
+            for model, data in models.items():
+                eval_total["input_tokens"] += data["input_tokens"]
+                eval_total["output_tokens"] += data["output_tokens"]
+                eval_total["reasoning_tokens"] += data["reasoning_tokens"]
+                eval_total["total_tokens"] += data["total_tokens"]
+                eval_total["tasks"] += data["tasks"]
+                eval_total["cost"] += calculate_cost(
+                    model, data["input_tokens"], data["output_tokens"]
+                )
+            f.write(
+                f"| {eval_set} | {eval_total['input_tokens']:,} | {eval_total['output_tokens']:,} | "
+                f"{eval_total['reasoning_tokens']:,} | {eval_total['total_tokens']:,} | {eval_total['tasks']} | ${eval_total['cost']:.4f} |\n"
+            )
+            for key in [
+                "input_tokens",
+                "output_tokens",
+                "reasoning_tokens",
+                "total_tokens",
+                "tasks",
+            ]:
+                grand_total[key] += eval_total[key]
+            grand_total["cost"] += eval_total["cost"]
+
+        f.write(
+            f"| **TOTAL** | **{grand_total['input_tokens']:,}** | **{grand_total['output_tokens']:,}** | "
+            f"**{grand_total['reasoning_tokens']:,}** | **{grand_total['total_tokens']:,}** | **{grand_total['tasks']}** | **${grand_total['cost']:.4f}** |\n"
+        )
+
     print(f"Token usage report written to {output_path}")
 
 
