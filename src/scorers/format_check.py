@@ -58,15 +58,15 @@ def format_scorer(condition_name: str) -> Scorer:
         output = state.output.completion
 
         if "uppercase" in condition_name and "lowercase" in condition_name:
-            # style_uppercase_lowercase or style_lowercase_uppercase
+            # Naming convention: {instruction}_{pattern}, so instruction is first word
             if condition_name == "style_uppercase_lowercase":
-                # Target is lowercase, pattern is uppercase
-                target_match = _check_lowercase(output)
-                pattern_match = _check_uppercase(output)
-            else:
-                # Target is uppercase, pattern is lowercase
+                # instruction=uppercase → target=UPPERCASE, pattern=lowercase
                 target_match = _check_uppercase(output)
                 pattern_match = _check_lowercase(output)
+            else:
+                # style_lowercase_uppercase: instruction=lowercase → target=lowercase, pattern=UPPERCASE
+                target_match = _check_lowercase(output)
+                pattern_match = _check_uppercase(output)
         elif "short" in condition_name and "long" in condition_name:
             if condition_name == "style_short_long":
                 # Target is long, pattern is short
@@ -78,13 +78,13 @@ def format_scorer(condition_name: str) -> Scorer:
                 pattern_match = _check_long(output)
         elif "python" in condition_name and "javascript" in condition_name:
             if condition_name == "style_python_javascript":
-                # Target is JavaScript, pattern is Python
-                code_score = _check_javascript(output)
+                # instruction=python → target=Python, pattern=JavaScript
+                code_score = _check_python(output)
                 target_match = code_score > 0
                 pattern_match = code_score < 0
             else:
-                # Target is Python, pattern is JavaScript
-                code_score = _check_python(output)
+                # style_javascript_python: instruction=javascript → target=JavaScript, pattern=Python
+                code_score = _check_javascript(output)
                 target_match = code_score > 0
                 pattern_match = code_score < 0
         else:

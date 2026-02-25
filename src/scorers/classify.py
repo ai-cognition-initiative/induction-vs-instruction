@@ -116,9 +116,11 @@ def classify_format(text: str, condition_name: str) -> str:
         is_upper = stripped == stripped.upper() and len(stripped) > 0
         is_lower = stripped == stripped.lower() and len(stripped) > 0
         if condition_name == "style_uppercase_lowercase":
-            target_match, pattern_match = is_lower, is_upper
-        else:
+            # instruction=uppercase → target=UPPERCASE, pattern=lowercase
             target_match, pattern_match = is_upper, is_lower
+        else:
+            # style_lowercase_uppercase: instruction=lowercase → target=lowercase, pattern=UPPERCASE
+            target_match, pattern_match = is_lower, is_upper
         if target_match:
             return "target"
         if pattern_match:
@@ -145,11 +147,13 @@ def classify_format(text: str, condition_name: str) -> str:
         py_score = sum(1 for kw in py_kw if kw in text)
         js_score = sum(1 for kw in js_kw if kw in text)
         if condition_name == "style_python_javascript":
-            target_match = js_score > py_score
-            pattern_match = py_score > js_score
-        else:
+            # instruction=python → target=Python, pattern=JavaScript
             target_match = py_score > js_score
             pattern_match = js_score > py_score
+        else:
+            # style_javascript_python: instruction=javascript → target=JavaScript, pattern=Python
+            target_match = js_score > py_score
+            pattern_match = py_score > js_score
         if target_match:
             return "target"
         if pattern_match:
