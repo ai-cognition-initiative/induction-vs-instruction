@@ -14,6 +14,9 @@
 | 2026-02-18 | self | Used `fy_axis="top"` — invalid | `fy_axis` only accepts `"left"`, `"right"`, `"both"`, or `bool`/`None`. There is no top/bottom option for fy axis. |
 | 2026-02-18 | self | `facet_anchor` (MarkOption) is not for positioning axis labels | `facet_anchor` controls WHICH facets a mark is rendered in (e.g. annotations in only the bottom facet). It does NOT move fy/fx axis labels. |
 | 2026-02-18 | self | fy axis labels (condition names) getting cut off despite `margin_left` | No built-in way to put fy labels above rows. Solutions: (1) `fy_axis=False` + color legend to replace labels, (2) increase `margin_left` to ~200px for long names. |
+| 2026-02-24 | self | Tried to use `--reasoning-effort none` | `reasoning_effort` only accepts `minimal`, `low`, `medium`, `high`, `xhigh`. To fully disable reasoning on OpenRouter, use `reasoning_enabled: false` in models.yaml. |
+| 2026-02-24 | self | Tried to specify both `reasoning_effort` and `reasoning_tokens` | Can only specify ONE, not both. OpenRouter provider warns and ignores `reasoning_tokens` if both are set. |
+| 2026-02-24 | self | Tried to pass `reasoning` object directly as model arg | OpenRouter provider handles `extra_body` construction internally. Use `reasoning_enabled` (boolean) as top-level model arg, or let inspect-ai's `reasoning_effort` map to OpenRouter's `extra_body.reasoning.effort`. |
 
 ## User Preferences
 - Project is single-purpose (induction vs instruction evals) - no need for extra subfolder nesting
@@ -46,6 +49,9 @@
   - Access reasoning via `message.content` list filtering for `type == "reasoning"`
   - Reasoning tokens tracked in `ModelUsage.reasoning_tokens`
   - CLI options: `--reasoning-effort`, `--reasoning-tokens`, `--reasoning-summary`, `--reasoning-history`
+  - **CRITICAL**: Can only specify ONE of `reasoning_effort` OR `reasoning_tokens`, not both
+  - `reasoning_effort` values: `minimal`, `low`, `medium`, `high`, `xhigh` — NOT `none`
+  - **OpenRouter-specific**: To fully disable reasoning, pass `reasoning_enabled: false` as a model arg (top-level, in models.yaml). OpenRouter provider handles constructing `extra_body` internally.
 
 ## Quarto Dashboard Layout
 - For sidebar-style controls: use `page-layout: full` in YAML + Bootstrap grid divs in content
@@ -85,7 +91,9 @@
 - `stroke_dash` is NOT a valid MarkOption. The correct parameter is `stroke_dasharray`.
 - `color_scheme` values must be lowercase (e.g., `"rdylgn"` not `"RdYlGn"`).
 - `font_weight` should be a direct mark kwarg, not inside `styles={}`.
+- `format_check.py` and `classify_format()`: naming is `{instruction}_{pattern}` so instruction=first word=target. `style_uppercase_lowercase` = instruction=uppercase = target=UPPERCASE. Previously had inverted logic (bug fixed 2026-02-23).
 - `filter_by=data.selection` on cascading selects causes deadlocks after the first interaction. Use a single dropdown instead of cascading (condition names are unique and self-descriptive).
+- Passing `fill="white"` (constant CSS color) as a direct kwarg to inspect-viz `text()` mark causes Mosaic JS error (`channelField(...) is null`). Pass constants via `styles={"fill": "white"}` instead to avoid Mosaic trying to resolve them as SQL channel fields.
 - Line marks connect points in DuckDB query order, not x_domain order. For string n_turns, sort the parquet data by numeric n_turns to ensure proper line connections.
 - inspect-viz `Data` has a built-in selection. ALL `select()`/`slider()` inputs targeting the same `Data` instance share that selection and filter ALL plots using that `Data`. Create separate `Data.from_file()` instances per filtering scope — e.g., trajectory section (condition_pair + hint only) vs factor section (condition_pair + hint + N) need DIFFERENT Data instances or the N filter bleeds into the trajectory.
 - For discrete N values, use `select(data, column="n_turns")` not `slider()` — slider implies continuous range; select shows only actual discrete values in the data.
@@ -107,6 +115,14 @@
   - `language_ru_fr` = instruction=Russian, pattern=French
   - `token_countries_states` = instruction=EU countries, pattern=US states
 - For future binary preference extensions, same pattern: `preference_aligned_X` / `preference_misaligned_X`
+
+## Report Metrics
+- Summary statistics (static vs dynamic avg IF): in behavioral_analysis.qmd. STATIC_CONDITIONS = {neutral, value_aligned_cats, value_misaligned_cats, factual_aligned_earth, factual_misaligned_earth}
+- Behavior boundaries: N_T_width (count of N values ≥90% IF) and N_P_start (first N ≤10% IF), computed per (model, condition) by averaging over instruction templates. Displayed as pivot tables in behavioral_analysis.qmd
+- Behavioral/prediction consistency heatmaps: stderr per (model, condition, n_turns) averaged over instructions; use color_scheme="reds", show_text=False. In behavioral_analysis.qmd (score_stderr) and prediction_analysis.qmd (per metric stderr)
+- overview_heatmap now has color_scheme (default "rdylgn") and show_text (default True) params
+- `r py$expr` inline code doesn't work in Python Quarto notebooks — remove or hardcode
+- ALIGNMENT_AXIS_PAIRS = {"value", "factual", "preference"} in prepare_viz_data.py — only these condition pairs have a true aligned/misaligned axis. Other pairs (token, language, persona, style) are direction-flipped without alignment semantics. Use this to filter paired bullet graphs.
 
 ## Domain Notes
 - `prepare_viz_data.py` distinguishes behavioral vs prediction logs via `task_name` column ("behavioral_baseline" vs "self_prediction") — NOT by score column names. Also filters to the relevant task rows so mixed folders work correctly.

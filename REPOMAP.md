@@ -9,8 +9,10 @@
 +-- scripts/
 |   +-- generate_hardcoded_responses.py
 |   |   MAX_WORKERS, DATA_DIR, OUTPUT_DIR, DEFAULT_MODEL, load_questions, _call_llm, generate_llm_responses, save_responses, main
+|   +-- generate_report_from_config.py
+|   |   load_config, validate_config, get_quarto_python, render_notebook, main
 |   +-- prepare_viz_data.py
-|   |   CONDITION_PAIR_MAP, ALIGNED_CONDITIONS, MISALIGNED_CONDITIONS, PREDICTION_SCORE_RENAME, add_pairing_columns, _coalesce_scores, _rename_prediction_scores, _common_prep, prepare_behavioral, prepare_prediction, prepare_combined
+|   |   CONDITION_PAIR_MAP, ALIGNED_CONDITIONS, MISALIGNED_CONDITIONS, ALIGNMENT_AXIS_PAIRS, PREDICTION_SCORE_RENAME, add_pairing_columns, _coalesce_scores, _rename_prediction_scores, _common_prep, prepare_behavioral, prepare_prediction, prepare_combined, load_evals_from_folders, process_raw_evals, process_behavioral_df, process_prediction_df, _merge_behavioral_prediction, prepare_behavioral_multi, prepare_prediction_multi, prepare_combined_multi
 |   +-- repomap.py
 |   |   extract_symbols, generate_repomap
 |   `-- viz_helpers.py
