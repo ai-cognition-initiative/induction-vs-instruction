@@ -18,6 +18,9 @@ Examples:
         --models-yaml models.yaml \
         --log-dir custom-logs/my-run
 
+For OpenRouter, disable reasoning in models.yaml:
+    reasoning_enabled: false
+
 For single condition/N runs, use inspect eval directly:
     uv run inspect eval src/tasks/behavioral.py \
         -T condition=neutral -T n_turns=5 \
@@ -58,6 +61,18 @@ def load_models_from_yaml(path: str) -> tuple[list[str], dict]:
     if provider_args:
         model_args["provider"] = provider_args
 
+    models_arg = models_config.get("models")
+    if models_arg:
+        model_args["models"] = models_arg
+
+    transforms = models_config.get("transforms")
+    if transforms:
+        model_args["transforms"] = transforms
+
+    reasoning_enabled = models_config.get("reasoning_enabled")
+    if reasoning_enabled is not None:
+        model_args["reasoning_enabled"] = reasoning_enabled
+
     return models, model_args
 
 
@@ -86,6 +101,12 @@ def main():
         type=int,
         default=2048,
         help="Maximum output tokens (default: 2048)",
+    )
+    parser.add_argument(
+        "--reasoning-effort",
+        type=str,
+        default="minimal",
+        help="Reasoning effort ('minimal', 'low', 'medium', 'high', or 'xhigh')",
     )
     args = parser.parse_args()
 
@@ -155,6 +176,8 @@ def main():
         eval_kwargs["model_args"] = model_args
     if args.temperature is not None:
         eval_kwargs["temperature"] = args.temperature
+    if args.reasoning_effort is not None:
+        eval_kwargs["reasoning_effort"] = args.reasoning_effort
 
     success, logs = eval_set(**eval_kwargs)
 

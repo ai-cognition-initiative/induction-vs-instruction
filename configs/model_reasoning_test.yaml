@@ -1,0 +1,9 @@
+provider: openrouter
+
+models:
+  - google/gemini-2.5-flash
+  - google/gemini-2.5-pro
+  - google/gemini-3-pro-preview
+
+provider_args:
+  quantizations: ["fp16", "bf16", "unknown"]
