@@ -117,12 +117,3 @@ For Tier 2: the existing "reasoning on" data can serve as one arm of a within-mo
 
 **Immediate zero-cost step** available regardless of choice: re-analyze existing data and **stratify the current results by reasoning tier** (annotation only, no new runs). This establishes the pattern and reveals whether mandatory-reasoning models look systematically different — which informs whether Option B is worth the investment.
 
----
-
-## Verification
-
-After deciding on a strategy:
-1. Update `configs/models.yaml` and `configs/models_reasoning.yaml` to reflect chosen tiers
-2. For any re-runs with reasoning disabled: add `reasoning_enabled: false` to model args in the config
-3. Check `logs/token_usage.md` post-run to confirm 0 reasoning tokens for disabled models
-4. In analysis notebooks: add a `reasoning_tier` column to the model metadata, use it to stratify heatmaps/trajectories

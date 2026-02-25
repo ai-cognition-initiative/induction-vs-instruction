@@ -93,7 +93,7 @@
 - `font_weight` should be a direct mark kwarg, not inside `styles={}`.
 - `format_check.py` and `classify_format()`: naming is `{instruction}_{pattern}` so instruction=first word=target. `style_uppercase_lowercase` = instruction=uppercase = target=UPPERCASE. Previously had inverted logic (bug fixed 2026-02-23).
 - `filter_by=data.selection` on cascading selects causes deadlocks after the first interaction. Use a single dropdown instead of cascading (condition names are unique and self-descriptive).
-- Passing `fill="white"` (constant CSS color) as a direct kwarg to inspect-viz `text()` mark causes Mosaic JS error (`channelField(...) is null`). Pass constants via `styles={"fill": "white"}` instead to avoid Mosaic trying to resolve them as SQL channel fields.
+- ANY non-column value in a mark kwarg that Mosaic tries to resolve as a channel causes the JS error `can't access property "as", n.channelField(...) is null`. Also affects `nearest_x(sel, channels=["stroke"])` — the `channels` param tells the interactor which mark channel to look up on EVERY mark in the plot. If any mark lacks that channel (e.g., area/text marks don't have `stroke`), `channelField("stroke")` returns null → crash. Fix: use `nearest_x(sel, fields=["model"])` instead — queries the raw data field, doesn't require all marks to have that channel. This includes: (1) string constants that aren't column names — e.g., `stroke="white"` → move to `styles={"stroke": "white"}`; (2) `stroke=None` (Python None → JS null) — Mosaic calls `channelField(null)` which returns null → crash. Fix: just omit `stroke` entirely on area marks (no stroke is the default). Integer constants like `stroke_width=4` are safe.
 - Line marks connect points in DuckDB query order, not x_domain order. For string n_turns, sort the parquet data by numeric n_turns to ensure proper line connections.
 - inspect-viz `Data` has a built-in selection. ALL `select()`/`slider()` inputs targeting the same `Data` instance share that selection and filter ALL plots using that `Data`. Create separate `Data.from_file()` instances per filtering scope — e.g., trajectory section (condition_pair + hint only) vs factor section (condition_pair + hint + N) need DIFFERENT Data instances or the N filter bleeds into the trajectory.
 - For discrete N values, use `select(data, column="n_turns")` not `slider()` — slider implies continuous range; select shows only actual discrete values in the data.
@@ -126,6 +126,8 @@
 
 ## Domain Notes
 - `prepare_viz_data.py` distinguishes behavioral vs prediction logs via `task_name` column ("behavioral_baseline" vs "self_prediction") — NOT by score column names. Also filters to the relevant task rows so mixed folders work correctly.
+- `reasoning_tokens` annotation: `samples_df(logs, columns=SampleSummary)` exposes `model_usage` per sample. Group by `eval_id` and sum. Join to `evals_df` result on `eval_id` (auto-included in both). `model_usage` may be a `ModelUsage` object or dict — handle both. Filter with `max_reasoning_tokens` param (None=no filter, 0=strict, 1000=allow noise-level).
+- `evals_df` and `samples_df` both auto-include `eval_id` as join key. Use `eval_id` not `task_id` (there is no `task_id` column).
 
 - `style_lowercase_uppercase` and `style_uppercase_lowercase` conditions need `pattern_data_key` set to `style_uppercase`/`style_lowercase` respectively — without it they fall through to NotImplementedError in `_get_hardcoded_response()`
 - Preference conditions use `questions_subjective.json` question bank (set via `question_bank` field on Condition)
