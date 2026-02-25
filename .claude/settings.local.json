@@ -54,7 +54,8 @@
       "Bash(QUARTO_PYTHON=\".venv/Scripts/python.exe\" uv run quarto:*)",
       "Bash(QUARTO_PYTHON=.venv/Scripts/python.exe uv run quarto render:*)",
       "Bash(test:*)",
-      "Bash(QUARTO_PYTHON=\".venv/Scripts/python.exe\" quarto render:*)"
+      "Bash(QUARTO_PYTHON=\".venv/Scripts/python.exe\" quarto render:*)",
+      "Bash(cd:*)"
     ],
     "deny": [],
     "ask": []
