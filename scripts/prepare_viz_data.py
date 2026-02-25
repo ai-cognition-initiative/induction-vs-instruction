@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Sequence
 
 import pandas as pd
 from inspect_ai.analysis import EvalModel, EvalScores, EvalTask, evals_df
@@ -52,6 +53,11 @@ MISALIGNED_CONDITIONS = {
     "style_python_javascript",
     "preference_misaligned_cats",
 }
+
+# Condition pairs where "aligned" means instruction agrees with model values/truth.
+# Other pairs (token, language, persona, style) are direction-flipped but neither
+# direction is inherently more "aligned" than the other.
+ALIGNMENT_AXIS_PAIRS = {"value", "factual", "preference"}
 
 # Prediction metric column rename map
 PREDICTION_SCORE_RENAME = {
@@ -141,7 +147,10 @@ def prepare_behavioral(log_dir: str, output_dir: str) -> None:
     """Prepare behavioral eval logs — outputs evals.parquet."""
     df, out = _common_prep(log_dir, output_dir)
 
-    if "task_name" not in df.columns or not (df["task_name"] == "behavioral_baseline").any():
+    if (
+        "task_name" not in df.columns
+        or not (df["task_name"] == "behavioral_baseline").any()
+    ):
         print(
             "No behavioral_baseline tasks found — this log directory may not contain behavioral logs."
         )
@@ -188,7 +197,10 @@ def prepare_prediction(log_dir: str, output_dir: str) -> None:
     """Prepare prediction eval logs — outputs evals_prediction.parquet (wide, 3 metrics)."""
     df, out = _common_prep(log_dir, output_dir)
 
-    if "task_name" not in df.columns or not (df["task_name"] == "self_prediction").any():
+    if (
+        "task_name" not in df.columns
+        or not (df["task_name"] == "self_prediction").any()
+    ):
         print(
             "No self_prediction tasks found — this log directory may not contain prediction logs."
         )
@@ -265,8 +277,131 @@ def prepare_combined(
 
     df_prediction = _rename_prediction_scores(df_prediction)
 
+    df_combined = _merge_behavioral_prediction(df_behavioral, df_prediction)
+
+    path = out / "evals_combined.parquet"
+    df_combined.to_parquet(path, index=False)
+    print(f"Saved {len(df_combined)} rows to {path}")
+    print(f"  Models: {df_combined['model'].nunique()}")
+    print(f"  Conditions: {sorted(df_combined['condition'].unique())}")
+    print(f"  Instructions: {sorted(df_combined['instruction'].unique())}")
+    print(f"  N values: {sorted(df_combined['n_turns'].unique(), key=int)}")
+
+
+# --- Reusable functions for multi-folder merging ---
+
+
+def load_evals_from_folders(log_dirs: Sequence[str]) -> pd.DataFrame:
+    """Load and concatenate evals from multiple log directories."""
+    dfs = []
+    for log_dir in log_dirs:
+        path = Path(log_dir)
+        if not path.exists():
+            raise FileNotFoundError(f"Log directory not found: {log_dir}")
+        evals = evals_df(logs=log_dir, columns=EvalTask + EvalModel + EvalScores)
+        dfs.append(evals)
+    return pd.concat(dfs, ignore_index=True)
+
+
+def process_raw_evals(df: pd.DataFrame) -> pd.DataFrame:
+    """Apply common transformations to raw evals dataframe."""
+    df = df.rename(
+        columns={
+            "task_arg_condition": "condition",
+            "task_arg_n_turns": "n_turns",
+            "task_arg_instruction_template": "instruction",
+        }
+    )
+    df["model"] = df["model"].str.replace(r"^openrouter/[^/]+/", "", regex=True)
+    df = add_pairing_columns(df)
+    df["_sort"] = pd.to_numeric(df["n_turns"], errors="coerce")
+    df = df.sort_values(["model", "condition", "instruction", "_sort"])
+    df["n_turns"] = df["_sort"].astype(int).astype(str)
+    df = df.drop(columns=["_sort"])
+    return df
+
+
+def process_behavioral_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Process a dataframe containing behavioral logs."""
+    if (
+        "task_name" not in df.columns
+        or not (df["task_name"] == "behavioral_baseline").any()
+    ):
+        raise ValueError("No behavioral_baseline tasks found in dataframe")
+
+    df = df[df["task_name"] == "behavioral_baseline"]
+    acc_cols = [c for c in df.columns if c.endswith("_accuracy")]
+    if not acc_cols:
+        raise ValueError("No score columns found in behavioral dataframe")
+
+    df = _coalesce_scores(df)
+    df = df.dropna(subset=["score"])
+
+    if df.empty:
+        raise ValueError("No behavioral scores found")
+
+    output_cols = [
+        "model",
+        "condition",
+        "condition_pair",
+        "instruction_aligned",
+        "instruction",
+        "n_turns",
+        "score",
+        "score_stderr",
+    ]
+    return df[output_cols].reset_index(drop=True)
+
+
+def process_prediction_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Process a dataframe containing prediction logs."""
+    if (
+        "task_name" not in df.columns
+        or not (df["task_name"] == "self_prediction").any()
+    ):
+        raise ValueError("No self_prediction tasks found in dataframe")
+
+    df = df[df["task_name"] == "self_prediction"]
+    if "score_prediction_accuracy_accuracy" not in df.columns:
+        raise ValueError("Missing prediction scores in dataframe")
+
+    df = _rename_prediction_scores(df)
+
+    output_cols = [
+        "model",
+        "condition",
+        "condition_pair",
+        "instruction_aligned",
+        "instruction",
+        "n_turns",
+        "score_instruction_following",
+        "stderr_instruction_following",
+        "score_prediction_accuracy",
+        "stderr_prediction_accuracy",
+        "score_prediction_instruction",
+        "stderr_prediction_instruction",
+    ]
+    df = df[output_cols].reset_index(drop=True)
+    df = df.dropna(subset=["score_instruction_following"])
+
+    if df.empty:
+        raise ValueError("No prediction scores found")
+
+    return df
+
+
+def _merge_behavioral_prediction(
+    df_behavioral: pd.DataFrame, df_prediction: pd.DataFrame
+) -> pd.DataFrame:
+    """Merge processed behavioral and prediction dataframes."""
+    df_behavioral = _coalesce_scores(df_behavioral)
+
+    if "score_instruction_following" not in df_prediction.columns:
+        df_prediction = _rename_prediction_scores(df_prediction)
+
     key_cols = ["model", "condition", "instruction", "n_turns"]
-    df_behavioral = df_behavioral[key_cols + ["score", "score_stderr"]].rename(
+    df_behavioral = df_behavioral[key_cols + ["score", "score_stderr"]].copy()
+    df_behavioral = df_behavioral.rename(
         columns={"score": "behavioral_score", "score_stderr": "behavioral_stderr"}
     )
 
@@ -280,7 +415,8 @@ def prepare_combined(
             "score_prediction_instruction",
             "stderr_prediction_instruction",
         ]
-    ].rename(
+    ].copy()
+    df_prediction = df_prediction.rename(
         columns={
             "score_instruction_following": "prediction_actual_score",
             "stderr_instruction_following": "prediction_actual_stderr",
@@ -292,8 +428,63 @@ def prepare_combined(
     df_combined = df_prediction.merge(df_behavioral, on=key_cols, how="inner")
 
     if df_combined.empty:
-        print("No matching rows between behavioral and prediction logs.")
-        sys.exit(1)
+        raise ValueError("No matching rows between behavioral and prediction logs")
+
+    return df_combined
+
+
+def prepare_behavioral_multi(log_dirs: Sequence[str], output_dir: str) -> None:
+    """Prepare behavioral eval logs from multiple folders — outputs evals.parquet."""
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    df = load_evals_from_folders(log_dirs)
+    df = process_raw_evals(df)
+    df = process_behavioral_df(df)
+
+    path = out / "evals.parquet"
+    df.to_parquet(path, index=False)
+    print(f"Saved {len(df)} rows to {path}")
+    print(f"  Models: {df['model'].nunique()}")
+    print(f"  Conditions: {sorted(df['condition'].unique())}")
+    print(f"  Instructions: {sorted(df['instruction'].unique())}")
+    print(f"  N values: {sorted(df['n_turns'].unique(), key=int)}")
+
+
+def prepare_prediction_multi(log_dirs: Sequence[str], output_dir: str) -> None:
+    """Prepare prediction eval logs from multiple folders — outputs evals_prediction.parquet."""
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    df = load_evals_from_folders(log_dirs)
+    df = process_raw_evals(df)
+    df = process_prediction_df(df)
+
+    path = out / "evals_prediction.parquet"
+    df.to_parquet(path, index=False)
+    print(f"Saved {len(df)} rows to {path}")
+    print(f"  Models: {df['model'].nunique()}")
+    print(f"  Conditions: {sorted(df['condition'].unique())}")
+    print(f"  Instructions: {sorted(df['instruction'].unique())}")
+    print(f"  N values: {sorted(df['n_turns'].unique(), key=int)}")
+
+
+def prepare_combined_multi(
+    behavioral_log_dirs: Sequence[str],
+    prediction_log_dirs: Sequence[str],
+    output_dir: str,
+) -> None:
+    """Combine behavioral and prediction logs from multiple folders."""
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    df_behavioral = load_evals_from_folders(behavioral_log_dirs)
+    df_behavioral = process_raw_evals(df_behavioral)
+
+    df_prediction = load_evals_from_folders(prediction_log_dirs)
+    df_prediction = process_raw_evals(df_prediction)
+
+    df_combined = _merge_behavioral_prediction(df_behavioral, df_prediction)
 
     path = out / "evals_combined.parquet"
     df_combined.to_parquet(path, index=False)

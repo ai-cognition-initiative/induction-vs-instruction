@@ -76,6 +76,12 @@ report-prediction behavioral_folder prediction_folder:
     echo "Done. Report at outputs/notebooks/{{behavioral_folder}}_vs_{{prediction_folder}}/"
 
 [group("reporting")]
+report-config config_file:
+    #!/usr/bin/env bash
+    set -e
+    uv run python scripts/generate_report_from_config.py --config {{config_file}}
+
+[group("reporting")]
 rescore-prediction folder:
     #!/usr/bin/env bash
     set -e

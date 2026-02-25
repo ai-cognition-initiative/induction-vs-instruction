@@ -1,0 +1,23 @@
+# Example report config file
+# Usage: just report-config configs/reports/example.yaml
+
+report_name: my_combined_report
+
+# Behavioral protocol logs (Protocol 1)
+# All logs from these folders will be merged
+behavioral:
+  log_folders:
+    - logs/protocol1-static-sweep
+    - logs/protocol1-static-anthropic
+
+# Prediction protocol logs (Protocol 2)
+# All logs from these folders will be merged
+prediction:
+  log_folders:
+    - logs/protocol2-static-sweep
+
+# Notes:
+# - If only 'behavioral' is specified → renders behavioral_analysis.qmd
+# - If only 'prediction' is specified → renders prediction_analysis.qmd
+# - If both are specified → renders behavioral_vs_prediction_analysis.qmd (combined)
+# - All log folders must exist (will error if missing)
