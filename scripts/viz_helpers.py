@@ -51,7 +51,6 @@ def labeled_line_chart(
                 fill="model",
                 fill_opacity=0.15,
                 filter_by=selection,
-                stroke=None,
             )
         )
 
@@ -78,18 +77,17 @@ def labeled_line_chart(
                 text="model",
                 filter_by=selection,
                 fill="model",
-                stroke="white",
                 stroke_width=4,
                 dx=5,
                 line_anchor="middle",
-                styles={"text_anchor": "start", "font_size": 11, "font_weight": 600},
+                styles={"text_anchor": "start", "font_size": 11, "font_weight": 600, "stroke": "white"},
             ),
         ]
     )
 
     return plot(
         *marks,
-        nearest_x(hover_sel, channels=["stroke"], fields=["model"]),
+        nearest_x(hover_sel, fields=["model"]),
         highlight(by=hover_sel),
         x_label="N (hardcoded turns)",
         y_label="Instruction Following Rate",
@@ -282,7 +280,6 @@ def calibration_line_chart(
                 fill="model",
                 fill_opacity=0.15,
                 filter_by=selection,
-                stroke=None,
             )
         )
 
@@ -299,7 +296,6 @@ def calibration_line_chart(
                 fill="model",
                 fill_opacity=0.08,
                 filter_by=selection,
-                stroke=None,
             )
         )
 
@@ -337,18 +333,17 @@ def calibration_line_chart(
                 text="model",
                 filter_by=selection,
                 fill="model",
-                stroke="white",
                 stroke_width=4,
                 dx=5,
                 line_anchor="middle",
-                styles={"text_anchor": "start", "font_size": 11, "font_weight": 600},
+                styles={"text_anchor": "start", "font_size": 11, "font_weight": 600, "stroke": "white"},
             ),
         ]
     )
 
     return plot(
         *marks,
-        nearest_x(hover_sel, channels=["stroke"], fields=["model"]),
+        nearest_x(hover_sel, fields=["model"]),
         highlight(by=hover_sel),
         x_label="N (hardcoded turns)",
         y_label="Rate",
@@ -403,6 +398,7 @@ def overview_heatmap(
                 styles={"fill": "white", "font_weight": 600},
             )
         )
+
     return plot(
         *marks,
         padding=0,

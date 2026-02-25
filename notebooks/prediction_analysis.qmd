@@ -50,8 +50,8 @@ evals_path_resolved = _resolve_path(evals_path)
 _evals_df = pd.read_parquet(evals_path_resolved)
 _out_dir = Path(evals_path_resolved).parent
 
-# N values sorted numerically (stored as strings)
-n_domain = sorted(_evals_df["n_turns"].unique(), key=lambda x: int(x))
+# N values are now stored as ints (convert to Python int for JSON serialization)
+n_domain = [int(x) for x in sorted(_evals_df["n_turns"].unique())]
 max_n = n_domain[-1]
 
 # --- Wide-format label data (max n_turns) for calibration/accuracy charts ---
@@ -85,10 +85,8 @@ for score_col, label in METRIC_LABELS.items():
 
 _long_df = pd.concat(_long_rows, ignore_index=True)
 
-# Sort by numeric n_turns for proper line connections
-_long_df["_sort"] = pd.to_numeric(_long_df["n_turns"], errors="coerce")
-_long_df = _long_df.sort_values(["model", "condition", "instruction", "metric", "_sort"])
-_long_df = _long_df.drop(columns=["_sort"])
+# Sort by n_turns for proper line connections
+_long_df = _long_df.sort_values(["model", "condition", "instruction", "metric", "n_turns"])
 
 _long_path = str(_out_dir / "_pred_long.parquet")
 _long_df.to_parquet(_long_path, index=False)
@@ -154,9 +152,8 @@ for _col, _label in _pred_stderr_metrics:
     _tmp = _tmp.rename(columns={_col: "stderr"})
     _pred_stderr_rows.append(_tmp)
 _pred_stderr = pd.concat(_pred_stderr_rows, ignore_index=True)
-_pred_stderr["n_turns_int"] = _pred_stderr["n_turns"].astype(int)
 _pred_stderr["stderr"] = _pred_stderr["stderr"].round(3)
-_pred_stderr = _pred_stderr.sort_values(["model", "condition", "instruction", "metric", "n_turns_int"])
+_pred_stderr = _pred_stderr.sort_values(["model", "condition", "instruction", "metric", "n_turns"])
 _pred_stderr_path = str(_out_dir / "_pred_stderr.parquet")
 _pred_stderr.to_parquet(_pred_stderr_path, index=False)
 _n_conditions_pred = _evals_df["condition"].nunique()
@@ -190,6 +187,11 @@ select(line_data, label="Condition", column="condition", value="auto", target=ca
 
 ```{python}
 #| echo: false
+select(line_data, label="Model", column="model", value="auto", target=cal_sel, field="model")
+```
+
+```{python}
+#| echo: false
 select(line_data, label="Instruction", column="instruction", value="auto", target=cal_sel, field="instruction")
 ```
 :::
@@ -207,14 +209,12 @@ calibration_line_chart(
     selection=cal_sel,
     x_domain=n_domain,
     width=900,
-    actual_stderr_col="stderr_instruction_following",
-    predicted_stderr_col="stderr_prediction_instruction",
 )
 ```
 
 ## Prediction Accuracy {#sec-accuracy}
 
-How often did the model correctly predict its own response (target or pattern)? Uses the same condition and instruction filters as above.
+How often did the model correctly predict its own response (target or pattern)? Uses the same filters as above.
 
 ```{python}
 #| echo: false
@@ -226,13 +226,12 @@ labeled_line_chart(
     title="Prediction Accuracy vs N",
     x_domain=n_domain,
     width=900,
-    stderr_col="stderr_prediction_accuracy",
 )
 ```
 
 ## Predicted: Follows Instruction {#sec-predicted-follows}
 
-How often did the model predict that it would follow the instruction (T)? Uses the same condition and instruction filters as above.
+How often did the model predict that it would follow the instruction (T)? Uses the same filters as above.
 
 ```{python}
 #| echo: false
@@ -244,7 +243,6 @@ labeled_line_chart(
     title="Predicted: Follows Instruction vs N",
     x_domain=n_domain,
     width=900,
-    stderr_col="stderr_prediction_instruction",
 )
 ```
 :::
@@ -253,45 +251,24 @@ labeled_line_chart(
 
 ## Bullet Graph: vs Neutral Baseline {#sec-bullet}
 
-Each row is a model. The grey bar shows the neutral condition score for the selected metric; the colored bar shows the selected condition. Use the dropdowns to select an N value and metric.
+Each row is a model. The grey bar shows the neutral condition score; the colored bar shows the selected condition. Faceted horizontally by instruction template and vertically by condition.
 
 ```{python}
 #| echo: false
 bullet_main = Data.from_file(_nonneutral_long_path)
 bullet_baseline = Data.from_file(_baseline_long_path)
-bullet_sel = Selection.intersect()
 ```
 
-:::: {.grid}
-
-::: {.g-col-3 .bg-light .p-3 style="position: sticky; top: 1rem; align-self: start;"}
-#### Filters
-
-```{python}
-#| echo: false
-select(bullet_main, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=bullet_sel, field="n_turns")
-```
-
-```{python}
-#| echo: false
-select(bullet_main, label="Metric", column="metric", options=metric_domain, value=metric_domain[0], target=bullet_sel, field="metric")
-```
-:::
-
-::: {.g-col-9}
 ```{python}
 #| echo: false
 bullet_graph(
     bullet_main,
     bullet_baseline,
-    selection=bullet_sel,
+    selection=None,
     width=900,
     height=_bullet_height,
 )
 ```
-:::
-
-::::
 
 ## Bullet Graph: Aligned vs Misaligned {#sec-paired-bullet}
 
@@ -300,49 +277,26 @@ Each row is a condition pair. Within each pair:
 - **Colored bar (aligned)**: instruction target agrees with the model's values or truth (following the instruction is the "natural" response).
 - **Grey bar (misaligned)**: instruction asks for the counter-conventional response (following requires overriding both induction *and* model values).
 
-Use the dropdowns to select an N value and metric.
-
 ```{python}
 #| echo: false
 aligned_data = Data.from_file(_aligned_long_path)
 misaligned_data = Data.from_file(_misaligned_long_path)
-paired_sel = Selection.intersect()
 ```
 
-:::: {.grid}
-
-::: {.g-col-3 .bg-light .p-3 style="position: sticky; top: 1rem; align-self: start;"}
-#### Filters
-
-```{python}
-#| echo: false
-select(aligned_data, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=paired_sel, field="n_turns")
-```
-
-```{python}
-#| echo: false
-select(aligned_data, label="Metric", column="metric", options=metric_domain, value=metric_domain[0], target=paired_sel, field="metric")
-```
-:::
-
-::: {.g-col-9}
 ```{python}
 #| echo: false
 paired_bullet_graph(
     aligned_data,
     misaligned_data,
-    selection=paired_sel,
+    selection=None,
     width=900,
     height=_paired_height,
 )
 ```
-:::
-
-::::
 
 ## Prediction Consistency {#sec-pred-consistency}
 
-Standard error of each prediction metric at each N × condition (averaged over instruction templates). **Lower values indicate stable behavior** across trials; higher values indicate mixed or uncertain responses. Use the dropdowns to select a model and metric.
+Standard error of each prediction metric at each N × condition. **Lower values indicate stable behavior** across trials; higher values indicate mixed or uncertain responses. Use the dropdowns to filter by condition, instruction, and metric.
 
 ```{python}
 #| echo: false
@@ -357,7 +311,7 @@ pred_stderr_sel = Selection.intersect()
 
 ```{python}
 #| echo: false
-select(pred_stderr_data, label="Model", column="model", value="auto", target=pred_stderr_sel, field="model")
+select(pred_stderr_data, label="Condition", column="condition", value="auto", target=pred_stderr_sel, field="condition")
 ```
 
 ```{python}
@@ -376,7 +330,7 @@ select(pred_stderr_data, label="Metric", column="metric", options=metric_domain,
 #| echo: false
 overview_heatmap(
     pred_stderr_data,
-    x="n_turns_int",
+    x="n_turns",
     y="condition",
     fill_col="stderr",
     selection=pred_stderr_sel,

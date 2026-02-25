@@ -50,14 +50,21 @@ evals_path_resolved = _resolve_path(evals_path)
 _evals_df = pd.read_parquet(evals_path_resolved)
 _out_dir = Path(evals_path_resolved).parent
 
-n_domain = sorted(_evals_df["n_turns"].unique(), key=lambda x: int(x))
+# Drop rows with null prediction scores (can't plot those)
+_evals_df = _evals_df.dropna(subset=["prediction_actual_score", "prediction_predicted_score"])
+
+# Save filtered data for plots
+_filtered_path = str(_out_dir / "_combined_filtered.parquet")
+_evals_df.to_parquet(_filtered_path, index=False)
+
+# N values are now stored as ints (convert to Python int for JSON serialization)
+n_domain = [int(x) for x in sorted(_evals_df["n_turns"].unique())]
 max_n = n_domain[-1]
 
 _label_df = _evals_df[_evals_df["n_turns"] == max_n].copy()
 _label_path = str(_out_dir / "_combined_labels.parquet")
 _label_df.to_parquet(_label_path, index=False)
 
-_evals_df["n_turns_int"] = _evals_df["n_turns"].astype(int)
 _evals_df["calibration_error_pct"] = (_evals_df["prediction_predicted_score"] - _evals_df["behavioral_score"]) * 100
 _evals_df["prediction_effect_pct"] = (_evals_df["prediction_actual_score"] - _evals_df["behavioral_score"]) * 100
 
@@ -67,9 +74,8 @@ _evals_df.to_parquet(_error_path, index=False)
 from inspect_viz import Data, Selection
 from inspect_viz.input import select
 from inspect_viz.interactor import highlight, nearest_x
-from inspect_viz.mark import line, text, cell, area
+from inspect_viz.mark import line, text, cell
 from inspect_viz.plot import plot
-from inspect_viz.transform import ci_bounds
 
 from scripts.viz_helpers import overview_heatmap
 ```
@@ -82,10 +88,12 @@ Compares behavioral data (Protocol 1) with prediction data (Protocol 2) to answe
 
 ```{python}
 #| echo: false
-line_data = Data.from_file(evals_path_resolved)
+line_data = Data.from_file(_filtered_path)
 label_data = Data.from_file(_label_path)
 error_data = Data.from_file(_error_path)
+
 sel = Selection.intersect()
+heatmap_sel = Selection.intersect()
 ```
 
 :::: {.grid}
@@ -96,11 +104,18 @@ sel = Selection.intersect()
 ```{python}
 #| echo: false
 select(line_data, label="Condition", column="condition", value="auto", target=sel, field="condition")
+select(error_data, label="Condition", column="condition", value="auto", target=heatmap_sel, field="condition")
+```
+
+```{python}
+#| echo: false
+select(line_data, label="Model", column="model", value="auto", target=sel, field="model")
 ```
 
 ```{python}
 #| echo: false
 select(line_data, label="Instruction", column="instruction", value="auto", target=sel, field="instruction")
+select(error_data, label="Instruction", column="instruction", value="auto", target=heatmap_sel, field="instruction")
 ```
 :::
 
@@ -114,29 +129,7 @@ The gap reveals calibration error: does the model know its own behavior?
 ```{python}
 #| echo: false
 hover_sel = Selection.single(cross=True)
-beh_lower, beh_upper = ci_bounds("behavioral_score", level=0.95, stderr="behavioral_stderr")
-pred_lower, pred_upper = ci_bounds("prediction_predicted_score", level=0.95, stderr="prediction_predicted_stderr")
 plot(
-    area(
-        line_data,
-        x1="n_turns",
-        y1=beh_lower,
-        y2=beh_upper,
-        fill="model",
-        fill_opacity=0.15,
-        filter_by=sel,
-        stroke=None,
-    ),
-    area(
-        line_data,
-        x1="n_turns",
-        y1=pred_lower,
-        y2=pred_upper,
-        fill="model",
-        fill_opacity=0.08,
-        filter_by=sel,
-        stroke=None,
-    ),
     line(
         line_data,
         x="n_turns",
@@ -165,13 +158,12 @@ plot(
         text="model",
         filter_by=sel,
         fill="model",
-        stroke="white",
         stroke_width=4,
         dx=5,
         line_anchor="middle",
-        styles={"text_anchor": "start", "font_size": 11, "font_weight": 600},
+        styles={"text_anchor": "start", "font_size": 11, "font_weight": 600, "stroke": "white"},
     ),
-    nearest_x(hover_sel, channels=["stroke"], fields=["model"]),
+    nearest_x(hover_sel, fields=["model"]),
     highlight(by=hover_sel),
     x_label="N (hardcoded turns)",
     y_label="Instruction Following Rate",
@@ -184,21 +176,51 @@ plot(
 )
 ```
 
+## Summary: Average Calibration Error
+
+Average calibration error (predicted - actual) in percentage points, aggregated across all N values. Positive = model overestimates instruction-following; negative = underestimates.
+
+### By Model (all conditions)
+
+```{python}
+#| echo: false
+_evals_df.groupby("model")["calibration_error_pct"].mean().round(1).to_frame()
+```
+
+### instruction_hint
+
+```{python}
+#| echo: false
+_hint_df = _evals_df[_evals_df["instruction"] == "instruction_hint"]
+_hint_avg = _hint_df.groupby(["model", "condition"])["calibration_error_pct"].mean().round(1)
+_hint_avg.unstack(level="model")
+```
+
+### instruction_no_hint
+
+```{python}
+#| echo: false
+_nohint_df = _evals_df[_evals_df["instruction"] == "instruction_no_hint"]
+_nohint_avg = _nohint_df.groupby(["model", "condition"])["calibration_error_pct"].mean().round(1)
+_nohint_avg.unstack(level="model")
+```
+
 ### Calibration Error Heatmap
 
 Percentage points difference between predicted and actual behavior. Positive = model overestimates instruction-following; negative = underestimates.
 
 ```{python}
 #| echo: false
+_n_conditions = _evals_df["condition"].nunique()
 overview_heatmap(
     error_data,
-    x="n_turns_int",
-    y="model",
+    x="n_turns",
+    y="condition",
     fill_col="calibration_error_pct",
-    selection=sel,
+    selection=heatmap_sel,
     title="Calibration Error (Predicted - Actual) %",
     width=900,
-    height=400,
+    height=_n_conditions * 30 + 80,
 )
 ```
 
@@ -213,29 +235,7 @@ Does asking the model to predict change what it outputs?
 ```{python}
 #| echo: false
 hover_sel2 = Selection.single(cross=True)
-beh_lower, beh_upper = ci_bounds("behavioral_score", level=0.95, stderr="behavioral_stderr")
-act_lower, act_upper = ci_bounds("prediction_actual_score", level=0.95, stderr="prediction_actual_stderr")
 plot(
-    area(
-        line_data,
-        x1="n_turns",
-        y1=beh_lower,
-        y2=beh_upper,
-        fill="model",
-        fill_opacity=0.15,
-        filter_by=sel,
-        stroke=None,
-    ),
-    area(
-        line_data,
-        x1="n_turns",
-        y1=act_lower,
-        y2=act_upper,
-        fill="model",
-        fill_opacity=0.08,
-        filter_by=sel,
-        stroke=None,
-    ),
     line(
         line_data,
         x="n_turns",
@@ -264,13 +264,12 @@ plot(
         text="model",
         filter_by=sel,
         fill="model",
-        stroke="white",
         stroke_width=4,
         dx=5,
         line_anchor="middle",
-        styles={"text_anchor": "start", "font_size": 11, "font_weight": 600},
+        styles={"text_anchor": "start", "font_size": 11, "font_weight": 600, "stroke": "white"},
     ),
-    nearest_x(hover_sel2, channels=["stroke"], fields=["model"]),
+    nearest_x(hover_sel2, fields=["model"]),
     highlight(by=hover_sel2),
     x_label="N (hardcoded turns)",
     y_label="Instruction Following Rate",
@@ -291,13 +290,13 @@ Percentage points change in instruction-following rate after prediction step. Po
 #| echo: false
 overview_heatmap(
     error_data,
-    x="n_turns_int",
-    y="model",
+    x="n_turns",
+    y="condition",
     fill_col="prediction_effect_pct",
-    selection=sel,
+    selection=heatmap_sel,
     title="Effect of Prediction (Protocol 2 - Protocol 1) %",
     width=900,
-    height=400,
+    height=_n_conditions * 30 + 80,
 )
 ```
 :::
