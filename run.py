@@ -105,8 +105,8 @@ def main():
     parser.add_argument(
         "--reasoning-effort",
         type=str,
-        default="minimal",
-        help="Reasoning effort ('minimal', 'low', 'medium', 'high', or 'xhigh')",
+        default="none",
+        help="Reasoning effort ('none', minimal', 'low', 'medium', 'high', or 'xhigh')",
     )
     args = parser.parse_args()
 
