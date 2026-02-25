@@ -112,12 +112,15 @@ _baseline_long = pd.concat(_baseline_rows, ignore_index=True)
 _baseline_long_path = str(_out_dir / "_pred_neutral_baseline.parquet")
 _baseline_long.to_parquet(_baseline_long_path, index=False)
 
-# Aligned / misaligned split (paired bullet)
-_aligned_long = _nonneutral_long[_nonneutral_long["instruction_aligned"] == True].copy()
+# Aligned / misaligned split — only condition pairs with a true alignment axis
+from scripts.prepare_viz_data import ALIGNMENT_AXIS_PAIRS
+
+_paired_long = _nonneutral_long[_nonneutral_long["condition_pair"].isin(ALIGNMENT_AXIS_PAIRS)]
+_aligned_long = _paired_long[_paired_long["instruction_aligned"] == True].copy()
 _aligned_long_path = str(_out_dir / "_pred_aligned.parquet")
 _aligned_long.to_parquet(_aligned_long_path, index=False)
 
-_misaligned_long = _nonneutral_long[_nonneutral_long["instruction_aligned"] == False].copy()
+_misaligned_long = _paired_long[_paired_long["instruction_aligned"] == False].copy()
 _misaligned_long_path = str(_out_dir / "_pred_misaligned.parquet")
 _misaligned_long.to_parquet(_misaligned_long_path, index=False)
 
@@ -134,7 +137,30 @@ from scripts.viz_helpers import (
     labeled_line_chart,
     bullet_graph,
     paired_bullet_graph,
+    overview_heatmap,
 )
+
+# --- Prediction consistency (stderr) derived dataset ---
+
+_pred_stderr_metrics = [
+    ("stderr_instruction_following", "Instruction Following"),
+    ("stderr_prediction_accuracy", "Prediction Accuracy"),
+    ("stderr_prediction_instruction", "Predicted: Follows Instruction"),
+]
+_pred_stderr_rows = []
+for _col, _label in _pred_stderr_metrics:
+    _tmp = _evals_df[["model", "condition", "instruction", "n_turns", _col]].copy()
+    _tmp["metric"] = _label
+    _tmp = _tmp.rename(columns={_col: "stderr"})
+    _pred_stderr_rows.append(_tmp)
+_pred_stderr = pd.concat(_pred_stderr_rows, ignore_index=True)
+_pred_stderr["n_turns_int"] = _pred_stderr["n_turns"].astype(int)
+_pred_stderr["stderr"] = _pred_stderr["stderr"].round(3)
+_pred_stderr = _pred_stderr.sort_values(["model", "condition", "instruction", "metric", "n_turns_int"])
+_pred_stderr_path = str(_out_dir / "_pred_stderr.parquet")
+_pred_stderr.to_parquet(_pred_stderr_path, index=False)
+_n_conditions_pred = _evals_df["condition"].nunique()
+_pred_stderr_height = max(300, _n_conditions_pred * 30 + 80)
 ```
 
 ## Overview
@@ -308,6 +334,57 @@ paired_bullet_graph(
     selection=paired_sel,
     width=900,
     height=_paired_height,
+)
+```
+:::
+
+::::
+
+## Prediction Consistency {#sec-pred-consistency}
+
+Standard error of each prediction metric at each N × condition (averaged over instruction templates). **Lower values indicate stable behavior** across trials; higher values indicate mixed or uncertain responses. Use the dropdowns to select a model and metric.
+
+```{python}
+#| echo: false
+pred_stderr_data = Data.from_file(_pred_stderr_path)
+pred_stderr_sel = Selection.intersect()
+```
+
+:::: {.grid}
+
+::: {.g-col-3 .bg-light .p-3 style="position: sticky; top: 1rem; align-self: start;"}
+#### Filters
+
+```{python}
+#| echo: false
+select(pred_stderr_data, label="Model", column="model", value="auto", target=pred_stderr_sel, field="model")
+```
+
+```{python}
+#| echo: false
+select(pred_stderr_data, label="Instruction", column="instruction", value="auto", target=pred_stderr_sel, field="instruction")
+```
+
+```{python}
+#| echo: false
+select(pred_stderr_data, label="Metric", column="metric", options=metric_domain, value=metric_domain[0], target=pred_stderr_sel, field="metric")
+```
+:::
+
+::: {.g-col-9}
+```{python}
+#| echo: false
+overview_heatmap(
+    pred_stderr_data,
+    x="n_turns_int",
+    y="condition",
+    fill_col="stderr",
+    selection=pred_stderr_sel,
+    title="Prediction Consistency — Standard Error by Metric",
+    color_scheme="reds",
+    show_text=False,
+    width=900,
+    height=_pred_stderr_height,
 )
 ```
 :::

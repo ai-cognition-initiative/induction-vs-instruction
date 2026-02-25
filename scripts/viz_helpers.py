@@ -371,9 +371,17 @@ def overview_heatmap(
     title: str = "Overview",
     width: int = 900,
     height: int = 400,
+    color_scheme: str = "rdylgn",
+    show_text: bool = True,
 ):
-    """Cell + text heatmap for condition x N overview."""
-    return plot(
+    """Cell + text heatmap for condition x N overview.
+
+    Args:
+        color_scheme: Observable Plot color scheme name (e.g. "rdylgn", "reds").
+        show_text: Whether to overlay the fill value as text in each cell.
+            Disable when the color scheme makes white text illegible on light cells.
+    """
+    marks: list = [
         cell(
             data,
             x=x,
@@ -382,18 +390,23 @@ def overview_heatmap(
             filter_by=selection,
             tip=True,
             inset=1,
-        ),
-        text(
-            data,
-            x=x,
-            y=y,
-            text=fill_col,
-            filter_by=selection,
-            fill="white",
-            font_weight=600,
-        ),
+        )
+    ]
+    if show_text:
+        marks.append(
+            text(
+                data,
+                x=x,
+                y=y,
+                text=fill_col,
+                filter_by=selection,
+                styles={"fill": "white", "font_weight": 600},
+            )
+        )
+    return plot(
+        *marks,
         padding=0,
-        color_scheme="rdylgn",
+        color_scheme=color_scheme,
         title=title,
         width=width,
         height=height,

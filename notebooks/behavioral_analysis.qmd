@@ -64,7 +64,67 @@ _label_df.to_parquet(_label_path, index=False)
 from inspect_viz import Data, Selection
 from inspect_viz.input import select
 
-from scripts.viz_helpers import labeled_line_chart, bullet_graph, paired_bullet_graph
+from scripts.viz_helpers import labeled_line_chart, bullet_graph, paired_bullet_graph, overview_heatmap
+from scripts.prepare_viz_data import ALIGNMENT_AXIS_PAIRS
+
+# --- Summary statistics: static vs dynamic conditions ---
+
+STATIC_CONDITIONS = {
+    "neutral", "value_aligned_cats", "value_misaligned_cats",
+    "factual_aligned_earth", "factual_misaligned_earth",
+}
+_static_mask = _evals_df["condition"].isin(STATIC_CONDITIONS)
+_has_static = _static_mask.any()
+_has_dynamic = (~_static_mask).any()
+_summary_cols = {}
+if _has_static:
+    _summary_cols["Static avg IF"] = _evals_df[_static_mask].groupby("model")["score"].mean()
+if _has_dynamic:
+    _summary_cols["Dynamic avg IF"] = _evals_df[~_static_mask].groupby("model")["score"].mean()
+_summary_stats = pd.DataFrame(_summary_cols).reset_index() if _summary_cols else None
+
+# --- Behavior boundaries (90% threshold, averaged over instruction templates) ---
+
+BOUNDARY_THRESHOLD = 0.90
+_avg_scores = (
+    _evals_df.groupby(["model", "condition", "n_turns"])["score"]
+    .mean()
+    .reset_index()
+)
+_avg_scores["_n_int"] = _avg_scores["n_turns"].astype(int)
+_avg_scores = _avg_scores.sort_values(["model", "condition", "_n_int"])
+
+
+def _boundary_stats(group):
+    scores = group["score"]
+    n_ints = group["_n_int"]
+    n_t = int((scores >= BOUNDARY_THRESHOLD).sum())
+    p_mask = scores <= (1 - BOUNDARY_THRESHOLD)
+    n_p = int(n_ints[p_mask].min()) if p_mask.any() else None
+    return pd.Series({"N_T_width": n_t, "N_P_start": n_p})
+
+
+_boundaries = (
+    _avg_scores.groupby(["model", "condition"])
+    .apply(_boundary_stats)
+    .reset_index()
+)
+_nt_pivot = _boundaries.pivot(index="condition", columns="model", values="N_T_width")
+_nt_pivot.columns.name = None
+_np_pivot = _boundaries.pivot(index="condition", columns="model", values="N_P_start")
+_np_pivot.columns.name = None
+
+# --- Behavioral consistency (stderr) derived dataset ---
+# Keep instruction column for filtering (no averaging over templates)
+
+_n_conditions_all = _evals_df["condition"].nunique()
+_stderr_height = max(300, _n_conditions_all * 30 + 80)
+_stderr_df = _evals_df[["model", "condition", "instruction", "n_turns", "score_stderr"]].copy()
+_stderr_df["n_turns_int"] = _stderr_df["n_turns"].astype(int)
+_stderr_df["score_stderr"] = _stderr_df["score_stderr"].round(3)
+_stderr_df = _stderr_df.sort_values(["model", "condition", "instruction", "n_turns_int"])
+_stderr_path = str(_out_dir / "_stderr.parquet")
+_stderr_df.to_parquet(_stderr_path, index=False)
 
 # --- Bullet graph data: neutral baseline cross-joined with non-neutral condition_pairs ---
 _nonneutral_df = _evals_df[_evals_df["condition"] != "neutral"].copy()
@@ -84,24 +144,43 @@ _baseline_df = pd.concat(_baseline_rows, ignore_index=True)
 _baseline_path = str(_out_dir / "_neutral_baseline.parquet")
 _baseline_df.to_parquet(_baseline_path, index=False)
 
-# Paired bullet graph: split nonneutral by instruction_aligned
-_aligned_df = _nonneutral_df[_nonneutral_df["instruction_aligned"] == True].copy()
+# Paired bullet graph: only condition pairs with a true alignment axis
+_paired_df = _nonneutral_df[_nonneutral_df["condition_pair"].isin(ALIGNMENT_AXIS_PAIRS)]
+_aligned_df = _paired_df[_paired_df["instruction_aligned"] == True].copy()
 _aligned_path = str(_out_dir / "_aligned.parquet")
 _aligned_df.to_parquet(_aligned_path, index=False)
 
-_misaligned_df = _nonneutral_df[_nonneutral_df["instruction_aligned"] == False].copy()
+_misaligned_df = _paired_df[_paired_df["instruction_aligned"] == False].copy()
 _misaligned_path = str(_out_dir / "_misaligned.parquet")
 _misaligned_df.to_parquet(_misaligned_path, index=False)
 
 # Height for bullet graphs: ~30px per (condition × model) row + margins
 _n_models = _evals_df["model"].nunique()
 _bullet_height = _nonneutral_df["condition"].nunique() * _n_models * 30 + 130
-_paired_height = _nonneutral_df["condition_pair"].nunique() * _n_models * 30 + 130
+_paired_height = _aligned_df["condition_pair"].nunique() * _n_models * 30 + 130
 ```
 
 ## Overview
 
 Protocol 1 tests whether models follow global instructions (output T) or succumb to local induction pressure (output P) as the number of hardcoded turns N increases.
+
+## Summary Statistics {#sec-summary}
+
+Mean instruction-following rate averaged over all N values and instruction templates.
+
+**Static** conditions use exact string matching (neutral baseline, value alignment, factual alignment). **Dynamic** conditions involve stylistic or semantic transformation (token sets, language, persona, style, preference).
+
+```{python}
+#| echo: false
+if _summary_stats is not None:
+    _score_cols = [c for c in _summary_stats.columns if c != "model"]
+    _sort_col = _score_cols[0]  # sort by first score column (Static or Dynamic)
+    _sorted = _summary_stats.sort_values(_sort_col, ascending=False)
+    _fmt = {c: "{:.1%}" for c in _score_cols}
+    _sorted.style.format(_fmt).hide(axis="index")
+else:
+    print("No data available.")
+```
 
 ## Labeled Line Chart {#sec-trajectory}
 
@@ -140,7 +219,7 @@ labeled_line_chart(
     title="Instruction Following Rate vs N",
     x_domain=n_domain,
     width=900,
-    stderr_col="stderr",
+    stderr_col="score_stderr",
 )
 ```
 :::
@@ -220,6 +299,78 @@ paired_bullet_graph(
     selection=paired_sel,
     width=900,
     height=_paired_height,
+)
+```
+:::
+
+::::
+
+## Behavior Boundaries {#sec-boundaries}
+
+For each model × condition, N values are classified using a 90% threshold on mean instruction-following rate (averaged over instruction templates):
+
+- **T-region** (IF ≥ 90%): model reliably follows the instruction.
+- **P-region** (IF ≤ 10%): induction dominates.
+- **Mixed** (10%–90%): neither fully dominates.
+
+Note that T-width and P-start are not complementary — a wide gap between them indicates a mixed region.
+
+**N_T_width** — number of N values in the measured range with IF ≥ 90%. Higher = instruction following is more persistent.
+
+```{python}
+#| echo: false
+_nt_display = _nt_pivot.fillna(0).astype(int)
+_nt_display.loc[_nt_display.mean(axis=1).sort_values(ascending=False).index]
+```
+
+**N_P_start** — first N value where IF ≤ 10% (P dominates). `—` = P never dominates in the measured range. Lower = earlier collapse.
+
+```{python}
+#| echo: false
+_np_display = _np_pivot.loc[_np_pivot.mean(axis=1).sort_values(ascending=True).index]
+_np_display.map(lambda x: "—" if pd.isna(x) else str(int(x)))
+```
+
+## Behavioral Consistency {#sec-consistency}
+
+Standard error of the instruction-following score at each N × condition (averaged over instruction templates). **Lower values indicate stable behavior** (reliably T or reliably P across trials); higher values indicate mixed, inconsistent responses. Use the **Model** dropdown to focus on a specific model.
+
+```{python}
+#| echo: false
+stderr_data = Data.from_file(_stderr_path)
+stderr_sel = Selection.intersect()
+```
+
+:::: {.grid}
+
+::: {.g-col-3 .bg-light .p-3 style="position: sticky; top: 1rem; align-self: start;"}
+#### Filters
+
+```{python}
+#| echo: false
+select(stderr_data, label="Model", column="model", value="auto", target=stderr_sel, field="model")
+```
+
+```{python}
+#| echo: false
+select(stderr_data, label="Instruction", column="instruction", value="auto", target=stderr_sel, field="instruction")
+```
+:::
+
+::: {.g-col-9}
+```{python}
+#| echo: false
+overview_heatmap(
+    stderr_data,
+    x="n_turns_int",
+    y="condition",
+    fill_col="score_stderr",
+    selection=stderr_sel,
+    title="Behavioral Consistency — Standard Error of IF Rate",
+    color_scheme="reds",
+    show_text=False,
+    width=900,
+    height=_stderr_height,
 )
 ```
 :::
