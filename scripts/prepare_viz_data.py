@@ -6,7 +6,14 @@ from pathlib import Path
 from typing import Sequence
 
 import pandas as pd
-from inspect_ai.analysis import EvalModel, EvalScores, EvalTask, evals_df
+from inspect_ai.analysis import (
+    EvalModel,
+    EvalScores,
+    EvalTask,
+    SampleSummary,
+    evals_df,
+    samples_df,
+)
 
 
 # --- Condition pairing logic ---
@@ -68,6 +75,41 @@ PREDICTION_SCORE_RENAME = {
     "score_prediction_instruction_accuracy": "score_prediction_instruction",
     "score_prediction_instruction_stderr": "stderr_prediction_instruction",
 }
+
+
+def _get_reasoning_tokens(model_usage: object) -> int:
+    """Extract reasoning_tokens from a ModelUsage object or dict."""
+    if model_usage is None:
+        return 0
+    if isinstance(model_usage, dict):
+        return model_usage.get("reasoning_tokens", 0) or 0
+    return getattr(model_usage, "reasoning_tokens", 0) or 0
+
+
+def load_reasoning_tokens(log_dirs: str | Sequence[str]) -> pd.DataFrame:
+    """Return a DataFrame with (eval_id, reasoning_tokens) summed across samples.
+
+    Uses samples_df() to read actual token usage — the ground truth for whether
+    reasoning was active during an eval, regardless of configuration.
+
+    Requires inspect-ai >= 0.3.93 (sample summaries with model_usage).
+    """
+    if isinstance(log_dirs, str):
+        log_dirs = [log_dirs]
+
+    dfs = []
+    for log_dir in log_dirs:
+        s = samples_df(logs=log_dir, columns=SampleSummary)
+        dfs.append(s)
+    all_samples = pd.concat(dfs, ignore_index=True)
+
+    all_samples["_rt"] = all_samples["model_usage"].apply(_get_reasoning_tokens)
+    return (
+        all_samples.groupby("eval_id")["_rt"]
+        .sum()
+        .reset_index()
+        .rename(columns={"_rt": "reasoning_tokens"})
+    )
 
 
 def add_pairing_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -140,6 +182,11 @@ def _common_prep(log_dir: str, output_dir: str) -> tuple[pd.DataFrame, Path]:
     df["n_turns"] = df["_sort"].astype(int).astype(str)
     df = df.drop(columns=["_sort"])
 
+    # Annotate with actual reasoning token usage (ground truth from sample-level data)
+    reasoning = load_reasoning_tokens(log_dir)
+    df = df.merge(reasoning, on="eval_id", how="left")
+    df["reasoning_tokens"] = df["reasoning_tokens"].fillna(0).astype(int)
+
     return df, out
 
 
@@ -181,6 +228,7 @@ def prepare_behavioral(log_dir: str, output_dir: str) -> None:
         "n_turns",
         "score",
         "score_stderr",
+        "reasoning_tokens",
     ]
     df = df[output_cols].reset_index(drop=True)
 
@@ -230,6 +278,7 @@ def prepare_prediction(log_dir: str, output_dir: str) -> None:
         "stderr_prediction_accuracy",
         "score_prediction_instruction",
         "stderr_prediction_instruction",
+        "reasoning_tokens",
     ]
     df = df[output_cols].reset_index(drop=True)
     df = df.dropna(subset=["score_instruction_following"])
@@ -263,19 +312,6 @@ def prepare_combined(
 
     df_behavioral, _ = _common_prep(behavioral_log_dir, output_dir)
     df_prediction, _ = _common_prep(prediction_log_dir, output_dir)
-
-    acc_cols = [c for c in df_behavioral.columns if c.endswith("_accuracy")]
-    if not acc_cols:
-        print("No score columns found in behavioral logs.")
-        sys.exit(1)
-
-    df_behavioral = _coalesce_scores(df_behavioral)
-
-    if "score_prediction_accuracy_accuracy" not in df_prediction.columns:
-        print("Missing prediction scores in prediction logs.")
-        sys.exit(1)
-
-    df_prediction = _rename_prediction_scores(df_prediction)
 
     df_combined = _merge_behavioral_prediction(df_behavioral, df_prediction)
 
@@ -314,15 +350,22 @@ def process_raw_evals(df: pd.DataFrame) -> pd.DataFrame:
     )
     df["model"] = df["model"].str.replace(r"^openrouter/[^/]+/", "", regex=True)
     df = add_pairing_columns(df)
-    df["_sort"] = pd.to_numeric(df["n_turns"], errors="coerce")
-    df = df.sort_values(["model", "condition", "instruction", "_sort"])
-    df["n_turns"] = df["_sort"].astype(int).astype(str)
-    df = df.drop(columns=["_sort"])
+    df["n_turns"] = pd.to_numeric(df["n_turns"], errors="coerce").astype(int)
+    df = df.sort_values(["model", "condition", "instruction", "n_turns"])
     return df
 
 
-def process_behavioral_df(df: pd.DataFrame) -> pd.DataFrame:
-    """Process a dataframe containing behavioral logs."""
+def process_behavioral_df(
+    df: pd.DataFrame, max_reasoning_tokens: int | None = None
+) -> pd.DataFrame:
+    """Process a dataframe containing behavioral logs.
+
+    Args:
+        df: Raw evals dataframe (output of process_raw_evals, with reasoning_tokens if annotated).
+        max_reasoning_tokens: If set, exclude models where total reasoning_tokens exceeds
+            this value. Use 0 for strict non-reasoning-only filter, or e.g. 1000 to allow
+            noise-level tokens (some non-reasoning models emit a small number).
+    """
     if (
         "task_name" not in df.columns
         or not (df["task_name"] == "behavioral_baseline").any()
@@ -340,6 +383,13 @@ def process_behavioral_df(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         raise ValueError("No behavioral scores found")
 
+    if max_reasoning_tokens is not None and "reasoning_tokens" in df.columns:
+        df = df[df["reasoning_tokens"] <= max_reasoning_tokens]
+        if df.empty:
+            raise ValueError(
+                f"No behavioral scores after filtering to max_reasoning_tokens={max_reasoning_tokens}"
+            )
+
     output_cols = [
         "model",
         "condition",
@@ -350,11 +400,21 @@ def process_behavioral_df(df: pd.DataFrame) -> pd.DataFrame:
         "score",
         "score_stderr",
     ]
+    if "reasoning_tokens" in df.columns:
+        output_cols.append("reasoning_tokens")
     return df[output_cols].reset_index(drop=True)
 
 
-def process_prediction_df(df: pd.DataFrame) -> pd.DataFrame:
-    """Process a dataframe containing prediction logs."""
+def process_prediction_df(
+    df: pd.DataFrame, max_reasoning_tokens: int | None = None
+) -> pd.DataFrame:
+    """Process a dataframe containing prediction logs.
+
+    Args:
+        df: Raw evals dataframe (output of process_raw_evals, with reasoning_tokens if annotated).
+        max_reasoning_tokens: If set, exclude models where total reasoning_tokens exceeds
+            this value. See process_behavioral_df for details.
+    """
     if (
         "task_name" not in df.columns
         or not (df["task_name"] == "self_prediction").any()
@@ -366,6 +426,13 @@ def process_prediction_df(df: pd.DataFrame) -> pd.DataFrame:
         raise ValueError("Missing prediction scores in dataframe")
 
     df = _rename_prediction_scores(df)
+
+    if max_reasoning_tokens is not None and "reasoning_tokens" in df.columns:
+        df = df[df["reasoning_tokens"] <= max_reasoning_tokens]
+        if df.empty:
+            raise ValueError(
+                f"No prediction scores after filtering to max_reasoning_tokens={max_reasoning_tokens}"
+            )
 
     output_cols = [
         "model",
@@ -381,6 +448,8 @@ def process_prediction_df(df: pd.DataFrame) -> pd.DataFrame:
         "score_prediction_instruction",
         "stderr_prediction_instruction",
     ]
+    if "reasoning_tokens" in df.columns:
+        output_cols.append("reasoning_tokens")
     df = df[output_cols].reset_index(drop=True)
     df = df.dropna(subset=["score_instruction_following"])
 
@@ -393,11 +462,32 @@ def process_prediction_df(df: pd.DataFrame) -> pd.DataFrame:
 def _merge_behavioral_prediction(
     df_behavioral: pd.DataFrame, df_prediction: pd.DataFrame
 ) -> pd.DataFrame:
-    """Merge processed behavioral and prediction dataframes."""
+    """Merge processed behavioral and prediction dataframes.
+
+    Both dataframes should be raw evals (output of process_raw_evals).
+    This function filters by task type and processes accordingly.
+    """
+    df_behavioral = df_behavioral.copy()
+    df_prediction = df_prediction.copy()
+
+    if "task_name" in df_behavioral.columns:
+        df_behavioral = df_behavioral[
+            df_behavioral["task_name"] == "behavioral_baseline"
+        ]
+
+    if "task_name" in df_prediction.columns:
+        df_prediction = df_prediction[df_prediction["task_name"] == "self_prediction"]
+
+    acc_cols = [c for c in df_behavioral.columns if c.endswith("_accuracy")]
+    if not acc_cols:
+        raise ValueError("No score columns found in behavioral logs")
+
     df_behavioral = _coalesce_scores(df_behavioral)
 
-    if "score_instruction_following" not in df_prediction.columns:
-        df_prediction = _rename_prediction_scores(df_prediction)
+    if "score_prediction_accuracy_accuracy" not in df_prediction.columns:
+        raise ValueError("Missing prediction scores in prediction logs")
+
+    df_prediction = _rename_prediction_scores(df_prediction)
 
     key_cols = ["model", "condition", "instruction", "n_turns"]
     df_behavioral = df_behavioral[key_cols + ["score", "score_stderr"]].copy()
@@ -433,14 +523,23 @@ def _merge_behavioral_prediction(
     return df_combined
 
 
-def prepare_behavioral_multi(log_dirs: Sequence[str], output_dir: str) -> None:
+def prepare_behavioral_multi(
+    log_dirs: Sequence[str],
+    output_dir: str,
+    max_reasoning_tokens: int | None = None,
+) -> None:
     """Prepare behavioral eval logs from multiple folders — outputs evals.parquet."""
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
     df = load_evals_from_folders(log_dirs)
     df = process_raw_evals(df)
-    df = process_behavioral_df(df)
+
+    reasoning = load_reasoning_tokens(log_dirs)
+    df = df.merge(reasoning, on="eval_id", how="left")
+    df["reasoning_tokens"] = df["reasoning_tokens"].fillna(0).astype(int)
+
+    df = process_behavioral_df(df, max_reasoning_tokens=max_reasoning_tokens)
 
     path = out / "evals.parquet"
     df.to_parquet(path, index=False)
@@ -449,16 +548,27 @@ def prepare_behavioral_multi(log_dirs: Sequence[str], output_dir: str) -> None:
     print(f"  Conditions: {sorted(df['condition'].unique())}")
     print(f"  Instructions: {sorted(df['instruction'].unique())}")
     print(f"  N values: {sorted(df['n_turns'].unique(), key=int)}")
+    if max_reasoning_tokens is not None:
+        print(f"  Filtered: max_reasoning_tokens={max_reasoning_tokens}")
 
 
-def prepare_prediction_multi(log_dirs: Sequence[str], output_dir: str) -> None:
+def prepare_prediction_multi(
+    log_dirs: Sequence[str],
+    output_dir: str,
+    max_reasoning_tokens: int | None = None,
+) -> None:
     """Prepare prediction eval logs from multiple folders — outputs evals_prediction.parquet."""
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
     df = load_evals_from_folders(log_dirs)
     df = process_raw_evals(df)
-    df = process_prediction_df(df)
+
+    reasoning = load_reasoning_tokens(log_dirs)
+    df = df.merge(reasoning, on="eval_id", how="left")
+    df["reasoning_tokens"] = df["reasoning_tokens"].fillna(0).astype(int)
+
+    df = process_prediction_df(df, max_reasoning_tokens=max_reasoning_tokens)
 
     path = out / "evals_prediction.parquet"
     df.to_parquet(path, index=False)
@@ -467,12 +577,15 @@ def prepare_prediction_multi(log_dirs: Sequence[str], output_dir: str) -> None:
     print(f"  Conditions: {sorted(df['condition'].unique())}")
     print(f"  Instructions: {sorted(df['instruction'].unique())}")
     print(f"  N values: {sorted(df['n_turns'].unique(), key=int)}")
+    if max_reasoning_tokens is not None:
+        print(f"  Filtered: max_reasoning_tokens={max_reasoning_tokens}")
 
 
 def prepare_combined_multi(
     behavioral_log_dirs: Sequence[str],
     prediction_log_dirs: Sequence[str],
     output_dir: str,
+    max_reasoning_tokens: int | None = None,
 ) -> None:
     """Combine behavioral and prediction logs from multiple folders."""
     out = Path(output_dir)
@@ -480,9 +593,29 @@ def prepare_combined_multi(
 
     df_behavioral = load_evals_from_folders(behavioral_log_dirs)
     df_behavioral = process_raw_evals(df_behavioral)
+    reasoning_b = load_reasoning_tokens(behavioral_log_dirs)
+    df_behavioral = df_behavioral.merge(reasoning_b, on="eval_id", how="left")
+    df_behavioral["reasoning_tokens"] = (
+        df_behavioral["reasoning_tokens"].fillna(0).astype(int)
+    )
 
     df_prediction = load_evals_from_folders(prediction_log_dirs)
     df_prediction = process_raw_evals(df_prediction)
+    reasoning_p = load_reasoning_tokens(prediction_log_dirs)
+    df_prediction = df_prediction.merge(reasoning_p, on="eval_id", how="left")
+    df_prediction["reasoning_tokens"] = (
+        df_prediction["reasoning_tokens"].fillna(0).astype(int)
+    )
+
+    if max_reasoning_tokens is not None:
+        if "reasoning_tokens" in df_behavioral.columns:
+            df_behavioral = df_behavioral[
+                df_behavioral["reasoning_tokens"] <= max_reasoning_tokens
+            ]
+        if "reasoning_tokens" in df_prediction.columns:
+            df_prediction = df_prediction[
+                df_prediction["reasoning_tokens"] <= max_reasoning_tokens
+            ]
 
     df_combined = _merge_behavioral_prediction(df_behavioral, df_prediction)
 

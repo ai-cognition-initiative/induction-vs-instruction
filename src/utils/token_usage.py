@@ -42,14 +42,11 @@ def compute_token_usage(logs_dir: str = "logs", output_file: str = "token_usage.
 
     results = {}
 
-    for eval_set_dir in sorted(logs_path.iterdir()):
-        if not eval_set_dir.is_dir():
-            continue
+    logs_files = sorted(
+        list(logs_path.glob("*/logs.json")) + list(logs_path.glob("*/*/logs.json"))
+    )
 
-        logs_json = eval_set_dir / "logs.json"
-        if not logs_json.exists():
-            continue
-
+    for logs_json in logs_files:
         with open(logs_json, "r", encoding="utf-8") as f:
             logs_data = json.load(f)
 
@@ -86,7 +83,8 @@ def compute_token_usage(logs_dir: str = "logs", output_file: str = "token_usage.
                     model_tokens[model_name]["tasks"] += 1
 
         if model_tokens:
-            results[eval_set_dir.name] = dict(model_tokens)
+            key = str(logs_json.parent.relative_to(logs_path))
+            results[key] = dict(model_tokens)
 
     def calculate_cost(model_id: str, input_tokens: int, output_tokens: int) -> Decimal:
         normalized_id = normalize_model_id(model_id)

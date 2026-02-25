@@ -129,29 +129,14 @@ def main(config_path: str) -> None:
 
     quarto_python = get_quarto_python()
 
-    if has_behavioral and has_prediction:
-        print("\nPreparing combined behavioral + prediction data...")
-        behavioral_folders = config["behavioral"]["log_folders"]
-        prediction_folders = config["prediction"]["log_folders"]
-
-        print(f"  Behavioral logs: {behavioral_folders}")
-        print(f"  Prediction logs: {prediction_folders}")
-
-        prepare_combined_multi(behavioral_folders, prediction_folders, viz_dir)
-
-        render_notebook(
-            "behavioral_vs_prediction_analysis",
-            f"{viz_dir}/evals_combined.parquet",
-            notebook_dir,
-            quarto_python,
-        )
-
-    elif has_behavioral:
+    if has_behavioral:
         print("\nPreparing behavioral data...")
         folders = config["behavioral"]["log_folders"]
+        max_rt = config["behavioral"].get("max_reasoning_tokens")
         print(f"  Log folders: {folders}")
-
-        prepare_behavioral_multi(folders, viz_dir)
+        if max_rt is not None:
+            print(f"  max_reasoning_tokens: {max_rt}")
+        prepare_behavioral_multi(folders, viz_dir, max_reasoning_tokens=max_rt)
 
         render_notebook(
             "behavioral_analysis",
@@ -160,16 +145,45 @@ def main(config_path: str) -> None:
             quarto_python,
         )
 
-    elif has_prediction:
+    if has_prediction:
         print("\nPreparing prediction data...")
         folders = config["prediction"]["log_folders"]
+        max_rt = config["prediction"].get("max_reasoning_tokens")
         print(f"  Log folders: {folders}")
-
-        prepare_prediction_multi(folders, viz_dir)
+        if max_rt is not None:
+            print(f"  max_reasoning_tokens: {max_rt}")
+        prepare_prediction_multi(folders, viz_dir, max_reasoning_tokens=max_rt)
 
         render_notebook(
             "prediction_analysis",
             f"{viz_dir}/evals_prediction.parquet",
+            notebook_dir,
+            quarto_python,
+        )
+
+    if has_behavioral and has_prediction:
+        print("\nPreparing combined behavioral + prediction data...")
+        behavioral_folders = config["behavioral"]["log_folders"]
+        prediction_folders = config["prediction"]["log_folders"]
+        max_rt_b = config["behavioral"].get("max_reasoning_tokens")
+        max_rt_p = config["prediction"].get("max_reasoning_tokens")
+        # Use the stricter of the two thresholds for combined output
+        max_rt_combined = None
+        if max_rt_b is not None and max_rt_p is not None:
+            max_rt_combined = min(max_rt_b, max_rt_p)
+        elif max_rt_b is not None:
+            max_rt_combined = max_rt_b
+        elif max_rt_p is not None:
+            max_rt_combined = max_rt_p
+
+        print(f"  Behavioral logs: {behavioral_folders}")
+        print(f"  Prediction logs: {prediction_folders}")
+
+        prepare_combined_multi(behavioral_folders, prediction_folders, viz_dir, max_reasoning_tokens=max_rt_combined)
+
+        render_notebook(
+            "behavioral_vs_prediction_analysis",
+            f"{viz_dir}/evals_combined.parquet",
             notebook_dir,
             quarto_python,
         )
