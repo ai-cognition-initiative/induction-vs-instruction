@@ -1,8 +1,0 @@
-provider: openrouter
-
-models:
-  - anthropic/claude-sonnet-4.6
-  - anthropic/claude-3.5-haiku
-
-provider_args:
-  only: ["anthropic"]
