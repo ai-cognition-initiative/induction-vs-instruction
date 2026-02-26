@@ -72,6 +72,7 @@ from scripts.prepare_viz_data import ALIGNMENT_AXIS_PAIRS
 STATIC_CONDITIONS = {
     "neutral", "value_aligned_cats", "value_misaligned_cats",
     "factual_aligned_earth", "factual_misaligned_earth",
+    "token_countries_states", "token_states_countries",
 }
 _static_mask = _evals_df["condition"].isin(STATIC_CONDITIONS)
 _has_static = _static_mask.any()
