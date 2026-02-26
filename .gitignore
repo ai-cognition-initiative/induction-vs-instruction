@@ -7,3 +7,6 @@ logs/
 outputs/
 *.pyc
 *.cpython-313.pyc
+*.css
+*.js
+*.woff

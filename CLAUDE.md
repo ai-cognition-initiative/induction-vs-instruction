@@ -1,14 +1,15 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-Always use the napkin skill.
+Always use the napkin skill. The key functions and classes and code files are in repomap.txt, use that to infer structure and location of code.
 Refer to docs/full-implementation-description.md for detailed information.
+Always use uv to run python commands.
 
-Available docs MCPs:
+Available docs MCPs and skills:
 - inspect-ai-docs
 - inspect-viz-docs
+- observable-plot
 
-The key functions and classes and code files are in repomap.txt
 
 ## Project Overview
 
