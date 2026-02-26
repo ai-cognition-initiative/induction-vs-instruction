@@ -66,7 +66,7 @@ def _load_hardcoded_responses(data_key: str) -> dict[str, str]:
     """Load pre-generated hardcoded responses from JSON."""
     if data_key not in _hardcoded_cache:
         path = DATA_DIR / "hardcoded_responses" / f"{data_key}.json"
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         _hardcoded_cache[data_key] = data["responses"]
     return _hardcoded_cache[data_key]
@@ -170,7 +170,11 @@ def build_behavioral_sample(
     Returns:
         A Sample ready for evaluation.
     """
-    bank = load_questions(DATA_DIR / condition.question_bank) if condition.question_bank else None
+    bank = (
+        load_questions(DATA_DIR / condition.question_bank)
+        if condition.question_bank
+        else None
+    )
     questions = get_question_sequence(trial_index, n_turns + 1, question_bank=bank)
 
     messages = _build_conversation(
@@ -211,7 +215,11 @@ def build_prediction_sample(
     Returns:
         A Sample ready for prediction evaluation.
     """
-    bank = load_questions(DATA_DIR / condition.question_bank) if condition.question_bank else None
+    bank = (
+        load_questions(DATA_DIR / condition.question_bank)
+        if condition.question_bank
+        else None
+    )
     questions = get_question_sequence(trial_index, n_turns + 2, question_bank=bank)
 
     messages: list[ChatMessage] = []
