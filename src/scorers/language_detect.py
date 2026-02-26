@@ -11,23 +11,8 @@ from inspect_ai.scorer import (
     stderr,
 )
 from inspect_ai.solver import TaskState
-from langdetect import DetectorFactory, detect_langs
 
-# Make langdetect deterministic
-DetectorFactory.seed = 0
-
-LANGUAGE_CODE_MAP = {
-    "French": "fr",
-    "Russian": "ru",
-    "English": "en",
-    "Spanish": "es",
-    "German": "de",
-    "Italian": "it",
-    "Portuguese": "pt",
-    "Chinese": "zh-cn",
-    "Japanese": "ja",
-    "Korean": "ko",
-}
+from src.scorers.classify import classify_language
 
 
 @scorer(metrics=[accuracy(), stderr()])
@@ -35,64 +20,36 @@ def language_scorer(
     target_language: str,
     pattern_language: str,
 ) -> Scorer:
-    """Score based on whether output is in the target language or pattern language."""
+    """Score based on whether output is in the target language or pattern language.
 
-    target_code = LANGUAGE_CODE_MAP.get(target_language, target_language.lower()[:2])
-    pattern_code = LANGUAGE_CODE_MAP.get(pattern_language, pattern_language.lower()[:2])
+    Delegates to classify_language() for the actual detection logic (single source
+    of truth shared with the prediction scorer).
+    """
 
     async def score(state: TaskState, target: Target) -> Score:
         output = state.output.completion.strip()
+        classification = classify_language(output, pattern_language, target_language)
 
-        if len(output.split()) < 3:
+        if classification == "target":
             return Score(
-                value=INCORRECT,
+                value=CORRECT,
                 answer=output,
-                explanation="Output too short for reliable language detection",
-                metadata={"detected_language": "unknown", "confidence": 0.0, "classification": "unknown"},
+                explanation=f"Detected target language ({target_language})",
+                metadata={"classification": "target"},
             )
-
-        try:
-            detected = detect_langs(output)
-            if not detected:
-                return Score(
-                    value=INCORRECT,
-                    answer=output,
-                    explanation="Language detection returned no results",
-                    metadata={"detected_language": "unknown", "confidence": 0.0, "classification": "unknown"},
-                )
-
-            top_lang = detected[0]
-            lang_code = top_lang.lang
-            confidence = top_lang.prob
-
-            if lang_code == target_code:
-                return Score(
-                    value=CORRECT,
-                    answer=output,
-                    explanation=f"Detected {lang_code} (target: {target_code}, confidence: {confidence:.2f})",
-                    metadata={"detected_language": lang_code, "confidence": confidence, "classification": "target"},
-                )
-            elif lang_code == pattern_code:
-                return Score(
-                    value=INCORRECT,
-                    answer=output,
-                    explanation=f"Detected {lang_code} (pattern: {pattern_code}, confidence: {confidence:.2f})",
-                    metadata={"detected_language": lang_code, "confidence": confidence, "classification": "pattern"},
-                )
-            else:
-                return Score(
-                    value=INCORRECT,
-                    answer=output,
-                    explanation=f"Detected {lang_code} (neither target nor pattern, confidence: {confidence:.2f})",
-                    metadata={"detected_language": lang_code, "confidence": confidence, "classification": "unknown"},
-                )
-
-        except Exception as e:
+        elif classification == "pattern":
             return Score(
                 value=INCORRECT,
                 answer=output,
-                explanation=f"Language detection failed: {e}",
-                metadata={"detected_language": "error", "confidence": 0.0, "classification": "unknown"},
+                explanation=f"Detected pattern language ({pattern_language})",
+                metadata={"classification": "pattern"},
+            )
+        else:
+            return Score(
+                value=INCORRECT,
+                answer=output,
+                explanation="Detected neither target nor pattern language",
+                metadata={"classification": "unknown"},
             )
 
     return score
