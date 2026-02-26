@@ -57,8 +57,8 @@ _evals_df = _evals_df.dropna(subset=["prediction_actual_score", "prediction_pred
 _filtered_path = str(_out_dir / "_combined_filtered.parquet")
 _evals_df.to_parquet(_filtered_path, index=False)
 
-# N values are now stored as ints (convert to Python int for JSON serialization)
-n_domain = [int(x) for x in sorted(_evals_df["n_turns"].unique())]
+# N values are strings (converted in prepare_viz_data); sort numerically, keep as strings
+n_domain = sorted(_evals_df["n_turns"].unique(), key=int)
 max_n = n_domain[-1]
 
 _label_df = _evals_df[_evals_df["n_turns"] == max_n].copy()
@@ -104,7 +104,11 @@ heatmap_sel = Selection.intersect()
 ```{python}
 #| echo: false
 select(line_data, label="Condition", column="condition", value="auto", target=sel, field="condition")
-select(error_data, label="Condition", column="condition", value="auto", target=heatmap_sel, field="condition")
+```
+
+```{python}
+#| echo: false
+select(error_data, label="Condition (heatmap)", column="condition", value="auto", target=heatmap_sel, field="condition")
 ```
 
 ```{python}
@@ -115,7 +119,11 @@ select(line_data, label="Model", column="model", value="auto", target=sel, field
 ```{python}
 #| echo: false
 select(line_data, label="Instruction", column="instruction", value="auto", target=sel, field="instruction")
-select(error_data, label="Instruction", column="instruction", value="auto", target=heatmap_sel, field="instruction")
+```
+
+```{python}
+#| echo: false
+select(error_data, label="Instruction (heatmap)", column="instruction", value="auto", target=heatmap_sel, field="instruction")
 ```
 :::
 
@@ -211,16 +219,16 @@ Percentage points difference between predicted and actual behavior. Positive = m
 
 ```{python}
 #| echo: false
-_n_conditions = _evals_df["condition"].nunique()
+_n_models = _evals_df["model"].nunique()
 overview_heatmap(
     error_data,
     x="n_turns",
-    y="condition",
+    y="model",
     fill_col="calibration_error_pct",
     selection=heatmap_sel,
     title="Calibration Error (Predicted - Actual) %",
     width=900,
-    height=_n_conditions * 30 + 80,
+    height=_n_models * 30 + 80,
 )
 ```
 
@@ -291,12 +299,12 @@ Percentage points change in instruction-following rate after prediction step. Po
 overview_heatmap(
     error_data,
     x="n_turns",
-    y="condition",
+    y="model",
     fill_col="prediction_effect_pct",
     selection=heatmap_sel,
     title="Effect of Prediction (Protocol 2 - Protocol 1) %",
     width=900,
-    height=_n_conditions * 30 + 80,
+    height=_n_models * 30 + 80,
 )
 ```
 :::

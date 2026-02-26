@@ -360,7 +360,7 @@ def overview_heatmap(
     data: Data,
     *,
     x: str = "n_turns",
-    y: str = "condition",
+    y: str = "model",
     fill_col: str = "score",
     selection: Selection | None = None,
     title: str = "Overview",
@@ -408,5 +408,5 @@ def overview_heatmap(
         height=height,
         x_label="N (hardcoded turns)",
         y_label=None,
-        margin_left=160,
+        margin_left=120,
     )

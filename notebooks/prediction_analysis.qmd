@@ -50,8 +50,8 @@ evals_path_resolved = _resolve_path(evals_path)
 _evals_df = pd.read_parquet(evals_path_resolved)
 _out_dir = Path(evals_path_resolved).parent
 
-# N values are now stored as ints (convert to Python int for JSON serialization)
-n_domain = [int(x) for x in sorted(_evals_df["n_turns"].unique())]
+# N values are strings (converted in prepare_viz_data); sort numerically, keep as strings
+n_domain = sorted(_evals_df["n_turns"].unique(), key=int)
 max_n = n_domain[-1]
 
 # --- Wide-format label data (max n_turns) for calibration/accuracy charts ---
@@ -85,8 +85,10 @@ for score_col, label in METRIC_LABELS.items():
 
 _long_df = pd.concat(_long_rows, ignore_index=True)
 
-# Sort by n_turns for proper line connections
-_long_df = _long_df.sort_values(["model", "condition", "instruction", "metric", "n_turns"])
+# Sort by numeric n_turns for proper line connections (n_turns is string for widget compatibility)
+_long_df["_n_sort"] = _long_df["n_turns"].astype(int)
+_long_df = _long_df.sort_values(["model", "condition", "instruction", "metric", "_n_sort"])
+_long_df = _long_df.drop(columns=["_n_sort"])
 
 _long_path = str(_out_dir / "_pred_long.parquet")
 _long_df.to_parquet(_long_path, index=False)
@@ -153,11 +155,13 @@ for _col, _label in _pred_stderr_metrics:
     _pred_stderr_rows.append(_tmp)
 _pred_stderr = pd.concat(_pred_stderr_rows, ignore_index=True)
 _pred_stderr["stderr"] = _pred_stderr["stderr"].round(3)
-_pred_stderr = _pred_stderr.sort_values(["model", "condition", "instruction", "metric", "n_turns"])
+_pred_stderr["_n_sort"] = _pred_stderr["n_turns"].astype(int)
+_pred_stderr = _pred_stderr.sort_values(["model", "condition", "instruction", "metric", "_n_sort"])
+_pred_stderr = _pred_stderr.drop(columns=["_n_sort"])
 _pred_stderr_path = str(_out_dir / "_pred_stderr.parquet")
 _pred_stderr.to_parquet(_pred_stderr_path, index=False)
-_n_conditions_pred = _evals_df["condition"].nunique()
-_pred_stderr_height = max(300, _n_conditions_pred * 30 + 80)
+_n_models_pred = _evals_df["model"].nunique()
+_pred_stderr_height = max(300, _n_models_pred * 30 + 80)
 ```
 
 ## Overview
@@ -251,24 +255,45 @@ labeled_line_chart(
 
 ## Bullet Graph: vs Neutral Baseline {#sec-bullet}
 
-Each row is a model. The grey bar shows the neutral condition score; the colored bar shows the selected condition. Faceted horizontally by instruction template and vertically by condition.
+Each row is a model. The grey bar shows the neutral condition score for the selected metric; the colored bar shows the selected condition. Use the dropdowns to select an N value and metric.
 
 ```{python}
 #| echo: false
 bullet_main = Data.from_file(_nonneutral_long_path)
 bullet_baseline = Data.from_file(_baseline_long_path)
+bullet_sel = Selection.intersect()
 ```
 
+:::: {.grid}
+
+::: {.g-col-3 .bg-light .p-3 style="position: sticky; top: 1rem; align-self: start;"}
+#### Filters
+
+```{python}
+#| echo: false
+select(bullet_main, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=bullet_sel, field="n_turns")
+```
+
+```{python}
+#| echo: false
+select(bullet_main, label="Metric", column="metric", options=metric_domain, value=metric_domain[0], target=bullet_sel, field="metric")
+```
+:::
+
+::: {.g-col-9}
 ```{python}
 #| echo: false
 bullet_graph(
     bullet_main,
     bullet_baseline,
-    selection=None,
+    selection=bullet_sel,
     width=900,
     height=_bullet_height,
 )
 ```
+:::
+
+::::
 
 ## Bullet Graph: Aligned vs Misaligned {#sec-paired-bullet}
 
@@ -277,22 +302,45 @@ Each row is a condition pair. Within each pair:
 - **Colored bar (aligned)**: instruction target agrees with the model's values or truth (following the instruction is the "natural" response).
 - **Grey bar (misaligned)**: instruction asks for the counter-conventional response (following requires overriding both induction *and* model values).
 
+Use the dropdowns to select an N value and metric.
+
 ```{python}
 #| echo: false
 aligned_data = Data.from_file(_aligned_long_path)
 misaligned_data = Data.from_file(_misaligned_long_path)
+paired_sel = Selection.intersect()
 ```
 
+:::: {.grid}
+
+::: {.g-col-3 .bg-light .p-3 style="position: sticky; top: 1rem; align-self: start;"}
+#### Filters
+
+```{python}
+#| echo: false
+select(aligned_data, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=paired_sel, field="n_turns")
+```
+
+```{python}
+#| echo: false
+select(aligned_data, label="Metric", column="metric", options=metric_domain, value=metric_domain[0], target=paired_sel, field="metric")
+```
+:::
+
+::: {.g-col-9}
 ```{python}
 #| echo: false
 paired_bullet_graph(
     aligned_data,
     misaligned_data,
-    selection=None,
+    selection=paired_sel,
     width=900,
     height=_paired_height,
 )
 ```
+:::
+
+::::
 
 ## Prediction Consistency {#sec-pred-consistency}
 
@@ -331,7 +379,7 @@ select(pred_stderr_data, label="Metric", column="metric", options=metric_domain,
 overview_heatmap(
     pred_stderr_data,
     x="n_turns",
-    y="condition",
+    y="model",
     fill_col="stderr",
     selection=pred_stderr_sel,
     title="Prediction Consistency — Standard Error by Metric",

@@ -50,8 +50,8 @@ evals_path_resolved = _resolve_path(evals_path)
 _evals_df = pd.read_parquet(evals_path_resolved)
 _out_dir = Path(evals_path_resolved).parent
 
-# N values are now stored as ints (convert to Python int for JSON serialization)
-n_domain = [int(x) for x in sorted(_evals_df["n_turns"].unique())]
+# N values are strings (converted in prepare_viz_data); sort numerically, keep as strings
+n_domain = sorted(_evals_df["n_turns"].unique(), key=int)
 max_n = n_domain[-1]
 
 # --- Derived datasets ---
@@ -88,12 +88,14 @@ _summary_stats = pd.DataFrame(_summary_cols).reset_index() if _summary_cols else
 
 BOUNDARY_THRESHOLD = 0.80
 _boundary_df = _evals_df[["model", "condition", "instruction", "n_turns", "score"]].copy()
-_boundary_df = _boundary_df.sort_values(["model", "condition", "instruction", "n_turns"])
+_boundary_df["_n_sort"] = _boundary_df["n_turns"].astype(int)
+_boundary_df = _boundary_df.sort_values(["model", "condition", "instruction", "_n_sort"])
+_boundary_df = _boundary_df.drop(columns=["_n_sort"])
 
 
 def _boundary_stats(group):
     scores = group["score"]
-    n_ints = group["n_turns"]
+    n_ints = group["n_turns"].astype(int)
     n_t = int((scores >= BOUNDARY_THRESHOLD).sum())
     n_p = int((scores <= (1 - BOUNDARY_THRESHOLD)).sum())
     p_mask = (scores <= (1 - BOUNDARY_THRESHOLD)) & (n_ints > 1)
@@ -112,11 +114,13 @@ _boundaries.to_parquet(_boundary_path, index=False)
 # --- Behavioral consistency (stderr) derived dataset ---
 # Keep instruction column for filtering (no averaging over templates)
 
-_n_conditions_all = _evals_df["condition"].nunique()
-_stderr_height = max(300, _n_conditions_all * 30 + 80)
+_n_models_all = _evals_df["model"].nunique()
+_stderr_height = max(300, _n_models_all * 30 + 80)
 _stderr_df = _evals_df[["model", "condition", "instruction", "n_turns", "score_stderr"]].copy()
 _stderr_df["score_stderr"] = _stderr_df["score_stderr"].round(3)
-_stderr_df = _stderr_df.sort_values(["model", "condition", "instruction", "n_turns"])
+_stderr_df["_n_sort"] = _stderr_df["n_turns"].astype(int)
+_stderr_df = _stderr_df.sort_values(["model", "condition", "instruction", "_n_sort"])
+_stderr_df = _stderr_df.drop(columns=["_n_sort"])
 _stderr_path = str(_out_dir / "_stderr.parquet")
 _stderr_df.to_parquet(_stderr_path, index=False)
 
@@ -217,31 +221,47 @@ Mean instruction-following rate averaged over all N values and instruction templ
 if _summary_stats is not None:
     _score_cols = [c for c in _summary_stats.columns if c != "model"]
     _fmt = {c: "{:.1%}" for c in _score_cols}
-    _summary_stats.style.format(_fmt).hide(axis="index")
+    display(_summary_stats.style.format(_fmt).hide(axis="index"))
 else:
     print("No data available.")
 ```
 
 ## Bullet Graph: vs Neutral Baseline {#sec-bullet}
 
-Each row is a model. The grey background bar shows the neutral condition's accuracy; the colored foreground bar shows the selected condition. Faceted horizontally by instruction template and vertically by condition.
+Each row is a model. The grey background bar shows the neutral condition's accuracy; the colored foreground bar shows the selected condition. Faceted horizontally by instruction template and vertically by condition. Use the dropdown to select N (number of hardcoded turns).
 
 ```{python}
 #| echo: false
 bullet_main = Data.from_file(_nonneutral_path)
 bullet_baseline = Data.from_file(_baseline_path)
+bullet_sel = Selection.intersect()
 ```
 
+:::: {.grid}
+
+::: {.g-col-3 .bg-light .p-3 style="position: sticky; top: 1rem; align-self: start;"}
+#### N Turns
+
+```{python}
+#| echo: false
+select(bullet_main, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=bullet_sel, field="n_turns")
+```
+:::
+
+::: {.g-col-9}
 ```{python}
 #| echo: false
 bullet_graph(
     bullet_main,
     bullet_baseline,
-    selection=None,
+    selection=bullet_sel,
     width=900,
     height=_bullet_height,
 )
 ```
+:::
+
+::::
 
 ## Bullet Graph: Aligned vs Misaligned {#sec-paired-bullet}
 
@@ -254,18 +274,34 @@ Each row is a condition pair. Within each pair, the two conditions share the sam
 #| echo: false
 aligned_data = Data.from_file(_aligned_path)
 misaligned_data = Data.from_file(_misaligned_path)
+paired_sel = Selection.intersect()
 ```
 
+:::: {.grid}
+
+::: {.g-col-3 .bg-light .p-3 style="position: sticky; top: 1rem; align-self: start;"}
+#### N Turns
+
+```{python}
+#| echo: false
+select(aligned_data, label="N (hardcoded turns)", column="n_turns", options=n_domain, value=n_domain[0], target=paired_sel, field="n_turns")
+```
+:::
+
+::: {.g-col-9}
 ```{python}
 #| echo: false
 paired_bullet_graph(
     aligned_data,
     misaligned_data,
-    selection=None,
+    selection=paired_sel,
     width=900,
     height=_paired_height,
 )
 ```
+:::
+
+::::
 
 ## Behavior Boundaries {#sec-boundaries}
 
@@ -369,7 +405,7 @@ select(stderr_data, label="Instruction", column="instruction", value="auto", tar
 overview_heatmap(
     stderr_data,
     x="n_turns",
-    y="condition",
+    y="model",
     fill_col="score_stderr",
     selection=stderr_sel,
     title="Behavioral Consistency — Standard Error of IF Rate",
