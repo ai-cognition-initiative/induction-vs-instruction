@@ -48,7 +48,7 @@ def language_scorer(
                 value=INCORRECT,
                 answer=output,
                 explanation="Output too short for reliable language detection",
-                metadata={"detected_language": "unknown", "confidence": 0.0},
+                metadata={"detected_language": "unknown", "confidence": 0.0, "classification": "unknown"},
             )
 
         try:
@@ -58,7 +58,7 @@ def language_scorer(
                     value=INCORRECT,
                     answer=output,
                     explanation="Language detection returned no results",
-                    metadata={"detected_language": "unknown", "confidence": 0.0},
+                    metadata={"detected_language": "unknown", "confidence": 0.0, "classification": "unknown"},
                 )
 
             top_lang = detected[0]
@@ -70,21 +70,21 @@ def language_scorer(
                     value=CORRECT,
                     answer=output,
                     explanation=f"Detected {lang_code} (target: {target_code}, confidence: {confidence:.2f})",
-                    metadata={"detected_language": lang_code, "confidence": confidence},
+                    metadata={"detected_language": lang_code, "confidence": confidence, "classification": "target"},
                 )
             elif lang_code == pattern_code:
                 return Score(
                     value=INCORRECT,
                     answer=output,
                     explanation=f"Detected {lang_code} (pattern: {pattern_code}, confidence: {confidence:.2f})",
-                    metadata={"detected_language": lang_code, "confidence": confidence},
+                    metadata={"detected_language": lang_code, "confidence": confidence, "classification": "pattern"},
                 )
             else:
                 return Score(
                     value=INCORRECT,
                     answer=output,
                     explanation=f"Detected {lang_code} (neither target nor pattern, confidence: {confidence:.2f})",
-                    metadata={"detected_language": lang_code, "confidence": confidence},
+                    metadata={"detected_language": lang_code, "confidence": confidence, "classification": "unknown"},
                 )
 
         except Exception as e:
@@ -92,7 +92,7 @@ def language_scorer(
                 value=INCORRECT,
                 answer=output,
                 explanation=f"Language detection failed: {e}",
-                metadata={"detected_language": "error", "confidence": 0.0},
+                metadata={"detected_language": "error", "confidence": 0.0, "classification": "unknown"},
             )
 
     return score

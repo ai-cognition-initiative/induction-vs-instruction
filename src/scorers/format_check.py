@@ -113,6 +113,7 @@ def format_scorer(condition_name: str) -> Scorer:
                 value=INCORRECT,
                 answer=output,
                 explanation=f"Unknown format condition: {condition_name}",
+                metadata={"classification": "unknown"},
             )
 
         if target_match:
@@ -120,18 +121,21 @@ def format_scorer(condition_name: str) -> Scorer:
                 value=CORRECT,
                 answer=output,
                 explanation=f"Output matches target format for {condition_name}",
+                metadata={"classification": "target"},
             )
         elif pattern_match:
             return Score(
                 value=INCORRECT,
                 answer=output,
                 explanation=f"Output matches pattern format for {condition_name}",
+                metadata={"classification": "pattern"},
             )
         else:
             return Score(
                 value=INCORRECT,
                 answer=output,
                 explanation=f"Output matches neither format for {condition_name}",
+                metadata={"classification": "unknown"},
             )
 
     return score

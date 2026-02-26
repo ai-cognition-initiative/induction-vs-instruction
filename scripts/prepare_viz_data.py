@@ -81,6 +81,10 @@ PREDICTION_SCORE_RENAME = {
     "score_prediction_accuracy_stderr": "stderr_prediction_accuracy",
     "score_prediction_instruction_accuracy": "score_prediction_instruction",
     "score_prediction_instruction_stderr": "stderr_prediction_instruction",
+    "score_actual_unknown_accuracy": "score_actual_unknown",
+    "score_actual_unknown_stderr": "stderr_actual_unknown",
+    "score_prediction_unknown_accuracy": "score_prediction_unknown",
+    "score_prediction_unknown_stderr": "stderr_prediction_unknown",
 }
 
 
@@ -285,8 +289,14 @@ def prepare_prediction(log_dir: str, output_dir: str) -> None:
         "stderr_prediction_accuracy",
         "score_prediction_instruction",
         "stderr_prediction_instruction",
+        "score_actual_unknown",
+        "stderr_actual_unknown",
+        "score_prediction_unknown",
+        "stderr_prediction_unknown",
         "reasoning_tokens",
     ]
+    # Keep only columns that exist (backwards compat with older logs without unknown metrics)
+    output_cols = [c for c in output_cols if c in df.columns]
     df = df[output_cols].reset_index(drop=True)
     df = df.dropna(subset=["score_instruction_following"])
 
@@ -454,9 +464,15 @@ def process_prediction_df(
         "stderr_prediction_accuracy",
         "score_prediction_instruction",
         "stderr_prediction_instruction",
+        "score_actual_unknown",
+        "stderr_actual_unknown",
+        "score_prediction_unknown",
+        "stderr_prediction_unknown",
     ]
     if "reasoning_tokens" in df.columns:
         output_cols.append("reasoning_tokens")
+    # Keep only columns that exist (backwards compat with older logs without unknown metrics)
+    output_cols = [c for c in output_cols if c in df.columns]
     df = df[output_cols].reset_index(drop=True)
     df = df.dropna(subset=["score_instruction_following"])
 

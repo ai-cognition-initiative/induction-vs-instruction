@@ -88,21 +88,21 @@ def style_scorer(
                 value=CORRECT,
                 answer=output,
                 explanation=f"Judge classified as TARGET ({target_description})",
-                metadata={"judge_response": judgment},
+                metadata={"judge_response": judgment, "classification": "target"},
             )
         elif "PATTERN" in judgment:
             return Score(
                 value=INCORRECT,
                 answer=output,
                 explanation=f"Judge classified as PATTERN ({pattern_description})",
-                metadata={"judge_response": judgment},
+                metadata={"judge_response": judgment, "classification": "pattern"},
             )
         else:
             return Score(
                 value=INCORRECT,
                 answer=output,
                 explanation=f"Judge classified as NEITHER (judge said: {judgment})",
-                metadata={"judge_response": judgment},
+                metadata={"judge_response": judgment, "classification": "unknown"},
             )
 
     return score

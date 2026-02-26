@@ -27,6 +27,8 @@ from src.scorers.classify import classify_actual, classify_prediction
         "prediction_accuracy": [accuracy(), stderr()],
         "instruction_following": [accuracy(), stderr()],
         "prediction_instruction": [accuracy(), stderr()],
+        "actual_unknown": [accuracy(), stderr()],
+        "prediction_unknown": [accuracy(), stderr()],
     }
 )
 def prediction_scorer() -> Scorer:
@@ -65,6 +67,8 @@ def prediction_scorer() -> Scorer:
                 "prediction_accuracy": CORRECT if prediction_correct else INCORRECT,
                 "instruction_following": CORRECT if actual_followed_instruction else INCORRECT,
                 "prediction_instruction": CORRECT if prediction_followed_instruction else INCORRECT,
+                "actual_unknown": CORRECT if actual_choice == "unknown" else INCORRECT,
+                "prediction_unknown": CORRECT if prediction_choice == "unknown" else INCORRECT,
             },
             answer=output,
             explanation=f"Prediction choice: {prediction_choice}, Actual choice: {actual_choice}",

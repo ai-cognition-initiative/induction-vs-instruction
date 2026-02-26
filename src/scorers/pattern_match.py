@@ -34,12 +34,21 @@ def pattern_match() -> Scorer:
                 value=CORRECT,
                 answer=state.output.completion,
                 explanation=f"Output matched target '{target_text}' (instruction-following)",
+                metadata={"classification": "target"},
+            )
+        elif pattern_match_score > target_match_score:
+            return Score(
+                value=INCORRECT,
+                answer=state.output.completion,
+                explanation=f"Output matched pattern '{pattern}' (induction)",
+                metadata={"classification": "pattern"},
             )
         else:
             return Score(
                 value=INCORRECT,
                 answer=state.output.completion,
-                explanation=f"Output matched pattern '{pattern}' (induction)",
+                explanation=f"Output matched neither target '{target_text}' nor pattern '{pattern}'",
+                metadata={"classification": "unknown"},
             )
 
     return score

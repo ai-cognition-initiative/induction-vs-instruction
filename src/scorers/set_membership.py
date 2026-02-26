@@ -63,28 +63,28 @@ def set_membership_scorer(
                 value=CORRECT,
                 answer=output,
                 explanation=f"Output matched target set member '{t_match}'",
-                metadata={"matched_member": t_match, "matched_set": "target"},
+                metadata={"matched_member": t_match, "matched_set": "target", "classification": "target"},
             )
         elif p_match and not t_match:
             return Score(
                 value=INCORRECT,
                 answer=output,
                 explanation=f"Output matched pattern set member '{p_match}'",
-                metadata={"matched_member": p_match, "matched_set": "pattern"},
+                metadata={"matched_member": p_match, "matched_set": "pattern", "classification": "pattern"},
             )
         elif t_match and p_match:
             return Score(
                 value=CORRECT,
                 answer=output,
                 explanation=f"Output matched both sets (target: '{t_match}', pattern: '{p_match}')",
-                metadata={"matched_member": t_match, "matched_set": "both"},
+                metadata={"matched_member": t_match, "matched_set": "both", "classification": "target"},
             )
         else:
             return Score(
                 value=INCORRECT,
                 answer=output,
                 explanation="Output matched neither set",
-                metadata={"matched_member": None, "matched_set": "neither"},
+                metadata={"matched_member": None, "matched_set": "neither", "classification": "unknown"},
             )
 
     return score
