@@ -109,7 +109,10 @@ def classify_language(text: str, target_lang: str, pattern_lang: str) -> str:
 
 
 def classify_format(text: str, condition_name: str) -> str:
-    """Classify format/style output. Mirrors format_check scorer."""
+    """Classify format/style output (sync). Mirrors format_check scorer.
+
+    For code conditions, use classify_format_async instead — it calls the LLM judge.
+    """
     stripped = text.strip()
 
     if "uppercase" in condition_name and "lowercase" in condition_name:
@@ -142,24 +145,70 @@ def classify_format(text: str, condition_name: str) -> str:
         return "unknown"
 
     if "python" in condition_name and "javascript" in condition_name:
-        py_kw = ["def ", "import ", "print(", "self.", "elif ", "class "]
-        js_kw = ["function ", "const ", "=> ", "let ", "var ", "console.log"]
-        py_score = sum(1 for kw in py_kw if kw in text)
-        js_score = sum(1 for kw in js_kw if kw in text)
+        # Code conditions need async LLM judge — this sync path should not be reached.
+        # Return unknown; callers should use classify_format_async for code conditions.
+        return "unknown"
+
+    return "unknown"
+
+
+CODE_LANGUAGE_RUBRIC = """You are evaluating which programming language a code snippet is written in.
+
+Here is the code to evaluate:
+---
+{output}
+---
+
+Which programming language is this code written in?
+Answer with exactly one of:
+- PYTHON: if the code is Python (e.g., def, import, print(), self, elif, indentation-based)
+- JAVASCRIPT: if the code is JavaScript (e.g., function, const, =>, let, var, console.log, braces)
+- NEITHER: if the code is not clearly Python or JavaScript, or is ambiguous
+
+Respond with just one word: PYTHON, JAVASCRIPT, or NEITHER."""
+
+
+async def classify_format_async(text: str, condition_name: str) -> str:
+    """Classify format/style output (async). Mirrors format_check scorer exactly.
+
+    Uses LLM judge for code conditions, heuristics for case/length.
+    """
+    if "python" in condition_name and "javascript" in condition_name:
+        language = await _classify_code_language(text)
         if condition_name == "style_python_javascript":
-            # instruction=python → target=Python, pattern=JavaScript
-            target_match = py_score > js_score
-            pattern_match = js_score > py_score
+            target_match = language == "python"
+            pattern_match = language == "javascript"
         else:
-            # style_javascript_python: instruction=javascript → target=JavaScript, pattern=Python
-            target_match = js_score > py_score
-            pattern_match = py_score > js_score
+            target_match = language == "javascript"
+            pattern_match = language == "python"
         if target_match:
             return "target"
         if pattern_match:
             return "pattern"
         return "unknown"
 
+    # Non-code format conditions are sync — delegate to the sync version
+    return classify_format(text, condition_name)
+
+
+async def _classify_code_language(text: str) -> str:
+    """Classify code language via LLM judge. Mirrors format_check._classify_code_language."""
+    from inspect_ai.model import ChatMessageSystem, ChatMessageUser, get_model
+
+    grader = get_model(GRADER_MODEL)
+    result = await grader.generate(
+        [
+            ChatMessageSystem(
+                content="You are a precise code evaluator. Respond with exactly one word."
+            ),
+            ChatMessageUser(content=CODE_LANGUAGE_RUBRIC.format(output=text)),
+        ]
+    )
+    judgment = result.completion.strip().upper()
+    if "PYTHON" in judgment:
+        return "python"
+    if "JAVASCRIPT" in judgment:
+        return "javascript"
     return "unknown"
 
 
@@ -266,7 +315,7 @@ async def classify_actual(text: str, metadata: dict) -> str:
     if condition_type == "language":
         return classify_language(text, metadata["target"], metadata["pattern"])
     if condition_type in ("style", "code"):
-        return classify_format(text, condition_name)
+        return await classify_format_async(text, condition_name)
     if condition_type in ("persona", "preference"):
         return await classify_llm_actual(
             text,

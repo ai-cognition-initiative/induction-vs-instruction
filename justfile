@@ -81,7 +81,7 @@ report-config config_file:
     set -e
     uv run python scripts/generate_report_from_config.py --config {{config_file}}
 
-[group("reporting")]
+[group("eval")]
 rescore-prediction folder:
     #!/usr/bin/env bash
     set -e
@@ -90,6 +90,20 @@ rescore-prediction folder:
         echo "  Scoring $f"
         uv run inspect score "$f" \
             --scorer src/scorers/prediction.py@prediction_scorer \
+            --action overwrite \
+            --overwrite
+    done
+    echo "Done."
+
+[group("eval")]
+rescore-behavioral folder:
+    #!/usr/bin/env bash
+    set -e
+    echo "Rescoring behavioral logs in logs/{{folder}}"
+    for f in logs/{{folder}}/*.eval; do
+        echo "  Scoring $f"
+        uv run inspect score "$f" \
+            --scorer src/scorers/behavioral.py@behavioral_scorer \
             --action overwrite \
             --overwrite
     done
