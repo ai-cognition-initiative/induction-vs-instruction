@@ -17,6 +17,7 @@
 | 2026-02-24 | self | Tried to use `--reasoning-effort none` | `reasoning_effort` only accepts `minimal`, `low`, `medium`, `high`, `xhigh`. To fully disable reasoning on OpenRouter, use `reasoning_enabled: false` in models.yaml. |
 | 2026-02-24 | self | Tried to specify both `reasoning_effort` and `reasoning_tokens` | Can only specify ONE, not both. OpenRouter provider warns and ignores `reasoning_tokens` if both are set. |
 | 2026-02-24 | self | Tried to pass `reasoning` object directly as model arg | OpenRouter provider handles `extra_body` construction internally. Use `reasoning_enabled` (boolean) as top-level model arg, or let inspect-ai's `reasoning_effort` map to OpenRouter's `extra_body.reasoning.effort`. |
+| 2026-02-26 | self | Used `sorted(df["n_turns"].unique())` when n_turns is string | String sorting is lexicographic ("1", "10", "2"). Use `sorted(..., key=int)` for numeric order. Same for `sort_values()` — create temp int column or use `key=` param. |
 
 ## User Preferences
 - Project is single-purpose (induction vs instruction evals) - no need for extra subfolder nesting
@@ -94,9 +95,12 @@
 - `format_check.py` and `classify_format()`: naming is `{instruction}_{pattern}` so instruction=first word=target. `style_uppercase_lowercase` = instruction=uppercase = target=UPPERCASE. Previously had inverted logic (bug fixed 2026-02-23).
 - `filter_by=data.selection` on cascading selects causes deadlocks after the first interaction. Use a single dropdown instead of cascading (condition names are unique and self-descriptive).
 - ANY non-column value in a mark kwarg that Mosaic tries to resolve as a channel causes the JS error `can't access property "as", n.channelField(...) is null`. Also affects `nearest_x(sel, channels=["stroke"])` — the `channels` param tells the interactor which mark channel to look up on EVERY mark in the plot. If any mark lacks that channel (e.g., area/text marks don't have `stroke`), `channelField("stroke")` returns null → crash. Fix: use `nearest_x(sel, fields=["model"])` instead — queries the raw data field, doesn't require all marks to have that channel. This includes: (1) string constants that aren't column names — e.g., `stroke="white"` → move to `styles={"stroke": "white"}`; (2) `stroke=None` (Python None → JS null) — Mosaic calls `channelField(null)` which returns null → crash. Fix: just omit `stroke` entirely on area marks (no stroke is the default). Integer constants like `stroke_width=4` are safe.
-- Line marks connect points in DuckDB query order, not x_domain order. For string n_turns, sort the parquet data by numeric n_turns to ensure proper line connections.
+- Line marks connect points in DuckDB query order, not x_domain order. For string n_turns, use `sorted(..., key=int)` for n_domain and create temp int column for `sort_values()` to ensure proper line connections.
 - inspect-viz `Data` has a built-in selection. ALL `select()`/`slider()` inputs targeting the same `Data` instance share that selection and filter ALL plots using that `Data`. Create separate `Data.from_file()` instances per filtering scope — e.g., trajectory section (condition_pair + hint only) vs factor section (condition_pair + hint + N) need DIFFERENT Data instances or the N filter bleeds into the trajectory.
 - For discrete N values, use `select(data, column="n_turns")` not `slider()` — slider implies continuous range; select shows only actual discrete values in the data.
+- inspect-viz `select()` with `value="auto"` may not initialize properly for all use cases. Use explicit `options=domain_list, value=domain_list[0]` for reliable initial filtering (especially bullet graphs). The working pattern: `select(data, column="n_turns", options=n_domain, value=n_domain[0], target=sel, field="n_turns")`
+- Before rewriting code, ALWAYS check git history for previously working versions. `git show <commit>:<file>` is faster than guessing.
+- n_turns is converted to string in `prepare_viz_data.py` via `_n_turns_to_string()`. Notebooks should NOT convert — just use `sorted(unique, key=lambda x: int(x))` to get string n_domain in numeric order. Don't duplicate the string conversion in notebooks.
 
 ### inspect-viz Selection semantics
 - `Selection.intersect()`: ALL predicates apply to ALL sources. Use this for simple shared filtering across Data instances.
