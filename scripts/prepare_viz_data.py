@@ -16,6 +16,13 @@ from inspect_ai.analysis import (
 )
 
 
+def _n_turns_to_string(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert n_turns from int to string for inspect-viz select() widget compatibility."""
+    df = df.copy()
+    df["n_turns"] = df["n_turns"].astype(str)
+    return df
+
+
 # --- Condition pairing logic ---
 
 CONDITION_PAIR_MAP = {
@@ -540,6 +547,7 @@ def prepare_behavioral_multi(
     df["reasoning_tokens"] = df["reasoning_tokens"].fillna(0).astype(int)
 
     df = process_behavioral_df(df, max_reasoning_tokens=max_reasoning_tokens)
+    df = _n_turns_to_string(df)
 
     path = out / "evals.parquet"
     df.to_parquet(path, index=False)
@@ -569,6 +577,7 @@ def prepare_prediction_multi(
     df["reasoning_tokens"] = df["reasoning_tokens"].fillna(0).astype(int)
 
     df = process_prediction_df(df, max_reasoning_tokens=max_reasoning_tokens)
+    df = _n_turns_to_string(df)
 
     path = out / "evals_prediction.parquet"
     df.to_parquet(path, index=False)
@@ -618,6 +627,7 @@ def prepare_combined_multi(
             ]
 
     df_combined = _merge_behavioral_prediction(df_behavioral, df_prediction)
+    df_combined = _n_turns_to_string(df_combined)
 
     path = out / "evals_combined.parquet"
     df_combined.to_parquet(path, index=False)
