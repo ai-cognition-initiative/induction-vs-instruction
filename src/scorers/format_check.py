@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from inspect_ai.model import ChatMessageSystem, ChatMessageUser, get_model
 from inspect_ai.scorer import (
     CORRECT,
     INCORRECT,
@@ -11,6 +12,8 @@ from inspect_ai.scorer import (
     stderr,
 )
 from inspect_ai.solver import TaskState
+
+from src.scorers.classify import GRADER_MODEL
 
 
 def _check_uppercase(text: str) -> bool:
@@ -31,18 +34,39 @@ def _check_long(text: str) -> bool:
     return len(text.split()) > 40
 
 
-def _check_python(text: str) -> float:
-    """Return positive score for Python, negative for JavaScript."""
-    python_keywords = ["def ", "import ", "print(", "self.", "elif ", "class "]
-    js_keywords = ["function ", "const ", "=> ", "let ", "var ", "console.log"]
-    py_score = sum(1 for kw in python_keywords if kw in text)
-    js_score = sum(1 for kw in js_keywords if kw in text)
-    return py_score - js_score
+CODE_LANGUAGE_RUBRIC = """You are evaluating which programming language a code snippet is written in.
+
+Here is the code to evaluate:
+---
+{output}
+---
+
+Which programming language is this code written in?
+Answer with exactly one of:
+- PYTHON: if the code is Python (e.g., def, import, print(), self, elif, indentation-based)
+- JAVASCRIPT: if the code is JavaScript (e.g., function, const, =>, let, var, console.log, braces)
+- NEITHER: if the code is not clearly Python or JavaScript, or is ambiguous
+
+Respond with just one word: PYTHON, JAVASCRIPT, or NEITHER."""
 
 
-def _check_javascript(text: str) -> float:
-    """Return positive score for JavaScript, negative for Python."""
-    return -_check_python(text)
+async def _classify_code_language(text: str) -> str:
+    """Classify code language via LLM judge. Returns 'python', 'javascript', or 'unknown'."""
+    grader = get_model(GRADER_MODEL)
+    result = await grader.generate(
+        [
+            ChatMessageSystem(
+                content="You are a precise code evaluator. Respond with exactly one word."
+            ),
+            ChatMessageUser(content=CODE_LANGUAGE_RUBRIC.format(output=text)),
+        ]
+    )
+    judgment = result.completion.strip().upper()
+    if "PYTHON" in judgment:
+        return "python"
+    if "JAVASCRIPT" in judgment:
+        return "javascript"
+    return "unknown"
 
 
 @scorer(metrics=[accuracy(), stderr()])
@@ -77,16 +101,13 @@ def format_scorer(condition_name: str) -> Scorer:
                 target_match = _check_short(output)
                 pattern_match = _check_long(output)
         elif "python" in condition_name and "javascript" in condition_name:
+            language = await _classify_code_language(output)
             if condition_name == "style_python_javascript":
-                # instruction=python → target=Python, pattern=JavaScript
-                code_score = _check_python(output)
-                target_match = code_score > 0
-                pattern_match = code_score < 0
+                target_match = language == "python"
+                pattern_match = language == "javascript"
             else:
-                # style_javascript_python: instruction=javascript → target=JavaScript, pattern=Python
-                code_score = _check_javascript(output)
-                target_match = code_score > 0
-                pattern_match = code_score < 0
+                target_match = language == "javascript"
+                pattern_match = language == "python"
         else:
             return Score(
                 value=INCORRECT,
