@@ -1,0 +1,182 @@
+{
+  "gpt-5.2": {
+    "api_name": "GPT-5.2 (medium)",
+    "intelligence_index": 46.6,
+    "coding_index": 44.2,
+    "math_index": 96.7,
+    "mmlu_pro": 0.859,
+    "gpqa": 0.864,
+    "livecodebench": 0.894
+  },
+  "llama-3.3-70b-instruct": {
+    "api_name": "Llama 3.3 Instruct 70B",
+    "intelligence_index": 14.5,
+    "coding_index": 10.7,
+    "math_index": 7.7,
+    "mmlu_pro": 0.713,
+    "gpqa": 0.498,
+    "livecodebench": 0.288
+  },
+  "llama-4-scout": {
+    "api_name": "Llama 4 Scout",
+    "intelligence_index": 13.5,
+    "coding_index": 6.7,
+    "math_index": 14,
+    "mmlu_pro": 0.752,
+    "gpqa": 0.587,
+    "livecodebench": 0.299
+  },
+  "llama-4-maverick": {
+    "api_name": "Llama 4 Maverick",
+    "intelligence_index": 18.4,
+    "coding_index": 15.6,
+    "math_index": 19.3,
+    "mmlu_pro": 0.809,
+    "gpqa": 0.671,
+    "livecodebench": 0.397
+  },
+  "gemma-3-27b-it": {
+    "api_name": "Gemma 3 27B Instruct",
+    "intelligence_index": 10.3,
+    "coding_index": 9.6,
+    "math_index": 20.7,
+    "mmlu_pro": 0.669,
+    "gpqa": 0.428,
+    "livecodebench": 0.137
+  },
+  "gemini-3-flash-preview": {
+    "api_name": "Gemini 3 Flash Preview (Non-reasoning)",
+    "intelligence_index": 35,
+    "coding_index": 37.8,
+    "math_index": 55.7,
+    "mmlu_pro": 0.882,
+    "gpqa": 0.812,
+    "livecodebench": 0.797
+  },
+  "gemini-2.5-flash": {
+    "api_name": "Gemini 2.5 Flash-Lite Preview (Sep '25) (Non-reasoning)",
+    "intelligence_index": 21.7,
+    "coding_index": 14.5,
+    "math_index": 46.7,
+    "mmlu_pro": 0.796,
+    "gpqa": 0.651,
+    "livecodebench": 0.641
+  },
+  "gemma-3-12b-it": {
+    "api_name": "Gemma 3 12B Instruct",
+    "intelligence_index": 12.4,
+    "coding_index": 6.3,
+    "math_index": 18.3,
+    "mmlu_pro": 0.595,
+    "gpqa": 0.349,
+    "livecodebench": 0.137
+  },
+  "gemini-2.5-pro": {
+    "api_name": "Gemini 2.5 Pro",
+    "intelligence_index": 34.6,
+    "coding_index": 31.9,
+    "math_index": 87.7,
+    "mmlu_pro": 0.862,
+    "gpqa": 0.844,
+    "livecodebench": 0.801
+  },
+  "gemini-3-pro-preview": {
+    "api_name": "Gemini 3 Pro Preview (low)",
+    "intelligence_index": 41.3,
+    "coding_index": 39.4,
+    "math_index": 86.7,
+    "mmlu_pro": 0.895,
+    "gpqa": 0.887,
+    "livecodebench": 0.857
+  },
+  "claude-sonnet-4.6": {
+    "api_name": "Claude Sonnet 4.6 (Non-reasoning, High Effort)",
+    "intelligence_index": 44.4,
+    "coding_index": 46.4,
+    "math_index": null,
+    "mmlu_pro": null,
+    "gpqa": 0.799,
+    "livecodebench": null
+  },
+  "claude-opus-4.6": {
+    "api_name": "Claude Opus 4.6 (Adaptive Reasoning, Max Effort)",
+    "intelligence_index": 53,
+    "coding_index": 48.1,
+    "math_index": null,
+    "mmlu_pro": null,
+    "gpqa": 0.896,
+    "livecodebench": null
+  },
+  "deepseek-v3.2": {
+    "api_name": "DeepSeek V3.2 (Non-reasoning)",
+    "intelligence_index": 32.1,
+    "coding_index": 34.6,
+    "math_index": 59,
+    "mmlu_pro": 0.837,
+    "gpqa": 0.751,
+    "livecodebench": 0.593
+  },
+  "deepseek-v3": {
+    "api_name": "DeepSeek V3.2 (Non-reasoning)",
+    "intelligence_index": 32.1,
+    "coding_index": 34.6,
+    "math_index": 59,
+    "mmlu_pro": 0.837,
+    "gpqa": 0.751,
+    "livecodebench": 0.593
+  },
+  "minimax-m2.5": {
+    "api_name": "MiniMax-M2.5",
+    "intelligence_index": 41.9,
+    "coding_index": 37.4,
+    "math_index": null,
+    "mmlu_pro": null,
+    "gpqa": 0.848,
+    "livecodebench": null
+  },
+  "kimi-k2.5": {
+    "api_name": "Kimi K2.5 (Reasoning)",
+    "intelligence_index": 46.8,
+    "coding_index": 39.5,
+    "math_index": null,
+    "mmlu_pro": null,
+    "gpqa": 0.879,
+    "livecodebench": null
+  },
+  "kimi-k2": {
+    "api_name": "Kimi K2.5 (Reasoning)",
+    "intelligence_index": 46.8,
+    "coding_index": 39.5,
+    "math_index": null,
+    "mmlu_pro": null,
+    "gpqa": 0.879,
+    "livecodebench": null
+  },
+  "qwen3.5-plus": {
+    "api_name": "Qwen3.5 397B A17B (Reasoning)",
+    "intelligence_index": 45,
+    "coding_index": 41.3,
+    "math_index": null,
+    "mmlu_pro": null,
+    "gpqa": 0.893,
+    "livecodebench": null
+  },
+  "claude-3.5-haiku": {
+    "api_name": "Claude 3.5 Haiku",
+    "intelligence_index": 12.3,
+    "coding_index": 10.7,
+    "math_index": null,
+    "mmlu_pro": 0.634,
+    "gpqa": 0.408,
+    "livecodebench": 0.314
+  },
+  "claude-opus-4.5": {
+    "api_name": "Claude Opus 4.5 (Reasoning)",
+    "intelligence_index": 49.7,
+    "coding_index": 47.8,
+    "math_index": 91.3,
+    "mmlu_pro": 0.895,
+    "gpqa": 0.866,
+    "livecodebench": 0.871
+  }
+}
