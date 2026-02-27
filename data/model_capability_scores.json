@@ -1,18 +1,14 @@
 {
   "gpt-5.2": {
-    "true": {
-      "api_name": "GPT-5.2 (xhigh)",
+"true": {
+      "api_name": "GPT-5.2 (medium)",
       "intelligence_index": 46.6,
       "coding_index": 44.2,
       "math_index": 96.7,
       "mmlu_pro": 0.859,
       "gpqa": 0.864,
       "livecodebench": 0.894,
-      "ifbench": 0.754
-    },
-    "false": {
-      "api_name": "GPT-5.2 (Non-reasoning)",
-      "ifbench": 0.474
+      "ifbench": 0.652
     }
   },
   "llama-3.3-70b-instruct": {
