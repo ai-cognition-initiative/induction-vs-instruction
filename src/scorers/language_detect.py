@@ -22,13 +22,13 @@ def language_scorer(
 ) -> Scorer:
     """Score based on whether output is in the target language or pattern language.
 
-    Delegates to classify_language() for the actual detection logic (single source
+    Delegates to classify_language() which uses an LLM judge (single source
     of truth shared with the prediction scorer).
     """
 
     async def score(state: TaskState, target: Target) -> Score:
         output = state.output.completion.strip()
-        classification = classify_language(output, pattern_language, target_language)
+        classification = await classify_language(output, pattern_language, target_language)
 
         if classification == "target":
             return Score(

@@ -8,43 +8,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from langdetect import DetectorFactory, detect_langs
-
-DetectorFactory.seed = 0
-
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 
 # Grader model used for all LLM-judge calls — hardcoded for consistency across runs
 GRADER_MODEL = "openrouter/anthropic/claude-3-5-haiku"
-
-LANGUAGE_CODE_MAP = {
-    "French": "fr",
-    "Russian": "ru",
-    "English": "en",
-    "Spanish": "es",
-    "German": "de",
-    "Italian": "it",
-    "Portuguese": "pt",
-    "Chinese": "zh-cn",
-    "Japanese": "ja",
-    "Korean": "ko",
-}
-
-# langdetect often confuses related languages, especially for short texts.
-# Map each target code to the set of codes that should count as a match.
-# e.g. short Russian text is often detected as Bulgarian (bg) or Ukrainian (uk).
-LANGUAGE_FAMILY_MAP: dict[str, set[str]] = {
-    "ru": {"ru", "bg", "mk", "uk"},  # Cyrillic-script Slavic languages
-    "fr": {"fr", "ca", "oc"},  # Catalan/Occitan often confused with French
-    "en": {"en"},
-    "es": {"es", "ca", "gl"},  # Iberian Romance
-    "de": {"de"},
-    "it": {"it"},
-    "pt": {"pt", "gl"},
-    "zh-cn": {"zh-cn", "zh-tw"},
-    "ja": {"ja"},
-    "ko": {"ko"},
-}
 
 _set_cache: dict[str, list[str]] = {}
 
@@ -104,31 +71,42 @@ def classify_set_membership(text: str, pattern_set: str, target_set: str) -> str
     return "unknown"
 
 
-def classify_language(text: str, pattern_lang: str, target_lang: str) -> str:
-    """Classify language output using langdetect with family-aware matching.
+LANGUAGE_RUBRIC = """You are identifying which language a text is written in.
 
-    Short texts in related scripts (e.g. Russian vs Bulgarian/Ukrainian) are
-    often misidentified by langdetect. We use LANGUAGE_FAMILY_MAP to accept
-    closely related languages as matches.
+The text should be in one of these two languages:
+- TARGET: {target_lang}
+- PATTERN: {pattern_lang}
+
+Here is the text:
+---
+{output}
+---
+
+What language is this text written in? Ignore any proper nouns, quoted titles, or borrowed words — focus on the grammar and function words.
+
+Answer with exactly one word:
+- TARGET: if the text is in {target_lang}
+- PATTERN: if the text is in {pattern_lang}
+- NEITHER: if the text is in some other language (e.g. English)
+
+Respond with just one word: TARGET, PATTERN, or NEITHER."""
+
+
+async def classify_language(text: str, pattern_lang: str, target_lang: str) -> str:
+    """Classify language output via LLM judge.
+
+    Uses an LLM judge instead of langdetect because langdetect is unreliable
+    for short texts, especially for languages sharing a script (e.g. Russian
+    vs Bulgarian/Ukrainian, French vs Catalan).
     """
     if len(text.split()) < 2:
         return "unknown"
-    target_code = LANGUAGE_CODE_MAP.get(target_lang, target_lang.lower()[:2])
-    pattern_code = LANGUAGE_CODE_MAP.get(pattern_lang, pattern_lang.lower()[:2])
-    target_family = LANGUAGE_FAMILY_MAP.get(target_code, {target_code})
-    pattern_family = LANGUAGE_FAMILY_MAP.get(pattern_code, {pattern_code})
-    try:
-        detected = detect_langs(text)
-        if not detected:
-            return "unknown"
-        lang_code = detected[0].lang
-        if lang_code in target_family:
-            return "target"
-        if lang_code in pattern_family:
-            return "pattern"
-    except Exception:
-        pass
-    return "unknown"
+    prompt = LANGUAGE_RUBRIC.format(
+        target_lang=target_lang,
+        pattern_lang=pattern_lang,
+        output=text,
+    )
+    return await _call_llm_judge(prompt)
 
 
 def classify_format(text: str, condition_name: str) -> str:
@@ -366,7 +344,7 @@ async def classify_actual(text: str, metadata: dict) -> str:
             metadata.get("target_set", ""),
         )
     if condition_type == "language":
-        return classify_language(text, metadata["pattern"], metadata["target"])
+        return await classify_language(text, metadata["pattern"], metadata["target"])
     if condition_type in ("style", "code"):
         return await classify_format_async(text, condition_name)
     if condition_type in ("persona", "preference"):
