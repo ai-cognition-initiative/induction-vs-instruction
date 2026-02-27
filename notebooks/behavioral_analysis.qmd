@@ -411,7 +411,9 @@ overview_heatmap(
     selection=stderr_sel,
     title="Behavioral Consistency — Standard Error of IF Rate",
     color_scheme="reds",
-    show_text=False,
+    show_text=True,
+    text_color="black",
+    x_domain=n_domain,
     width=900,
     height=_stderr_height,
 )

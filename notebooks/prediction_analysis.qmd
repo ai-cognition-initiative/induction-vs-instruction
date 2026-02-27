@@ -384,7 +384,9 @@ overview_heatmap(
     selection=pred_stderr_sel,
     title="Prediction Consistency — Standard Error by Metric",
     color_scheme="reds",
-    show_text=False,
+    show_text=True,
+    text_color="black",
+    x_domain=n_domain,
     width=900,
     height=_pred_stderr_height,
 )

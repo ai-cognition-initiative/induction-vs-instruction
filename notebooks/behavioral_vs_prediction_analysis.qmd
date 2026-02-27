@@ -227,6 +227,7 @@ overview_heatmap(
     fill_col="calibration_error_pct",
     selection=heatmap_sel,
     title="Calibration Error (Predicted - Actual) %",
+    x_domain=n_domain,
     width=900,
     height=_n_models * 30 + 80,
 )
@@ -303,6 +304,7 @@ overview_heatmap(
     fill_col="prediction_effect_pct",
     selection=heatmap_sel,
     title="Effect of Prediction (Protocol 2 - Protocol 1) %",
+    x_domain=n_domain,
     width=900,
     height=_n_models * 30 + 80,
 )

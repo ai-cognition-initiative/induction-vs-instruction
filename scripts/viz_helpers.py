@@ -80,7 +80,12 @@ def labeled_line_chart(
                 stroke_width=4,
                 dx=5,
                 line_anchor="middle",
-                styles={"text_anchor": "start", "font_size": 11, "font_weight": 600, "stroke": "white"},
+                styles={
+                    "text_anchor": "start",
+                    "font_size": 11,
+                    "font_weight": 600,
+                    "stroke": "white",
+                },
             ),
         ]
     )
@@ -336,7 +341,12 @@ def calibration_line_chart(
                 stroke_width=4,
                 dx=5,
                 line_anchor="middle",
-                styles={"text_anchor": "start", "font_size": 11, "font_weight": 600, "stroke": "white"},
+                styles={
+                    "text_anchor": "start",
+                    "font_size": 11,
+                    "font_weight": 600,
+                    "stroke": "white",
+                },
             ),
         ]
     )
@@ -368,13 +378,16 @@ def overview_heatmap(
     height: int = 400,
     color_scheme: str = "rdylgn",
     show_text: bool = True,
+    x_domain: list[str] | None = None,
+    text_color: str = "white",
 ):
     """Cell + text heatmap for condition x N overview.
 
     Args:
         color_scheme: Observable Plot color scheme name (e.g. "rdylgn", "reds").
         show_text: Whether to overlay the fill value as text in each cell.
-            Disable when the color scheme makes white text illegible on light cells.
+        x_domain: Explicit x-axis domain (sorted n_turns values).
+        text_color: Color for text overlay (use "black" for light color schemes like "reds").
     """
     marks: list = [
         cell(
@@ -395,7 +408,7 @@ def overview_heatmap(
                 y=y,
                 text=fill_col,
                 filter_by=selection,
-                styles={"fill": "white", "font_weight": 600},
+                styles={"fill": text_color, "font_weight": 600},
             )
         )
 
@@ -409,4 +422,5 @@ def overview_heatmap(
         x_label="N (hardcoded turns)",
         y_label=None,
         margin_left=120,
+        x_domain=x_domain,
     )
