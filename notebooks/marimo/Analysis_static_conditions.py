@@ -1,14 +1,22 @@
 import marimo
 
 __generated_with = "0.20.2"
-app = marimo.App(width="medium")
+app = marimo.App(
+    width="medium",
+    layout_file="layouts/Analysis_static_conditions.slides.json",
+)
 
 
 @app.cell
 def _():
     import marimo as mo
-    # add imports here
-    return (mo,)
+    import altair as alt
+    import pandas as pd
+    import json
+    from pathlib import Path
+    from pyobsplot import Plot, js
+
+    return Path, Plot, alt, js, json, mo, pd
 
 
 @app.cell(hide_code=True)
@@ -41,10 +49,191 @@ def _(mo):
 
 
 @app.cell
-def _():
-    # todo
-    # for now, filter all the data to only include instruction_template='instruction_no_hint'
-    return
+def _(Path, alt, json, pd):
+    _root = Path(__file__).resolve().parent.parent.parent
+    _static = _root / "outputs" / "viz" / "static"
+
+    evals_all = pd.read_parquet(_static / "evals.parquet")
+    evals = evals_all[evals_all["instruction"] == "instruction_no_hint"].copy()
+    evals["n_turns_int"] = evals["n_turns"].astype(int)
+
+    combined_errors_all = pd.read_parquet(_static / "_combined_errors.parquet")
+    combined_errors = combined_errors_all[
+        combined_errors_all["instruction"] == "instruction_no_hint"
+    ].copy()
+    combined_errors["n_turns_int"] = combined_errors["n_turns"].astype(int)
+
+    evals_prediction_all = pd.read_parquet(_static / "evals_prediction.parquet")
+    evals_prediction = evals_prediction_all[
+        evals_prediction_all["instruction"] == "instruction_no_hint"
+    ].copy()
+    evals_prediction["n_turns_int"] = evals_prediction["n_turns"].astype(int)
+
+    with open(_root / "data" / "model_capability_scores.json") as _f:
+        _caps_raw = json.load(_f)
+
+    reasoning_models = {
+        "gemini-2.5-pro",
+        "gemini-3-pro-preview",
+        "gpt-5.2",
+        "kimi-k2.5",
+        "minimax-m2.5",
+    }
+
+    def _get_caps(model_name, caps_data):
+        mode = "true" if model_name in reasoning_models else "false"
+        scores = caps_data.get(mode, {}) or {}
+        return {
+            "model": model_name,
+            "intelligence_index": scores.get("intelligence_index"),
+            "mmlu_pro": scores.get("mmlu_pro"),
+            "gpqa": scores.get("gpqa"),
+        }
+
+    caps_df = pd.DataFrame([_get_caps(k, v) for k, v in _caps_raw.items()])
+    caps_df = caps_df.dropna(
+        how="all", subset=["intelligence_index", "mmlu_pro", "gpqa"]
+    )
+
+    n_values_sorted = sorted(evals["n_turns"].unique(), key=int)
+
+    def nudge_labels(
+        df, x_col, y_col, x_range, y_range, pad_x=0.02, pad_y=0.03, iters=50
+    ):
+        """Iterative repulsion to separate overlapping text labels."""
+        out = df.copy()
+        x_span = x_range[1] - x_range[0] or 1
+        y_span = y_range[1] - y_range[0] or 1
+        lx = ((out[x_col] - x_range[0]) / x_span).values.astype(float)
+        ly = ((out[y_col] - y_range[0]) / y_span).values.astype(float)
+        lx = lx + pad_x
+        n = len(lx)
+        for _ in range(iters):
+            for i in range(n):
+                for j in range(i + 1, n):
+                    dx = lx[i] - lx[j]
+                    dy = ly[i] - ly[j]
+                    dist = (dx**2 + dy**2) ** 0.5
+                    if dist < pad_y:
+                        force = (pad_y - dist) / 2
+                        if dist > 0:
+                            lx[i] += force * dx / dist * 0.3
+                            ly[i] += force * dy / dist
+                            lx[j] -= force * dx / dist * 0.3
+                            ly[j] -= force * dy / dist
+                        else:
+                            ly[i] += force
+                            ly[j] -= force
+        out["label_x"] = lx * x_span + x_range[0]
+        out["label_y"] = ly * y_span + y_range[0]
+        return out
+
+    BENCHMARKS = {
+        "intelligence_index": "Intelligence Index",
+        "mmlu_pro": "MMLU Pro",
+        "gpqa": "GPQA",
+    }
+    SHAPE_SCALE = alt.Scale(
+        domain=["non-reasoning", "reasoning"], range=["circle", "diamond"]
+    )
+
+    def prep_benchmark_data(df, y_col, caps_df, reasoning_models, nudge_labels):
+        """Prepare data for benchmark scatter plots."""
+        _wide = df.merge(caps_df, on="model", how="inner")
+        _wide["reasoning"] = (
+            _wide["model"]
+            .isin(reasoning_models)
+            .map({True: "reasoning", False: "non-reasoning"})
+        )
+        parts = []
+        for _col, _label in BENCHMARKS.items():
+            _part = (
+                _wide[["model", y_col, "reasoning", _col]].dropna(subset=[_col]).copy()
+            )
+            if len(_part) == 0:
+                continue
+            _part = _part.rename(columns={_col: "benchmark_value"})
+            _part["benchmark"] = _label
+            _xr = [
+                _part["benchmark_value"].min() * 0.95,
+                _part["benchmark_value"].max() * 1.05,
+            ]
+            _yr = [0, 1] if y_col in ["avg_if_rate", "prediction_rate"] else None
+            if _yr:
+                _part = nudge_labels(_part, "benchmark_value", y_col, _xr, _yr)
+            else:
+                _yr = [_part[y_col].min() - 5, _part[y_col].max() + 5]
+                _part = nudge_labels(_part, "benchmark_value", y_col, _xr, _yr)
+            parts.append(_part)
+        result = pd.concat(parts, ignore_index=True)
+        return result.where(pd.notnull(result), None)
+
+    def make_scatter_chart(df, y_col, y_title, title):
+        """Create a faceted scatter chart with labels and trendline."""
+        points = (
+            alt.Chart(df)
+            .mark_point(size=100, filled=True)
+            .encode(
+                x=alt.X(
+                    "benchmark_value:Q",
+                    title="Benchmark Score",
+                    scale=alt.Scale(zero=False),
+                ),
+                y=alt.Y(f"{y_col}:Q", title=y_title),
+                color=alt.Color("model:N", legend=None),
+                shape=alt.Shape("reasoning:N", scale=SHAPE_SCALE, title="Model type"),
+                tooltip=[
+                    "model",
+                    f"{y_col}:Q",
+                    "benchmark_value:Q",
+                    "benchmark:N",
+                    "reasoning:N",
+                ],
+            )
+        )
+        trendline = (
+            alt.Chart(df)
+            .transform_regression("benchmark_value", y_col)
+            .mark_line(color="gray", strokeDash=[4, 2])
+            .encode(x="benchmark_value:Q", y=f"{y_col}:Q")
+        )
+        leaders = (
+            alt.Chart(df)
+            .mark_rule(strokeWidth=0.5, color="#999")
+            .encode(
+                x="benchmark_value:Q", y=f"{y_col}:Q", x2="label_x:Q", y2="label_y:Q"
+            )
+        )
+        text = (
+            alt.Chart(df)
+            .mark_text(align="left", dx=3, fontSize=9)
+            .encode(x="label_x:Q", y="label_y:Q", text="model:N")
+        )
+        layers = points + trendline + leaders + text
+        if y_col == "mean_calibration_error":
+            rule = (
+                alt.Chart(pd.DataFrame({"y": [0]}))
+                .mark_rule(strokeDash=[4, 2], color="gray")
+                .encode(y="y:Q")
+            )
+            layers = layers + rule
+        return (
+            layers.facet(facet=alt.Facet("benchmark:N", title=None), columns=3)
+            .resolve_scale(x="independent")
+            .properties(title=title)
+        )
+
+    return (
+        caps_df,
+        combined_errors,
+        evals,
+        evals_all,
+        evals_prediction,
+        make_scatter_chart,
+        n_values_sorted,
+        prep_benchmark_data,
+        reasoning_models,
+    )
 
 
 @app.cell(hide_code=True)
@@ -55,31 +244,206 @@ def _(mo):
     - Plot A2 - avg IF rate vs capability. Compute average IF rate and make a scatterplot of (IF rate, intelligence_index). Color is model.
     - Plot A3 - horizontal bar chart with avg IF rate + error bars to show uncertainty. Error bars come from the stderr metric in the dataframe. Faceted by condition (col size 3 or 4), y shows models. x axis should be fixed from 0 to 1. Add dropdown to select which instruction_template to show
     - Plot A4: vertical colored stripes of IF rate for increasing N: similar to https://observablehq.com/@observablehq/plot-stacked-unit-chart. But here the data is sorted by N, not by the value of the data itself. The quantity to plot is again the mean IF rate across condition per model (models on the y axis). Each stacked unit is the IF rate for one N value per increasing N, with color showing the average IF rate.
+    - Plot A5: Plot the first N value (when N is sorted) where IF drops to THRESHOLD or less, against each of the capability values *3 scatterplots). THRESHOLD is set through another slider, not the same one as above.
     """)
     return
 
 
 @app.cell
-def _():
-    # plot a1
+def _(mo):
+    threshold_slider = mo.ui.slider(
+        start=0.5, stop=1.0, value=0.8, step=0.05, label="IF/PF Threshold"
+    )
+    threshold_slider
+    return (threshold_slider,)
+
+
+@app.cell
+def _(alt, evals, n_values_sorted, pd, threshold_slider):
+    # Plot A1: Stacked bar — N values classified as IF-dominant, PF-dominant, or Mixed
+    # TODO: turn this into a diverging bar plot: https://observablehq.com/@observablehq/plot-diverging-stacked-bar
+    _threshold = threshold_slider.value
+    _n_total = len(n_values_sorted)
+    _avg = evals.groupby(["model", "n_turns"])["score"].mean().reset_index()
+
+    _records = []
+    for _model in _avg["model"].unique():
+        _model_df = _avg[_avg["model"] == _model]
+        _n_if = (_model_df["score"] >= _threshold).sum()
+        _n_pf = ((1 - _model_df["score"]) >= _threshold).sum()
+        _n_mixed = len(_model_df) - _n_if - _n_pf
+        _records.append(
+            {"model": _model, "category": "IF-dominant", "count": int(_n_if)}
+        )
+        _records.append(
+            {"model": _model, "category": "PF-dominant", "count": int(_n_pf)}
+        )
+        _records.append({"model": _model, "category": "Mixed", "count": int(_n_mixed)})
+
+    _bar_df = pd.DataFrame(_records)
+    _color_scale = alt.Scale(
+        domain=["IF-dominant", "PF-dominant", "Mixed"],
+        range=["#2ca02c", "#d62728", "#999999"],
+    )
+
+    (
+        alt.Chart(_bar_df)
+        .mark_bar()
+        .encode(
+            x=alt.X("model:N", sort="-y", title="Model"),
+            y=alt.Y(
+                "count:Q", title=f"Number of N values (out of {_n_total})", stack="zero"
+            ),
+            color=alt.Color("category:N", scale=_color_scale, title="Category"),
+            tooltip=["model", "category", "count"],
+        )
+        .properties(
+            width=600,
+            height=350,
+            title=f"N-value classification (threshold={_threshold})",
+        )
+    )
+    return
+
+
+@app.cell
+def _(
+    caps_df,
+    evals,
+    make_scatter_chart,
+    prep_benchmark_data,
+    reasoning_models,
+):
+    # Plot A2: Scatter — avg IF rate vs capability (faceted by benchmark)
+    _avg_if = evals.groupby("model")["score"].mean().reset_index(name="avg_if_rate")
+    _a2_df = prep_benchmark_data(
+        _avg_if, "avg_if_rate", caps_df, reasoning_models, lambda *a: a[0]
+    )
+    make_scatter_chart(
+        _a2_df, "avg_if_rate", "Avg IF Rate", "Avg IF Rate vs Model Capability"
+    )
+    return
+
+
+@app.cell
+def _(caps_df):
+    caps_df
+    return
+
+
+@app.cell
+def _(mo):
+    instruction_dropdown = mo.ui.dropdown(
+        options=["instruction_no_hint", "instruction_hint"],
+        value="instruction_no_hint",
+        label="Instruction template",
+    )
+    instruction_dropdown
+    return (instruction_dropdown,)
+
+
+@app.cell
+def _(alt, evals_all, instruction_dropdown):
+    # Plot A3: Horizontal bar + error bars, faceted by condition
+    _sel = instruction_dropdown.value
+    _a3_data = evals_all[evals_all["instruction"] == _sel].copy()
+    _a3_agg = (
+        _a3_data.groupby(["model", "condition"])
+        .agg(mean_score=("score", "mean"), mean_stderr=("score_stderr", "mean"))
+        .reset_index()
+    )
+    _a3_agg["ci_lo"] = (_a3_agg["mean_score"] - _a3_agg["mean_stderr"]).clip(lower=0)
+    _a3_agg["ci_hi"] = (_a3_agg["mean_score"] + _a3_agg["mean_stderr"]).clip(upper=1)
+
+    _bars = (
+        alt.Chart(_a3_agg)
+        .mark_bar()
+        .encode(
+            x=alt.X("mean_score:Q", title="IF Rate", scale=alt.Scale(domain=[0, 1])),
+            y=alt.Y("model:N", sort="-x", title=None),
+            color=alt.Color("model:N", legend=None),
+            tooltip=["model", "condition", "mean_score:Q", "mean_stderr:Q"],
+        )
+    )
+    _error = (
+        alt.Chart(_a3_agg)
+        .mark_errorbar()
+        .encode(
+            x=alt.X("ci_lo:Q", title=""), x2="ci_hi:Q", y=alt.Y("model:N", sort="-x")
+        )
+    )
+    (
+        (_bars + _error)
+        .facet(facet=alt.Facet("condition:N", title="Condition"), columns=2)
+        .resolve_scale(y="independent")
+        .properties(title=f"IF Rate by Model and Condition ({_sel})")
+    )
+    return
+
+
+@app.cell
+def _(Plot, evals, js, mo):
+    # Plot A4: Stacked unit chart — colored stripes of IF rate by N
+    _a4_agg = (
+        evals.groupby(["model", "n_turns", "n_turns_int"])["score"]
+        .mean()
+        .reset_index(name="behavioral_score")
+        .sort_values(["model", "n_turns_int"])
+    )
+    _a4_records = _a4_agg.to_dict("records")
+
+    mo.ui.anywidget(
+        Plot.plot(
+            {
+                "x": {"axis": None},
+                "y": {"label": "Model"},
+                "color": {
+                    "type": "linear",
+                    "scheme": "RdYlGn",
+                    "domain": [0, 1],
+                    "label": "IF Rate",
+                    "legend": True,
+                },
+                "marks": [
+                    Plot.barX(
+                        _a4_records,
+                        {
+                            "x": 1,
+                            "y": "model",
+                            "fill": "behavioral_score",
+                            "sort": {"y": "-x", "reduce": "sum"},
+                            "order": "n_turns_int",
+                            "title": js(
+                                "d => `N=${d.n_turns}, IF=${d.behavioral_score.toFixed(2)}`"
+                            ),
+                        },
+                    ),
+                    Plot.text(
+                        _a4_records,
+                        Plot.stackX(
+                            {
+                                "x": 1,
+                                "y": "model",
+                                "order": "n_turns_int",
+                                "text": "n_turns",
+                                "fill": "white",
+                                "fontSize": 8,
+                            }
+                        ),
+                    ),
+                ],
+                "width": 700,
+                "height": 450,
+                "marginLeft": 160,
+            }
+        )
+    )
     return
 
 
 @app.cell
 def _():
-    # plot A2
-    return
-
-
-@app.cell
-def _():
-    # plot A3
-    return
-
-
-@app.cell
-def _():
-    # Plot A4
+    #Todo: Plot A5
     return
 
 
@@ -97,26 +461,198 @@ def _(mo):
 
 
 @app.cell
-def _():
-    # plot B1
+def _(Plot, combined_errors, js, mo):
+    # Plot B1: Arrow plot — mean actual vs predicted IF rate per model
+    _b1_agg = (
+        combined_errors.groupby("model")
+        .agg(
+            actual=("behavioral_score", "mean"),
+            predicted=("prediction_predicted_score", "mean"),
+        )
+        .reset_index()
+    )
+    _b1_agg["direction"] = _b1_agg.apply(
+        lambda r: "over-predicts" if r["predicted"] > r["actual"] else "under-predicts",
+        axis=1,
+    )
+    _b1_records = _b1_agg.to_dict("records")
+
+    mo.ui.anywidget(
+        Plot.plot(
+            {
+                "x": {"domain": [0, 1], "label": "IF Rate"},
+                "y": {"label": None},
+                "color": {
+                    "domain": ["over-predicts", "under-predicts"],
+                    "range": ["#e15759", "#4e79a7"],
+                    "legend": True,
+                },
+                "marks": [
+                    Plot.arrow(
+                        _b1_records,
+                        {
+                            "x1": "actual",
+                            "x2": "predicted",
+                            "y": "model",
+                            "stroke": "direction",
+                            "strokeWidth": 2,
+                            "sort": {"y": "-x1"},
+                        },
+                    ),
+                    Plot.dot(
+                        _b1_records,
+                        {
+                            "x": "actual",
+                            "y": "model",
+                            "fill": "black",
+                            "r": 3,
+                            "title": js("d => `Actual: ${d.actual.toFixed(3)}`"),
+                        },
+                    ),
+                    Plot.dot(
+                        _b1_records,
+                        {
+                            "x": "predicted",
+                            "y": "model",
+                            "fill": "direction",
+                            "symbol": "diamond",
+                            "r": 4,
+                            "title": js("d => `Predicted: ${d.predicted.toFixed(3)}`"),
+                        },
+                    ),
+                    Plot.ruleX([0.5], {"stroke": "#ccc", "strokeDasharray": "4 2"}),
+                ],
+                "width": 600,
+                "height": 400,
+                "marginLeft": 160,
+                "title": "Mean Calibration: Actual vs Predicted IF Rate",
+            }
+        )
+    )
     return
 
 
 @app.cell
-def _():
-    # plot B2
+def _(
+    caps_df,
+    combined_errors,
+    make_scatter_chart,
+    prep_benchmark_data,
+    reasoning_models,
+):
+    # Plot B2: Scatter — mean calibration error vs capability (faceted by benchmark)
+    _b2_agg = (
+        combined_errors.groupby("model")["calibration_error_pct"]
+        .mean()
+        .reset_index(name="mean_calibration_error")
+    )
+    _b2_df = prep_benchmark_data(
+        _b2_agg, "mean_calibration_error", caps_df, reasoning_models, lambda *a: a[0]
+    )
+    make_scatter_chart(
+        _b2_df,
+        "mean_calibration_error",
+        "Mean Calibration Error (%)",
+        "Calibration Error vs Model Capability",
+    )
     return
 
 
 @app.cell
-def _():
-    # plot B3
+def _(Plot, combined_errors, js, mo):
+    # Plot B3: Trellis arrows — actual vs predicted by condition (faceted)
+    _b3_agg = (
+        combined_errors.groupby(["model", "condition"])
+        .agg(
+            actual=("behavioral_score", "mean"),
+            predicted=("prediction_predicted_score", "mean"),
+        )
+        .reset_index()
+    )
+    _b3_agg["direction"] = _b3_agg.apply(
+        lambda r: "over-predicts" if r["predicted"] > r["actual"] else "under-predicts",
+        axis=1,
+    )
+    _b3_records = _b3_agg.to_dict("records")
+
+    mo.ui.anywidget(
+        Plot.plot(
+            {
+                "x": {"domain": [0, 1], "label": "IF Rate"},
+                "y": {"label": None},
+                "fy": {"label": None},
+                "color": {
+                    "domain": ["over-predicts", "under-predicts"],
+                    "range": ["#e15759", "#4e79a7"],
+                    "legend": True,
+                },
+                "marks": [
+                    Plot.arrow(
+                        _b3_records,
+                        {
+                            "x1": "actual",
+                            "x2": "predicted",
+                            "y": "model",
+                            "fy": "condition",
+                            "stroke": "direction",
+                            "strokeWidth": 1.5,
+                            "sort": {"y": "-x1"},
+                        },
+                    ),
+                    Plot.dot(
+                        _b3_records,
+                        {
+                            "x": "actual",
+                            "y": "model",
+                            "fy": "condition",
+                            "fill": "black",
+                            "r": 2.5,
+                            "title": js("d => `Actual: ${d.actual.toFixed(3)}`"),
+                        },
+                    ),
+                    Plot.dot(
+                        _b3_records,
+                        {
+                            "x": "predicted",
+                            "y": "model",
+                            "fy": "condition",
+                            "fill": "direction",
+                            "symbol": "diamond",
+                            "r": 3,
+                            "title": js("d => `Predicted: ${d.predicted.toFixed(3)}`"),
+                        },
+                    ),
+                ],
+                "width": 600,
+                "height": 900,
+                "marginLeft": 160,
+                "title": "Calibration by Condition: Actual vs Predicted IF Rate",
+            }
+        )
+    )
     return
 
 
 @app.cell
-def _():
-    # plot B4
+def _(alt, combined_errors, pd):
+    # Plot B4: Box plot — distribution of calibration error per model
+    _rule_b4 = (
+        alt.Chart(pd.DataFrame({"x": [0]}))
+        .mark_rule(strokeDash=[4, 2], color="gray")
+        .encode(x="x:Q")
+    )
+    _box_b4 = (
+        alt.Chart(combined_errors)
+        .mark_boxplot(extent=1.5)
+        .encode(
+            x=alt.X("calibration_error_pct:Q", title="Calibration Error (%)"),
+            y=alt.Y("model:N", sort="-x", title=None),
+            color=alt.Color("model:N", legend=None),
+        )
+    )
+    (_box_b4 + _rule_b4).properties(
+        width=500, height=400, title="Distribution of Calibration Error by Model"
+    )
     return
 
 
@@ -130,8 +666,28 @@ def _(mo):
 
 
 @app.cell
-def _():
-    # Plot C1
+def _(
+    caps_df,
+    evals_prediction,
+    make_scatter_chart,
+    prep_benchmark_data,
+    reasoning_models,
+):
+    # Plot C1: Scatter — avg prediction of IF rate vs capability (faceted by benchmark)
+    _c1_agg = (
+        evals_prediction.groupby("model")["score_prediction_instruction"]
+        .mean()
+        .reset_index(name="prediction_rate")
+    )
+    _c1_df = prep_benchmark_data(
+        _c1_agg, "prediction_rate", caps_df, reasoning_models, lambda *a: a[0]
+    )
+    make_scatter_chart(
+        _c1_df,
+        "prediction_rate",
+        "Avg 'Predicts IF' Rate",
+        "Prediction of IF Rate vs Model Capability",
+    )
     return
 
 
@@ -139,8 +695,14 @@ def _():
 def _(mo):
     mo.md(r"""
     ## Effect of hint
-    Spec coming soon
+    - Plot D1: radar plot with non-hint IF rate overlapped with IF rate for each model: https://observablehq.com/@observablehq/plot-radar-chart
     """)
+    return
+
+
+@app.cell
+def _():
+    # todo Plot D1
     return
 
 
@@ -148,8 +710,14 @@ def _(mo):
 def _(mo):
     mo.md(r"""
     ## Effect of prediction
-    Spec coming soon
+    - Plot D2: radar plot with IF rate without prediction overlapped with IF rate AFTER prediction for each model: https://observablehq.com/@observablehq/plot-radar-chart
     """)
+    return
+
+
+@app.cell
+def _():
+    # todo Plot D2
     return
 
 
@@ -157,8 +725,14 @@ def _(mo):
 def _(mo):
     mo.md(r"""
     ## Effect of aligned/misaligned
-    Spec coming soon
+    - Plot D3: radar plot with IF rate for aligned conditions overlapped with IF rate of unaligned conditions for each model, but faceted by specific condition couple (the cats one and the earth round/flat one): https://observablehq.com/@observablehq/plot-radar-chart https://observablehq.com/@observablehq/plot-radar-chart-faceted
     """)
+    return
+
+
+@app.cell
+def _():
+    # todo Plot D3
     return
 
 
