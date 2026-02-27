@@ -12,8 +12,32 @@ def _():
     import json
     from pathlib import Path
     from pyobsplot import Plot, js
+    from src.plotting_utils import (
+        BENCHMARKS,
+        SHAPE_SCALE,
+        nudge_labels,
+        prep_benchmark_data,
+        make_scatter_chart,
+        make_radar_chart,
+        LIKERT_OFFSET_JS,
+        CATEGORY_ORDER,
+        CATEGORY_COLORS,
+    )
 
-    return Path, Plot, alt, js, json, mo, pd
+    return (
+        CATEGORY_COLORS,
+        CATEGORY_ORDER,
+        LIKERT_OFFSET_JS,
+        Path,
+        Plot,
+        alt,
+        js,
+        json,
+        make_scatter_chart,
+        mo,
+        pd,
+        prep_benchmark_data,
+    )
 
 
 @app.cell(hide_code=True)
@@ -46,7 +70,7 @@ def _(mo):
 
 
 @app.cell
-def _(Path, alt, json, pd):
+def _(Path, json, pd):
     _root = Path(__file__).resolve().parent.parent.parent
     _dynamic = _root / "outputs" / "viz" / "dynamic"
 
@@ -79,7 +103,7 @@ def _(Path, alt, json, pd):
             "intelligence_index": scores.get("intelligence_index"),
             "mmlu_pro": scores.get("mmlu_pro"),
             "gpqa": scores.get("gpqa"),
-            "ifbench":  scores.get("ifbench"),
+            "ifbench": scores.get("ifbench"),
         }
 
     caps_df = pd.DataFrame([_get_caps(k, v) for k, v in _caps_raw.items()])
@@ -88,142 +112,12 @@ def _(Path, alt, json, pd):
     )
 
     n_values_sorted = sorted(evals["n_turns"].unique(), key=int)
-
-    def nudge_labels(
-        df, x_col, y_col, x_range, y_range, pad_x=0.02, pad_y=0.03, iters=50
-    ):
-        """Iterative repulsion to separate overlapping text labels."""
-        out = df.copy()
-        x_span = x_range[1] - x_range[0] or 1
-        y_span = y_range[1] - y_range[0] or 1
-        lx = ((out[x_col] - x_range[0]) / x_span).values.astype(float)
-        ly = ((out[y_col] - y_range[0]) / y_span).values.astype(float)
-        lx = lx + pad_x
-        n = len(lx)
-        for _ in range(iters):
-            for i in range(n):
-                for j in range(i + 1, n):
-                    dx = lx[i] - lx[j]
-                    dy = ly[i] - ly[j]
-                    dist = (dx**2 + dy**2) ** 0.5
-                    if dist < pad_y:
-                        force = (pad_y - dist) / 2
-                        if dist > 0:
-                            lx[i] += force * dx / dist * 0.3
-                            ly[i] += force * dy / dist
-                            lx[j] -= force * dx / dist * 0.3
-                            ly[j] -= force * dy / dist
-                        else:
-                            ly[i] += force
-                            ly[j] -= force
-        out["label_x"] = lx * x_span + x_range[0]
-        out["label_y"] = ly * y_span + y_range[0]
-        return out
-
-    BENCHMARKS = {
-        "intelligence_index": "Intelligence Index",
-        "mmlu_pro": "MMLU Pro",
-        "gpqa": "GPQA",
-        "ifbench": "IFBench"
-    }
-    SHAPE_SCALE = alt.Scale(
-        domain=["non-reasoning", "reasoning"], range=["circle", "diamond"]
-    )
-
-    def prep_benchmark_data(df, y_col, caps_df, reasoning_models, nudge_labels):
-        """Prepare data for benchmark scatter plots."""
-        _wide = df.merge(caps_df, on="model", how="inner")
-        _wide["reasoning"] = (
-            _wide["model"]
-            .isin(reasoning_models)
-            .map({True: "reasoning", False: "non-reasoning"})
-        )
-        parts = []
-        for _col, _label in BENCHMARKS.items():
-            _part = (
-                _wide[["model", y_col, "reasoning", _col]].dropna(subset=[_col]).copy()
-            )
-            if len(_part) == 0:
-                continue
-            _part = _part.rename(columns={_col: "benchmark_value"})
-            _part["benchmark"] = _label
-            _xr = [
-                _part["benchmark_value"].min() * 0.95,
-                _part["benchmark_value"].max() * 1.05,
-            ]
-            _yr = [0, 1] if y_col in ["avg_if_rate", "prediction_rate"] else None
-            if _yr:
-                _part = nudge_labels(_part, "benchmark_value", y_col, _xr, _yr)
-            else:
-                _yr = [_part[y_col].min() - 5, _part[y_col].max() + 5]
-                _part = nudge_labels(_part, "benchmark_value", y_col, _xr, _yr)
-            parts.append(_part)
-        result = pd.concat(parts, ignore_index=True)
-        return result.where(pd.notnull(result), None)
-
-    def make_scatter_chart(df, y_col, y_title, title):
-        """Create a faceted scatter chart with labels and trendline."""
-        points = (
-            alt.Chart(df)
-            .mark_point(size=100, filled=True)
-            .encode(
-                x=alt.X(
-                    "benchmark_value:Q",
-                    title="Benchmark Score",
-                    scale=alt.Scale(zero=False),
-                ),
-                y=alt.Y(f"{y_col}:Q", title=y_title),
-                color=alt.Color("model:N", legend=None),
-                shape=alt.Shape("reasoning:N", scale=SHAPE_SCALE, title="Model type"),
-                tooltip=[
-                    "model",
-                    f"{y_col}:Q",
-                    "benchmark_value:Q",
-                    "benchmark:N",
-                    "reasoning:N",
-                ],
-            )
-        )
-        trendline = (
-            alt.Chart(df)
-            .transform_regression("benchmark_value", y_col)
-            .mark_line(color="gray", strokeDash=[4, 2])
-            .encode(x="benchmark_value:Q", y=f"{y_col}:Q")
-        )
-        leaders = (
-            alt.Chart(df)
-            .mark_rule(strokeWidth=0.5, color="#999")
-            .encode(
-                x="benchmark_value:Q", y=f"{y_col}:Q", x2="label_x:Q", y2="label_y:Q"
-            )
-        )
-        text = (
-            alt.Chart(df)
-            .mark_text(align="left", dx=3, fontSize=9)
-            .encode(x="label_x:Q", y="label_y:Q", text="model:N")
-        )
-        layers = points + trendline + leaders + text
-        if y_col == "mean_calibration_error":
-            rule = (
-                alt.Chart(pd.DataFrame({"y": [0]}))
-                .mark_rule(strokeDash=[4, 2], color="gray")
-                .encode(y="y:Q")
-            )
-            layers = layers + rule
-        return (
-            layers.facet(facet=alt.Facet("benchmark:N", title=None), columns=2)
-            .resolve_scale(x="independent")
-            .properties(title=title)
-        )
-
     return (
         caps_df,
         combined_errors,
         evals,
         evals_all,
-        make_scatter_chart,
         n_values_sorted,
-        prep_benchmark_data,
         reasoning_models,
     )
 
@@ -250,49 +144,70 @@ def _(mo):
 
 
 @app.cell
-def _(alt, evals, n_values_sorted, pd, threshold_slider):
-    # Plot A1: Stacked bar — N values classified as IF-dominant, PF-dominant, or Mixed
-    # TODO: turn this into a diverging bar plot: https://observablehq.com/@observablehq/plot-diverging-stacked-bar
+def _(
+    CATEGORY_COLORS,
+    CATEGORY_ORDER,
+    LIKERT_OFFSET_JS,
+    Plot,
+    evals,
+    js,
+    mo,
+    n_values_sorted,
+    threshold_slider,
+):
+    # Plot A1: Diverging stacked bar — N values classified as IF/PF/Mixed
     _threshold = threshold_slider.value
-    _n_total = len(n_values_sorted)
     _avg = evals.groupby(["model", "n_turns"])["score"].mean().reset_index()
 
-    _records = []
+    # Expand each N value into a unit row with its classification
+    _unit_records = []
     for _model in _avg["model"].unique():
-        _model_df = _avg[_avg["model"] == _model]
-        _n_if = (_model_df["score"] >= _threshold).sum()
-        _n_pf = ((1 - _model_df["score"]) >= _threshold).sum()
-        _n_mixed = len(_model_df) - _n_if - _n_pf
-        _records.append(
-            {"model": _model, "category": "IF-dominant", "count": int(_n_if)}
-        )
-        _records.append(
-            {"model": _model, "category": "PF-dominant", "count": int(_n_pf)}
-        )
-        _records.append({"model": _model, "category": "Mixed", "count": int(_n_mixed)})
+        _model_df = _avg[_avg["model"] == _model].sort_values("n_turns", key=lambda s: s.astype(int))
+        for _, _r in _model_df.iterrows():
+            _score = _r["score"]
+            if _score >= _threshold:
+                _cat = "IF-dominant"
+            elif (1 - _score) >= _threshold:
+                _cat = "PF-dominant"
+            else:
+                _cat = "Mixed"
+            _unit_records.append({"model": _r["model"], "category": _cat})
 
-    _bar_df = pd.DataFrame(_records)
-    _color_scale = alt.Scale(
-        domain=["IF-dominant", "PF-dominant", "Mixed"],
-        range=["#2ca02c", "#d62728", "#999999"],
-    )
+    _n_total = len(n_values_sorted)
 
-    (
-        alt.Chart(_bar_df)
-        .mark_bar()
-        .encode(
-            x=alt.X("model:N", sort="-y", title="Model"),
-            y=alt.Y(
-                "count:Q", title=f"Number of N values (out of {_n_total})", stack="zero"
-            ),
-            color=alt.Color("category:N", scale=_color_scale, title="Category"),
-            tooltip=["model", "category", "count"],
-        )
-        .properties(
-            width=600,
-            height=350,
-            title=f"N-value classification (threshold={_threshold})",
-        )
+    mo.ui.anywidget(
+        Plot.plot({
+            "x": {
+                "label": f"← PF-dominant · Number of N values (out of {_n_total}) · IF-dominant →",
+                "tickFormat": js("Math.abs"),
+            },
+            "y": {"label": None},
+            "color": {
+                "domain": CATEGORY_ORDER,
+                "range": CATEGORY_COLORS,
+                "legend": True,
+            },
+            "marks": [
+                Plot.barX(
+                    _unit_records,
+                    Plot.groupY(
+                        {"x": "count"},
+                        {
+                            "y": "model",
+                            "fill": "category",
+                            "order": CATEGORY_ORDER,
+                            "offset": js(LIKERT_OFFSET_JS),
+                            "sort": {"y": "-x"},
+                        },
+                    ),
+                ),
+                Plot.ruleX([0]),
+            ],
+            "width": 700,
+            "height": 450,
+            "marginLeft": 160,
+            "title": f"N-value classification (threshold={_threshold})",
+        })
     )
     return
 
@@ -508,7 +423,7 @@ def _(Plot, combined_errors, js, mo):
                     Plot.ruleX([0.5], {"stroke": "#ccc", "strokeDasharray": "4 2"}),
                 ],
                 "width": 600,
-                "height": 400,
+                "height": 200,
                 "marginLeft": 160,
                 "title": "Mean Calibration: Actual vs Predicted IF Rate",
             }
@@ -609,8 +524,9 @@ def _(Plot, combined_errors, js, mo):
                     ),
                 ],
                 "width": 600,
-                "height": 900,
+                "height": 800,
                 "marginLeft": 160,
+                "marginRight": 160,
                 "title": "Calibration by Condition: Actual vs Predicted IF Rate",
             }
         )
@@ -626,8 +542,9 @@ def _(alt, combined_errors, pd):
         .mark_rule(strokeDash=[4, 2], color="gray")
         .encode(x="x:Q")
     )
+    _b4_data = combined_errors.dropna(subset=["calibration_error_pct"])
     _box_b4 = (
-        alt.Chart(combined_errors)
+        alt.Chart(_b4_data)
         .mark_boxplot(extent=1.5)
         .encode(
             x=alt.X("calibration_error_pct:Q", title="Calibration Error (%)"),

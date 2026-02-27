@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "accelerate>=1.12.0",
     "altair>=6.0.0",
+    "auto-mix-prep>=0.2.0",
     "datasets>=4.4.1",
     "hf-xet>=1.2.0",
     "huggingface-hub>=0.36.0",
@@ -25,6 +26,7 @@ dependencies = [
     "pandas>=2.3.3",
     "papermill>=2.6.0",
     "plotnine>=0.15.3",
+    "ply>=3.11",
     "polars>=1.37.1",
     "pyarrow>=23.0.0",
     "pyobsplot>=0.5.4",
@@ -42,6 +44,9 @@ dependencies = [
     "typer>=0.20.0",
     "vl-convert-python>=1.9.0.post1",
 ]
+
+[tool.marimo.runtime]
+pythonpath = ["."]
 
 [[tool.uv.index]]
 name = "pytorch-cu128"

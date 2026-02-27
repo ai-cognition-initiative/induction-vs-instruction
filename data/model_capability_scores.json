@@ -9,6 +9,16 @@
       "gpqa": 0.864,
       "livecodebench": 0.894,
       "ifbench": 0.652
+    },
+    "false": {
+      "api_name": "GPT-5.2 (Non-reasoning)",
+      "intelligence_index": 33.6,
+      "coding_index": 34.7,
+      "math_index": 51,
+      "mmlu_pro": 0.814,
+      "gpqa": 0.712,
+      "livecodebench": 0.669,
+      "ifbench": 0.474
     }
   },
   "llama-3.3-70b-instruct": {
