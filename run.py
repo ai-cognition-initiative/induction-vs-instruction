@@ -21,6 +21,15 @@ Examples:
 For OpenRouter, disable reasoning in models.yaml:
     reasoning_enabled: false
 
+For custom OpenAI-compatible providers (e.g., Nebius, Hyperbolic, HF Inference),
+use provider and url fields in models.yaml:
+    provider: nebius
+    url: https://api.studio.nebius.com/v1
+    models:
+      - meta-llama/Llama-3.3-70B-Instruct
+
+Set the API key via environment variable: {PROVIDER}_API_KEY (e.g., NEBIUS_API_KEY)
+
 For single condition/N runs, use inspect eval directly:
     uv run inspect eval src/tasks/behavioral.py \
         -T condition=neutral -T n_turns=5 \
@@ -47,27 +56,54 @@ PROTOCOL_MAP = {
 
 
 def load_models_from_yaml(path: str) -> tuple[list[str], dict]:
+    import os
+
     with open(path) as f:
         models_config = yaml.safe_load(f)
 
     provider = models_config.get("provider", "openrouter")
+    url = models_config.get("url")
     models = []
-    for model_name in models_config.get("models", []):
-        full_model = f"{provider}/{model_name}"
-        models.append(full_model)
+
+    if provider == "openrouter":
+        for model_name in models_config.get("models", []):
+            full_model = f"{provider}/{model_name}"
+            models.append(full_model)
+    else:
+        if not url:
+            raise ValueError(
+                f"'url' field is required when provider is not 'openrouter' "
+                f"(got provider='{provider}')"
+            )
+        for model_name in models_config.get("models", []):
+            full_model = f"openai-api/{provider}/{model_name}"
+            models.append(full_model)
 
     model_args = {}
-    provider_args = models_config.get("provider_args", {})
-    if provider_args:
-        model_args["provider"] = provider_args
 
-    models_arg = models_config.get("models")
-    if models_arg:
-        model_args["models"] = models_arg
+    if provider != "openrouter":
+        model_args["base_url"] = url
 
-    transforms = models_config.get("transforms")
-    if transforms:
-        model_args["transforms"] = transforms
+        api_key_env = f"{provider.upper().replace('-', '_')}_API_KEY"
+        api_key = os.environ.get(api_key_env)
+        if not api_key:
+            raise ValueError(
+                f"API key not found: set {api_key_env} environment variable"
+            )
+        model_args["api_key"] = api_key
+        model_args["responses_api"] = False
+    else:
+        provider_args = models_config.get("provider_args", {})
+        if provider_args:
+            model_args["provider"] = provider_args
+
+        models_arg = models_config.get("models")
+        if models_arg:
+            model_args["models"] = models_arg
+
+        transforms = models_config.get("transforms")
+        if transforms:
+            model_args["transforms"] = transforms
 
     reasoning_enabled = models_config.get("reasoning_enabled")
     if reasoning_enabled is not None:
