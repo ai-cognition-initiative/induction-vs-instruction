@@ -57,7 +57,8 @@
       "Bash(QUARTO_PYTHON=\".venv/Scripts/python.exe\" quarto render:*)",
       "Bash(cd:*)",
       "Bash(git commit:*)",
-      "Bash(uv:*)"
+      "Bash(uv:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

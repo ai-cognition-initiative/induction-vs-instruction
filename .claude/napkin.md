@@ -128,6 +128,13 @@
 - `r py$expr` inline code doesn't work in Python Quarto notebooks — remove or hardcode
 - ALIGNMENT_AXIS_PAIRS = {"value", "factual", "preference"} in prepare_viz_data.py — only these condition pairs have a true aligned/misaligned axis. Other pairs (token, language, persona, style) are direction-flipped without alignment semantics. Use this to filter paired bullet graphs.
 
+## Sample-Level Data Access
+- `samples_df(logs='logs/protocol1', columns=SampleSummary)` gives per-trial data (48,240 rows)
+- `metadata_trial_index` is the question seed (0-24 for static, deterministic via `random.Random(trial_index)`)
+- Model name is NOT in samples_df — extract from `log` column path: `protocol1/<model>/...`
+- Score columns: `score_pattern_match`, `score_set_membership_scorer` — coalesce to single `score`
+- `evals_df()` with `EvalModel+EvalTask+EvalScores` crashes on current inspect-ai version (Index attribute error) — use log path parsing instead
+
 ## Domain Notes
 - `prepare_viz_data.py` distinguishes behavioral vs prediction logs via `task_name` column ("behavioral_baseline" vs "self_prediction") — NOT by score column names. Also filters to the relevant task rows so mixed folders work correctly.
 - `reasoning_tokens` annotation: `samples_df(logs, columns=SampleSummary)` exposes `model_usage` per sample. Group by `eval_id` and sum. Join to `evals_df` result on `eval_id` (auto-included in both). `model_usage` may be a `ModelUsage` object or dict — handle both. Filter with `max_reasoning_tokens` param (None=no filter, 0=strict, 1000=allow noise-level).
