@@ -66,7 +66,7 @@ def _(Path, pd):
         _samples["score"] = _samples["score"].fillna(_mapped)
     _samples["score"] = _samples["score"].astype(float)
 
-    _samples["model"] = _samples["model"].astype(object).str.split("/").str[-1]
+    _samples["model"] = _samples["model"].astype(str).str.split("/").str[-1]
 
     _samples = _samples.rename(
         columns={
