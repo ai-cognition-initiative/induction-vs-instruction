@@ -11,3 +11,5 @@ outputs/
 *.js
 *.woff
 configs/
+*pyrightconfig.json
+.vscode/
