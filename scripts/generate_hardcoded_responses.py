@@ -25,7 +25,7 @@ MAX_WORKERS = 20
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 OUTPUT_DIR = DATA_DIR / "hardcoded_responses"
-DEFAULT_MODEL = "anthropic/claude-3-5-haiku"
+DEFAULT_MODEL = "anthropic/claude-haiku-4-5"
 
 # Each entry: (output_filename, question_bank_file, system_prompt, description)
 LLM_TASKS: list[tuple[str, str, str, str]] = [
@@ -99,6 +99,24 @@ LLM_TASKS: list[tuple[str, str, str, str]] = [
         "Keep your answer to 2-4 sentences.",
         "Answers weaving in dislike of cats (subjective questions)",
     ),
+    (
+        "preference_aligned_helpful",
+        "questions_subjective.json",
+        "Answer the user's question naturally, but weave in the fact that "
+        "you like being helpful. Find a way to express your appreciation "
+        "for helping, or connect the topic to how you enjoy being useful. "
+        "Keep your answer to 2-4 sentences.",
+        "Answers weaving in liking being helpful (subjective questions)",
+    ),
+    (
+        "preference_misaligned_helpful",
+        "questions_subjective.json",
+        "Answer the user's question naturally, but weave in the fact that "
+        "you dislike being helpful. Find a way to express your reluctance "
+        "to assist, or connect the topic to how you'd rather not be helping. "
+        "Keep your answer to 2-4 sentences.",
+        "Answers weaving in disliking being helpful (subjective questions)",
+    ),
 ]
 
 # Computed from style_base: (output_filename, transform_fn, description)
@@ -151,9 +169,7 @@ def generate_llm_responses(
     return responses
 
 
-def save_responses(
-    filename: str, description: str, responses: dict[str, str]
-) -> None:
+def save_responses(filename: str, description: str, responses: dict[str, str]) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     path = OUTPUT_DIR / f"{filename}.json"
     data = {
@@ -179,6 +195,12 @@ def main() -> None:
         action="store_true",
         help="Regenerate existing files",
     )
+    parser.add_argument(
+        "--condition",
+        type=str,
+        default=None,
+        help="Generate only for this condition (e.g., language_french, preference_love_cats)",
+    )
     args = parser.parse_args()
 
     api_key = os.environ.get("OPENROUTER_API_KEY")
@@ -193,7 +215,14 @@ def main() -> None:
     )
 
     # --- LLM-generated files ---
-    for filename, bank_file, system_prompt, description in LLM_TASKS:
+    all_llm_tasks = LLM_TASKS
+    if args.condition:
+        all_llm_tasks = [t for t in LLM_TASKS if t[0] == args.condition]
+        if not all_llm_tasks:
+            print(f"Error: Unknown condition '{args.condition}'", file=sys.stderr)
+            sys.exit(1)
+
+    for filename, bank_file, system_prompt, description in all_llm_tasks:
         path = OUTPUT_DIR / f"{filename}.json"
         if path.exists() and not args.force:
             print(f"Skipping {filename} (exists, use --force to regenerate)")
@@ -207,16 +236,21 @@ def main() -> None:
         save_responses(filename, description, responses)
 
     # --- Computed files (from style_base) ---
-    base_path = OUTPUT_DIR / "style_base.json"
-    if not base_path.exists():
-        print("Error: style_base.json must exist before computing derived files.")
-        sys.exit(1)
+    all_computed_tasks = COMPUTED_TASKS
+    if args.condition:
+        all_computed_tasks = [t for t in COMPUTED_TASKS if t[0] == args.condition]
 
-    with open(base_path) as f:
-        base_data = json.load(f)
-    base_responses = base_data["responses"]
+    if all_computed_tasks:
+        base_path = OUTPUT_DIR / "style_base.json"
+        if not base_path.exists():
+            print("Error: style_base.json must exist before computing derived files.")
+            sys.exit(1)
 
-    for filename, description in COMPUTED_TASKS:
+        with open(base_path) as f:
+            base_data = json.load(f)
+        base_responses = base_data["responses"]
+
+    for filename, description in all_computed_tasks:
         path = OUTPUT_DIR / f"{filename}.json"
         if path.exists() and not args.force:
             print(f"Skipping {filename} (exists, use --force to regenerate)")
