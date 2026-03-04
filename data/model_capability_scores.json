@@ -1,6 +1,6 @@
 {
   "gpt-5.2": {
-"true": {
+    "true": {
       "api_name": "GPT-5.2 (medium)",
       "intelligence_index": 46.6,
       "coding_index": 44.2,
@@ -19,6 +19,25 @@
       "gpqa": 0.712,
       "livecodebench": 0.669,
       "ifbench": 0.474
+    }
+  },
+  "Qwen3-235B-A22B-Instruct-2507": {
+    "false": {
+      "artificial_analysis_intelligence_index": 25,
+      "artificial_analysis_coding_index": 22.1,
+      "artificial_analysis_math_index": 71.7,
+      "mmlu_pro": 0.828,
+      "gpqa": 0.753,
+      "hle": 0.106,
+      "livecodebench": 0.524,
+      "scicode": 0.36,
+      "math_500": 0.98,
+      "aime": 0.717,
+      "aime_25": 0.717,
+      "ifbench": 0.461,
+      "lcr": 0.312,
+      "terminalbench_hard": 0.152,
+      "tau2": 0.333
     }
   },
   "llama-3.3-70b-instruct": {
