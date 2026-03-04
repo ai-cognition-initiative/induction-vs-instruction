@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 from pathlib import Path
@@ -28,7 +29,16 @@ def shorten_model(model: str) -> str:
 
 
 def main():
-    logs_dir = "logs"
+    parser = argparse.ArgumentParser(description="Summarize eval results")
+    parser.add_argument(
+        "folder",
+        nargs="?",
+        default=None,
+        help="Optional subfolder under logs/ to process (e.g., 'experiment1' -> logs/experiment1)",
+    )
+    args = parser.parse_args()
+
+    logs_dir = f"logs/{args.folder}" if args.folder else "logs"
     eval_files = find_eval_set_files(logs_dir, max_depth=2)
 
     folder_data = defaultdict(
@@ -90,7 +100,7 @@ def main():
 
     for folder in sorted(folder_data.keys()):
         data = folder_data[folder]
-        folder_short = folder.replace("logs\\", "").replace("logs/", "")
+        folder_short = folder.replace(f"{logs_dir}\\", "").replace(f"{logs_dir}/", "")
         models = format_set(shorten_model(m) for m in data["models"])
         n_turns = format_set(data["n_turns"])
         instructions = format_set(data["instructions"])
@@ -99,7 +109,7 @@ def main():
             f"| {folder_short} | {models} | {n_turns} | {instructions} | {conditions} |"
         )
 
-    output_path = "logs/eval_summary.md"
+    output_path = f"{logs_dir}/eval_summary.md"
     with open(output_path, "w") as f:
         f.write("\n".join(lines))
 
