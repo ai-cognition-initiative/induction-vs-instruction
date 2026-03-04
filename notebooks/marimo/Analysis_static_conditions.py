@@ -76,7 +76,8 @@ def _(Path, json, pd):
     _root = Path(__file__).resolve().parent.parent.parent
     _static = _root / "outputs" / "viz" / "static"
 
-    _exclude_conditions = ["value_aligned_helpful", "value_misaligned_helpful"]
+    _exclude_conditions = []
+    # ["value_aligned_helpful", "value_misaligned_helpful"]
 
     evals_all = pd.read_parquet(_static / "evals.parquet")
     evals_all = evals_all[~evals_all["condition"].isin(_exclude_conditions)].copy()
@@ -107,7 +108,7 @@ def _(Path, json, pd):
     reasoning_models = {
         "gemini-2.5-pro",
         "gemini-3-pro-preview",
-        "gpt-5.2",
+        #  "gpt-5.2",
         "kimi-k2.5",
         "minimax-m2.5",
     }
@@ -288,7 +289,7 @@ def _(
                 ],
                 "width": 700,
                 "height": 450,
-                "marginLeft": 160,
+                "marginLeft": 250,
                 "title": f"N-value classification (threshold={_threshold})",
             }
         )
@@ -505,7 +506,7 @@ def _(mo):
 
 @app.cell
 def _(Plot, combined_errors_filtered, js, mo):
-    #TODO: also produce a sort of count metric where I count for each evaluation setting whether the model under or over predicted instead of using the mean? but that might be messed up by the temperature..
+    # TODO: also produce a sort of count metric where I count for each evaluation setting whether the model under or over predicted instead of using the mean? but that might be messed up by the temperature..
     # on the other hand, I can compare for each sample across protocols 1 and 2 because the question data is the same for a given sample.
     # Plot B1: Arrow plot — mean actual vs predicted IF rate per model
     _b1_agg = (
