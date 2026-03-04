@@ -181,8 +181,8 @@ def _common_prep(log_dir: str, output_dir: str) -> tuple[pd.DataFrame, Path]:
         }
     )
 
-    # Shorten model names (strip provider prefixes like "openrouter/google/")
-    df["model"] = df["model"].str.replace(r"^openrouter/[^/]+/", "", regex=True)
+    # Shorten model names (extract just the model name after the last /)
+    df["model"] = df["model"].astype(str).str.split("/").str[-1]
 
     # Add pairing columns
     df = add_pairing_columns(df)
@@ -365,7 +365,7 @@ def process_raw_evals(df: pd.DataFrame) -> pd.DataFrame:
             "task_arg_instruction_template": "instruction",
         }
     )
-    df["model"] = df["model"].str.replace(r"^openrouter/[^/]+/", "", regex=True)
+    df["model"] = df["model"].astype(str).str.split("/").str[-1]
     df = add_pairing_columns(df)
     df["n_turns"] = pd.to_numeric(df["n_turns"], errors="coerce").astype(int)
     df = df.sort_values(["model", "condition", "instruction", "n_turns"])

@@ -66,11 +66,7 @@ def _(Path, pd):
         _samples["score"] = _samples["score"].fillna(_mapped)
     _samples["score"] = _samples["score"].astype(float)
 
-    _samples["model"] = (
-        _samples["model"]
-        .astype(object)
-        .str.replace(r"^openrouter/[^/]+/", "", regex=True)
-    )
+    _samples["model"] = _samples["model"].astype(object).str.split("/").str[-1]
 
     _samples = _samples.rename(
         columns={
@@ -80,14 +76,14 @@ def _(Path, pd):
             "metadata_instruction_template": "instruction",
         }
     )
-    _samples["n_turns"] = pd.to_numeric(
-        _samples["n_turns"], errors="coerce"
-    ).astype(int)
+    _samples["n_turns"] = pd.to_numeric(_samples["n_turns"], errors="coerce").astype(
+        int
+    )
 
     # All analysis uses the neutral condition only.
     samples_neutral = _samples[
-      #  (_samples["condition"] == "neutral")&
-         (_samples["instruction"] == "instruction_no_hint")
+        #  (_samples["condition"] == "neutral")&
+        (_samples["instruction"] == "instruction_no_hint")
     ].copy()
     samples_neutral["is_T"] = (samples_neutral["score"] >= 0.5).astype(int)
 
@@ -100,9 +96,7 @@ def _(Path, pd):
 @app.cell(hide_code=True)
 def _(all_models, all_n_values, mo, n_seeds, samples_neutral):
     _epochs_per_cell = (
-        samples_neutral.groupby(["model", "n_turns", "trial_index"])
-        .size()
-        .median()
+        samples_neutral.groupby(["model", "n_turns", "trial_index"]).size().median()
     )
     mo.md(f"""
     **Data summary (neutral condition, no hint):**
@@ -369,11 +363,7 @@ def _(all_n_values, alt, mo, np, pd, samples_neutral, stats):
                 _t_rate * (1 - _t_rate) / _k if 0 < _t_rate < 1 and _k > 0 else 0
             )
             _observed_var = float(_seed_stats["T_rate"].var())
-            _odr = (
-                _observed_var / _expected_var
-                if _expected_var > 0
-                else float("nan")
-            )
+            _odr = _observed_var / _expected_var if _expected_var > 0 else float("nan")
 
             # Chi-squared test of homogeneity
             if 0 < _t_rate < 1:
@@ -459,9 +449,9 @@ def _(all_n_values, alt, mo, np, pd, samples_neutral, stats):
     _k_val = within_n_df["epochs_per_seed"].median()
     mo.vstack(
         [
-            alt.vconcat(
-                alt.layer(_odr_chart, _one_line), _trate_chart
-            ).resolve_scale(x="shared"),
+            alt.vconcat(alt.layer(_odr_chart, _one_line), _trate_chart).resolve_scale(
+                x="shared"
+            ),
             mo.md(f"""
     **Reading the chart:**
     - Dashed line at 1.0 = expected under pure binomial noise (no seed effect)
@@ -518,18 +508,14 @@ def _(alt, icc_oneway, mo, model_selector, np, samples_neutral, stats):
     # Restrict to transition zone (0.2 < T-rate < 0.8)
     _tz_ns = sorted([n for n in _pivot.columns if 0.2 < _n_means[n] < 0.8])
 
-
     def _icc_interp(v):
         if v < 0.05:
             return "negligible — seed rankings are essentially random across N"
         if v < 0.15:
-            return (
-                "weak — slight tendency for seeds to maintain rank, mostly noise"
-            )
+            return "weak — slight tendency for seeds to maintain rank, mostly noise"
         if v < 0.3:
             return "moderate — seeds show meaningful stability across N"
         return "strong — seed effects are highly stable across N"
-
 
     def _w_interp(w, p):
         _sig = "significant" if p < 0.05 else "not significant"
@@ -541,7 +527,6 @@ def _(alt, icc_oneway, mo, model_selector, np, samples_neutral, stats):
             return f"moderate concordance ({_sig})"
         return f"strong concordance ({_sig})"
 
-
     def _corr_interp(r):
         if r < 0.1:
             return "near-zero — seed ranks reshuffle between adjacent Ns"
@@ -550,7 +535,6 @@ def _(alt, icc_oneway, mo, model_selector, np, samples_neutral, stats):
         if r < 0.5:
             return "moderate — seed ranks carry over between nearby Ns"
         return "strong — seed ranks are very stable between adjacent Ns"
-
 
     if len(_tz_ns) >= 2:
         _tz_res = _residuals[_tz_ns].dropna()
@@ -565,11 +549,7 @@ def _(alt, icc_oneway, mo, model_selector, np, samples_neutral, stats):
         _rank_sums = _ranks.sum(axis=1)
         _mean_rs = _rank_sums.mean()
         _ss = ((_rank_sums - _mean_rs) ** 2).sum()
-        _w = (
-            (12 * _ss) / (_k**2 * (_n_seeds**3 - _n_seeds))
-            if _n_seeds > 1
-            else 0.0
-        )
+        _w = (12 * _ss) / (_k**2 * (_n_seeds**3 - _n_seeds)) if _n_seeds > 1 else 0.0
         _friedman_chi2 = _k * (_n_seeds - 1) * _w
         _friedman_p = 1 - stats.chi2.cdf(_friedman_chi2, _n_seeds - 1)
 
@@ -588,9 +568,7 @@ def _(alt, icc_oneway, mo, model_selector, np, samples_neutral, stats):
         _mean_adj_corr = float(np.mean(_adj_corrs)) if _adj_corrs else 0.0
 
         # Heatmap: seeds (sorted by mean residual) x N values
-        _sorted_seeds = (
-            _tz_res.mean(axis=1).sort_values(ascending=False).index.tolist()
-        )
+        _sorted_seeds = _tz_res.mean(axis=1).sort_values(ascending=False).index.tolist()
         _hm_long = (
             _tz_res.loc[_sorted_seeds]
             .reset_index()
@@ -728,11 +706,7 @@ def _(icc_oneway, np, pd, samples_neutral, stats):
         _rank_sums = _ranks.sum(axis=1)
         _mean_rs = _rank_sums.mean()
         _ss = ((_rank_sums - _mean_rs) ** 2).sum()
-        _w = (
-            (12 * _ss) / (_k**2 * (_n_seeds**3 - _n_seeds))
-            if _n_seeds > 1
-            else 0.0
-        )
+        _w = (12 * _ss) / (_k**2 * (_n_seeds**3 - _n_seeds)) if _n_seeds > 1 else 0.0
         _friedman_chi2 = _k * (_n_seeds - 1) * _w
         _friedman_p = 1 - stats.chi2.cdf(_friedman_chi2, _n_seeds - 1)
 
@@ -810,9 +784,7 @@ def _(alt, cross_n_df, mo, pd, samples_neutral, within_n_df):
         _m_wn = _tz[_tz["model"] == _model] if _n_tz_cells > 0 else pd.DataFrame()
         _m_cn = cross_n_df[cross_n_df["model"] == _model]
         _m_data = samples_neutral[samples_neutral["model"] == _model]
-        _n_epochs = int(
-            _m_data.groupby(["n_turns", "trial_index"]).size().median()
-        )
+        _n_epochs = int(_m_data.groupby(["n_turns", "trial_index"]).size().median())
         _n_tz_n = len(_m_wn)
         _cn_row = _m_cn.iloc[0] if len(_m_cn) > 0 else {}
         _icc_val = _cn_row.get("icc_cross_n", float("nan"))
@@ -906,8 +878,7 @@ def _(alt, cross_n_df, mo, pd, samples_neutral, within_n_df):
                 width=500,
                 height=max(120, _n_cross_models * 30),
                 title=(
-                    "Cross-N seed stability per model"
-                    " (blue = significant Kendall's W)"
+                    "Cross-N seed stability per model (blue = significant Kendall's W)"
                 ),
             )
         )
