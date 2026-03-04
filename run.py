@@ -141,8 +141,14 @@ def main():
     parser.add_argument(
         "--reasoning-effort",
         type=str,
-        default="none",
+        default=None,
         help="Reasoning effort ('none', minimal', 'low', 'medium', 'high', or 'xhigh')",
+    )
+    parser.add_argument(
+        "--reasoning-tokens",
+        type=int,
+        default=None,
+        help="Maximum tokens for reasoning (for Claude 3.7+/Gemini 2.5+)",
     )
     args = parser.parse_args()
 
@@ -214,6 +220,8 @@ def main():
         eval_kwargs["temperature"] = args.temperature
     if args.reasoning_effort is not None:
         eval_kwargs["reasoning_effort"] = args.reasoning_effort
+    if args.reasoning_tokens is not None:
+        eval_kwargs["reasoning_tokens"] = args.reasoning_tokens
 
     success, logs = eval_set(**eval_kwargs)
 
