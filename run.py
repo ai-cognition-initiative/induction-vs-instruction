@@ -76,22 +76,19 @@ def load_models_from_yaml(path: str) -> tuple[list[str], dict]:
                 f"(got provider='{provider}')"
             )
         for model_name in models_config.get("models", []):
-            full_model = f"openai-api/{provider}/{model_name}"
-            models.append(full_model)
+            models.append(f"openai-api/{provider}/{model_name}")
 
     model_args = {}
 
     if provider != "openrouter":
-        model_args["base_url"] = url
-
         api_key_env = f"{provider.upper().replace('-', '_')}_API_KEY"
         api_key = os.environ.get(api_key_env)
         if not api_key:
             raise ValueError(
                 f"API key not found: set {api_key_env} environment variable"
             )
-        model_args["api_key"] = api_key
-        model_args["responses_api"] = False
+        base_url_env = f"{provider.upper().replace('-', '_')}_BASE_URL"
+        os.environ[base_url_env] = url
     else:
         provider_args = models_config.get("provider_args", {})
         if provider_args:
