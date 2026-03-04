@@ -28,6 +28,8 @@ def _n_turns_to_string(df: pd.DataFrame) -> pd.DataFrame:
 CONDITION_PAIR_MAP = {
     "value_aligned_cats": "value",
     "value_misaligned_cats": "value",
+    "value_aligned_helpful": "value",
+    "value_misaligned_helpful": "value",
     "factual_aligned_earth": "factual",
     "factual_misaligned_earth": "factual",
     "neutral": "neutral",
@@ -41,31 +43,29 @@ CONDITION_PAIR_MAP = {
     "style_uppercase_lowercase": "style_case",
     "style_javascript_python": "style_code",
     "style_python_javascript": "style_code",
-    "preference_aligned_cats": "preference",
-    "preference_misaligned_cats": "preference",
+    "preference_aligned_helpful": "preference",
+    "preference_misaligned_unhelpful": "preference",
 }
 
 ALIGNED_CONDITIONS = {
     "value_aligned_cats",
+    "value_aligned_helpful",
     "factual_aligned_earth",
-    "token_countries_states",
-    "language_ru_fr",
-    "persona_casual_formal",
-    "style_lowercase_uppercase",
-    "style_javascript_python",
     "preference_aligned_cats",
+    "preference_aligned_helpful",
+    "token_countries_states",
+    "language_fr_ru"
+
 }
 
 MISALIGNED_CONDITIONS = {
     "value_misaligned_cats",
+    "value_misaligned_helpful",
     "factual_misaligned_earth",
-    "token_states_countries",
-    "language_fr_ru",
-    "persona_formal_casual",
-    "style_uppercase_lowercase",
-    "style_short_long",
-    "style_python_javascript",
     "preference_misaligned_cats",
+    "preference_misaligned_helpful",
+    "token_states_countries",
+    "language_ru_fr"
 }
 
 # Condition pairs where "aligned" means instruction agrees with model values/truth.
@@ -183,6 +183,7 @@ def _common_prep(log_dir: str, output_dir: str) -> tuple[pd.DataFrame, Path]:
 
     # Shorten model names (extract just the model name after the last /)
     df["model"] = df["model"].astype(str).str.split("/").str[-1]
+    df["model"] = df["model"].str.replace(r"^(openai-|anthropic-)", "", regex=True)
 
     # Add pairing columns
     df = add_pairing_columns(df)
@@ -366,6 +367,7 @@ def process_raw_evals(df: pd.DataFrame) -> pd.DataFrame:
         }
     )
     df["model"] = df["model"].astype(str).str.split("/").str[-1]
+    df["model"] = df["model"].str.replace(r"^(openai-|anthropic-)", "", regex=True)
     df = add_pairing_columns(df)
     df["n_turns"] = pd.to_numeric(df["n_turns"], errors="coerce").astype(int)
     df = df.sort_values(["model", "condition", "instruction", "n_turns"])
