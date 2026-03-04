@@ -3,15 +3,17 @@
 These implement the same logic as the condition-specific behavioral scorers so that
 the prediction scorer's instruction_following metric is consistent with Protocol 1.
 """
+
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 
-# Grader model used for all LLM-judge calls — hardcoded for consistency across runs
-GRADER_MODEL = "openrouter/anthropic/claude-3-5-haiku"
+# Grader model used for all LLM-judge calls — configurable via GRADER_MODEL env var
+GRADER_MODEL = os.environ.get("GRADER_MODEL", "openai-api/gradient/anthropic-claude-4.5-haiku")
 
 _set_cache: dict[str, list[str]] = {}
 
@@ -56,7 +58,9 @@ def classify_set_membership(text: str, pattern_set: str, target_set: str) -> str
 
     def _match(members: list[str]) -> bool:
         return any(
-            m.lower() == normalized or m.lower() in normalized or normalized in m.lower()
+            m.lower() == normalized
+            or m.lower() in normalized
+            or normalized in m.lower()
             for m in members
         )
 
@@ -285,7 +289,9 @@ async def _call_llm_judge(prompt: str) -> str:
     grader = get_model(GRADER_MODEL)
     result = await grader.generate(
         [
-            ChatMessageSystem(content="You are a precise evaluator. Respond with exactly one word."),
+            ChatMessageSystem(
+                content="You are a precise evaluator. Respond with exactly one word."
+            ),
             ChatMessageUser(content=prompt),
         ]
     )
