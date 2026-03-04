@@ -1,10 +1,7 @@
 import marimo
 
 __generated_with = "0.20.2"
-app = marimo.App(
-    width="medium",
-    layout_file="layouts/Analysis_static_conditions.slides.json",
-)
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -115,6 +112,7 @@ def _(Path, json, pd):
         "minimax-m2.5",
     }
 
+
     def _get_caps(model_name, caps_data):
         mode = "true" if model_name in reasoning_models else "false"
         scores = caps_data.get(mode, {}) or {}
@@ -125,6 +123,7 @@ def _(Path, json, pd):
             "gpqa": scores.get("gpqa"),
             "ifbench": scores.get("ifbench"),
         }
+
 
     caps_df = pd.DataFrame([_get_caps(k, v) for k, v in _caps_raw.items()])
     caps_df = caps_df.dropna(
@@ -167,7 +166,9 @@ def _(
 ):
     _excluded = model_exclusion.value
     evals_filtered = (
-        evals[~evals["model"].isin(_excluded)].copy() if _excluded else evals.copy()
+        evals[~evals["model"].isin(_excluded)].copy()
+        if _excluded
+        else evals.copy()
     )
     evals_all_filtered = (
         evals_all[~evals_all["model"].isin(_excluded)].copy()
@@ -234,7 +235,9 @@ def _(
 ):
     # Plot A1: Diverging stacked bar — N values classified as IF/PF/Mixed
     _threshold = threshold_slider.value
-    _avg = evals_filtered.groupby(["model", "n_turns"])["score"].mean().reset_index()
+    _avg = (
+        evals_filtered.groupby(["model", "n_turns"])["score"].mean().reset_index()
+    )
 
     # Expand each N value into a unit row with its classification
     _unit_records = []
@@ -303,7 +306,9 @@ def _(
 ):
     # Plot A2: Scatter — avg IF rate vs capability (faceted by benchmark)
     _avg_if = (
-        evals_filtered.groupby("model")["score"].mean().reset_index(name="avg_if_rate")
+        evals_filtered.groupby("model")["score"]
+        .mean()
+        .reset_index(name="avg_if_rate")
     )
     _a2_df = prep_benchmark_data(
         _avg_if, "avg_if_rate", caps_df_filtered, reasoning_models, lambda *a: a[0]
@@ -311,12 +316,6 @@ def _(
     make_scatter_chart(
         _a2_df, "avg_if_rate", "Avg IF Rate", "Avg IF Rate vs Model Capability"
     )
-    return
-
-
-@app.cell
-def _(caps_df_filtered):
-    caps_df_filtered
     return
 
 
@@ -341,14 +340,20 @@ def _(alt, evals_all_filtered, instruction_dropdown):
         .agg(mean_score=("score", "mean"), mean_stderr=("score_stderr", "mean"))
         .reset_index()
     )
-    _a3_agg["ci_lo"] = (_a3_agg["mean_score"] - _a3_agg["mean_stderr"]).clip(lower=0)
-    _a3_agg["ci_hi"] = (_a3_agg["mean_score"] + _a3_agg["mean_stderr"]).clip(upper=1)
+    _a3_agg["ci_lo"] = (_a3_agg["mean_score"] - _a3_agg["mean_stderr"]).clip(
+        lower=0
+    )
+    _a3_agg["ci_hi"] = (_a3_agg["mean_score"] + _a3_agg["mean_stderr"]).clip(
+        upper=1
+    )
 
     _bars = (
         alt.Chart(_a3_agg)
         .mark_bar()
         .encode(
-            x=alt.X("mean_score:Q", title="IF Rate", scale=alt.Scale(domain=[0, 1])),
+            x=alt.X(
+                "mean_score:Q", title="IF Rate", scale=alt.Scale(domain=[0, 1])
+            ),
             y=alt.Y("model:N", sort="-x", title=None),
             color=alt.Color("model:N", legend=None),
             tooltip=["model", "condition", "mean_score:Q", "mean_stderr:Q"],
@@ -423,8 +428,8 @@ def _(Plot, evals_filtered, js, mo):
                         ),
                     ),
                 ],
-                "width": 700,
-                "height": 450,
+                "width": 800,
+                "height": 550,
                 "marginLeft": 160,
             }
         )
@@ -456,7 +461,9 @@ def _(
     # Plot A5: First N where IF drops to threshold, vs capability benchmarks
     _threshold_a5 = threshold_slider_a5.value
     _avg_a5 = (
-        evals_filtered.groupby(["model", "n_turns_int"])["score"].mean().reset_index()
+        evals_filtered.groupby(["model", "n_turns_int"])["score"]
+        .mean()
+        .reset_index()
     )
     _max_n = max(n_values_sorted, key=int)
     _sentinel = int(_max_n) + 5
@@ -465,7 +472,9 @@ def _(
     for _model in _avg_a5["model"].unique():
         _mdf = _avg_a5[_avg_a5["model"] == _model].sort_values("n_turns_int")
         _first = _mdf[_mdf["score"] <= _threshold_a5]
-        _drop_n = int(_first["n_turns_int"].iloc[0]) if len(_first) > 0 else _sentinel
+        _drop_n = (
+            int(_first["n_turns_int"].iloc[0]) if len(_first) > 0 else _sentinel
+        )
         _records_a5.append({"model": _model, "first_drop_n": _drop_n})
 
     _drop_df = pd.DataFrame(_records_a5)
@@ -496,6 +505,8 @@ def _(mo):
 
 @app.cell
 def _(Plot, combined_errors_filtered, js, mo):
+    #TODO: also produce a sort of count metric where I count for each evaluation setting whether the model under or over predicted instead of using the mean? but that might be messed up by the temperature..
+    # on the other hand, I can compare for each sample across protocols 1 and 2 because the question data is the same for a given sample.
     # Plot B1: Arrow plot — mean actual vs predicted IF rate per model
     _b1_agg = (
         combined_errors_filtered.groupby("model")
@@ -506,7 +517,9 @@ def _(Plot, combined_errors_filtered, js, mo):
         .reset_index()
     )
     _b1_agg["direction"] = _b1_agg.apply(
-        lambda r: "over-predicts" if r["predicted"] > r["actual"] else "under-predicts",
+        lambda r: (
+            "over-predicts" if r["predicted"] > r["actual"] else "under-predicts"
+        ),
         axis=1,
     )
     _b1_records = _b1_agg.to_dict("records")
@@ -551,10 +564,14 @@ def _(Plot, combined_errors_filtered, js, mo):
                             "fill": "direction",
                             "symbol": "diamond",
                             "r": 4,
-                            "title": js("d => `Predicted: ${d.predicted.toFixed(3)}`"),
+                            "title": js(
+                                "d => `Predicted: ${d.predicted.toFixed(3)}`"
+                            ),
                         },
                     ),
-                    Plot.ruleX([0.5], {"stroke": "#ccc", "strokeDasharray": "4 2"}),
+                    Plot.ruleX(
+                        [0.5], {"stroke": "#ccc", "strokeDasharray": "4 2"}
+                    ),
                 ],
                 "width": 600,
                 "height": 400,
@@ -612,7 +629,9 @@ def _(Plot, combined_errors_filtered, js, mo):
         .reset_index()
     )
     _b3_agg["direction"] = _b3_agg.apply(
-        lambda r: "over-predicts" if r["predicted"] > r["actual"] else "under-predicts",
+        lambda r: (
+            "over-predicts" if r["predicted"] > r["actual"] else "under-predicts"
+        ),
         axis=1,
     )
     _b3_records = _b3_agg.to_dict("records")
@@ -661,7 +680,9 @@ def _(Plot, combined_errors_filtered, js, mo):
                             "fill": "direction",
                             "symbol": "diamond",
                             "r": 3,
-                            "title": js("d => `Predicted: ${d.predicted.toFixed(3)}`"),
+                            "title": js(
+                                "d => `Predicted: ${d.predicted.toFixed(3)}`"
+                            ),
                         },
                     ),
                 ],
@@ -724,7 +745,11 @@ def _(
         .reset_index(name="prediction_rate")
     )
     _c1_df = prep_benchmark_data(
-        _c1_agg, "prediction_rate", caps_df_filtered, reasoning_models, lambda *a: a[0]
+        _c1_agg,
+        "prediction_rate",
+        caps_df_filtered,
+        reasoning_models,
+        lambda *a: a[0],
     )
     make_scatter_chart(
         _c1_df,
@@ -771,7 +796,9 @@ def _(Plot, evals_all_filtered, js, make_radar_chart, mo, pd):
         )
 
     mo.ui.anywidget(
-        make_radar_chart(Plot, js, _points, _categories, "Effect of Hint on IF Rate")
+        make_radar_chart(
+            Plot, js, _points, _categories, "Effect of Hint on IF Rate"
+        )
     )
     return
 
