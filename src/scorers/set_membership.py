@@ -29,16 +29,20 @@ def _load_set(filename: str) -> list[str]:
 
 
 def _normalize(text: str) -> str:
-    return text.strip().lower()
+    return text.strip().lower().strip("\"'.,!?;:")
 
 
-def _fuzzy_set_match(text: str, members: list[str]) -> str | None:
-    """Check if text matches any member of the set. Returns matched member or None."""
+def _extract_answer(text: str) -> str:
+    """Return the last non-empty line for multi-line outputs."""
+    lines = [line for line in text.splitlines() if line.strip()]
+    return lines[-1].strip() if len(lines) > 1 else text.strip()
+
+
+def _exact_set_match(text: str, members: list[str]) -> str | None:
+    """Check if text exactly matches any member of the set after normalization."""
     normalized = _normalize(text)
     for member in members:
         if _normalize(member) == normalized:
-            return member
-        if _normalize(member) in normalized or normalized in _normalize(member):
             return member
     return None
 
@@ -51,12 +55,12 @@ def set_membership_scorer(
     """Score based on whether output is a member of target set (T) or pattern set (P)."""
 
     async def score(state: TaskState, target: Target) -> Score:
-        output = state.output.completion.strip()
+        output = _extract_answer(state.output.completion)
         t_members = _load_set(target_set)
         p_members = _load_set(pattern_set)
 
-        t_match = _fuzzy_set_match(output, t_members)
-        p_match = _fuzzy_set_match(output, p_members)
+        t_match = _exact_set_match(output, t_members)
+        p_match = _exact_set_match(output, p_members)
 
         if t_match and not p_match:
             return Score(

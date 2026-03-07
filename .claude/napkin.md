@@ -16,6 +16,7 @@
 | 2026-03-03 | self | Used η² (eta-squared ANOVA) on raw binary data (is_T ∈ {0,1}) | With binary data and few epochs per seed, η² trivially = 1.0 because SS_within = 0. Use **overdispersion ratio** instead: Var(per-seed T-rates) / (p*(1-p)/k). This properly accounts for expected binomial variance. |
 | 2026-03-03 | user | Cross-model analyses are meaningless when models have different transition curves | Models behave completely differently at the same N. Don't treat models as interchangeable "raters" of seeds. All seed analyses must be within-model. |
 | 2026-03-03 | user | Within-N seed effects (unanimity, overdispersion) don't prove question content matters | A seed unanimous at one N could be noise — if it flips at adjacent N values, it's stochasticity not content. The decisive test is **cross-N stability**: do seed residuals (centered by model mean at each N) correlate across N values? ICC on residual matrix, Kendall's W, seeds consistently above/below median at ALL transition-zone Ns. |
+| 2026-03-07 | self | Substring matching (`pattern in text`) in scorers causes false positives | Model outputs like "I can't comply... USA... femur" falsely match as TARGET. Use normalized exact equality: `text.strip().lower().strip("\"'.,!?;:")` then `==`. This handles trailing punctuation but rejects substring containment in longer text. |
 
 ## User Preferences
 - Project is single-purpose (induction vs instruction evals) - no need for extra subfolder nesting

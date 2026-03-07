@@ -26,43 +26,45 @@ def _load_set(filename: str) -> list[str]:
     return _set_cache[filename]
 
 
-def _fuzzy_match(text: str, pattern: str) -> float:
-    """Substring match with partial word-level fallback. Mirrors pattern_match.py."""
-    text = text.lower().strip()
-    pattern = pattern.lower().strip()
-    if pattern in text:
-        return 1.0
-    words = pattern.split()
-    if len(words) > 1:
-        return sum(1 for w in words if w in text) / len(words)
-    return 0.0
+def _normalize_answer(text: str) -> str:
+    """Normalize for exact matching: lowercase, strip whitespace and surrounding punctuation."""
+    return text.lower().strip().strip("\"'.,!?;:")
+
+
+def _extract_answer(text: str) -> str:
+    """Return the last non-empty line for multi-line outputs.
+
+    Reasoning models emit thinking traces before the final answer.
+    Using the last non-empty line isolates the actual response.
+    """
+    lines = [line for line in text.splitlines() if line.strip()]
+    return lines[-1].strip() if len(lines) > 1 else text.strip()
+
+
+def _exact_match(text: str, pattern: str) -> bool:
+    """Check if text is exactly the given pattern after normalization."""
+    return _normalize_answer(text) == _normalize_answer(pattern)
 
 
 def classify_static(text: str, pattern: str, target: str) -> str:
-    """Classify static-condition output. Mirrors pattern_match scorer."""
-    text_lower = text.lower().strip()
-    target_score = _fuzzy_match(text_lower, target.lower())
-    pattern_score = _fuzzy_match(text_lower, pattern.lower())
-    if target_score > pattern_score:
+    """Classify static-condition output. Canonical source for pattern_match scorer."""
+    is_target = _exact_match(text, target)
+    is_pattern = _exact_match(text, pattern)
+    if is_target and not is_pattern:
         return "target"
-    if pattern_score > target_score:
+    if is_pattern and not is_target:
         return "pattern"
     return "unknown"
 
 
 def classify_set_membership(text: str, pattern_set: str, target_set: str) -> str:
     """Classify token-pattern output. Mirrors set_membership scorer."""
-    normalized = text.strip().lower()
+    normalized = _normalize_answer(text)
     t_members = _load_set(target_set)
     p_members = _load_set(pattern_set)
 
     def _match(members: list[str]) -> bool:
-        return any(
-            m.lower() == normalized
-            or m.lower() in normalized
-            or normalized in m.lower()
-            for m in members
-        )
+        return any(_normalize_answer(m) == normalized for m in members)
 
     in_target = _match(t_members)
     in_pattern = _match(p_members)
@@ -338,6 +340,7 @@ async def classify_actual(text: str, metadata: dict) -> str:
 
     Mirrors the behavioral scorer so that instruction_following is consistent with Protocol 1.
     """
+    text = _extract_answer(text)
     condition_type = metadata.get("condition_type", "static")
     condition_name = metadata.get("condition", "")
 

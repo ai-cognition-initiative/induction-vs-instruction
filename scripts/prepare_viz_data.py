@@ -74,6 +74,14 @@ MISALIGNED_CONDITIONS = {
 # direction is inherently more "aligned" than the other.
 ALIGNMENT_AXIS_PAIRS = {"value", "factual", "preference"}
 
+# Behavioral metric column rename map (multi-metric scorer)
+BEHAVIORAL_SCORE_RENAME = {
+    "score_instruction_following_accuracy": "score",
+    "score_instruction_following_stderr": "score_stderr",
+    "score_unknown_accuracy": "score_unknown",
+    "score_unknown_stderr": "stderr_unknown",
+}
+
 # Prediction metric column rename map
 PREDICTION_SCORE_RENAME = {
     "score_instruction_following_accuracy": "score_instruction_following",
@@ -239,7 +247,11 @@ def prepare_behavioral(log_dir: str, output_dir: str) -> None:
         )
         sys.exit(1)
 
-    df = _coalesce_scores(df)
+    # Try multi-metric rename first; fall back to coalesce for older logs
+    if "score_instruction_following_accuracy" in df.columns:
+        df = df.rename(columns=BEHAVIORAL_SCORE_RENAME)
+    else:
+        df = _coalesce_scores(df)
     df = df.dropna(subset=["score"])
 
     if df.empty:
@@ -255,8 +267,12 @@ def prepare_behavioral(log_dir: str, output_dir: str) -> None:
         "n_turns",
         "score",
         "score_stderr",
+        "score_unknown",
+        "stderr_unknown",
         "reasoning_tokens",
     ]
+    # Keep only columns that exist (backwards compat with older logs without unknown metric)
+    output_cols = [c for c in output_cols if c in df.columns]
     df = df[output_cols].reset_index(drop=True)
 
     path = out / "evals.parquet"
@@ -411,7 +427,11 @@ def process_behavioral_df(
     if not acc_cols:
         raise ValueError("No score columns found in behavioral dataframe")
 
-    df = _coalesce_scores(df)
+    # Try multi-metric rename first; fall back to coalesce for older logs
+    if "score_instruction_following_accuracy" in df.columns:
+        df = df.rename(columns=BEHAVIORAL_SCORE_RENAME)
+    else:
+        df = _coalesce_scores(df)
     df = df.dropna(subset=["score"])
 
     if df.empty:
@@ -433,9 +453,13 @@ def process_behavioral_df(
         "n_turns",
         "score",
         "score_stderr",
+        "score_unknown",
+        "stderr_unknown",
     ]
     if "reasoning_tokens" in df.columns:
         output_cols.append("reasoning_tokens")
+    # Keep only columns that exist (backwards compat with older logs without unknown metric)
+    output_cols = [c for c in output_cols if c in df.columns]
     return df[output_cols].reset_index(drop=True)
 
 
@@ -522,7 +546,11 @@ def _merge_behavioral_prediction(
     if not acc_cols:
         raise ValueError("No score columns found in behavioral logs")
 
-    df_behavioral = _coalesce_scores(df_behavioral)
+    # Try multi-metric rename first; fall back to coalesce for older logs
+    if "score_instruction_following_accuracy" in df_behavioral.columns:
+        df_behavioral = df_behavioral.rename(columns=BEHAVIORAL_SCORE_RENAME)
+    else:
+        df_behavioral = _coalesce_scores(df_behavioral)
 
     if "score_prediction_accuracy_accuracy" not in df_prediction.columns:
         raise ValueError("Missing prediction scores in prediction logs")
@@ -530,10 +558,15 @@ def _merge_behavioral_prediction(
     df_prediction = _rename_prediction_scores(df_prediction)
 
     key_cols = ["model", "condition", "instruction", "n_turns"]
-    df_behavioral = df_behavioral[key_cols + ["score", "score_stderr"]].copy()
-    df_behavioral = df_behavioral.rename(
-        columns={"score": "behavioral_score", "score_stderr": "behavioral_stderr"}
-    )
+    behavioral_cols = ["score", "score_stderr"]
+    if "score_unknown" in df_behavioral.columns:
+        behavioral_cols += ["score_unknown", "stderr_unknown"]
+    df_behavioral = df_behavioral[key_cols + behavioral_cols].copy()
+    rename_map = {"score": "behavioral_score", "score_stderr": "behavioral_stderr"}
+    if "score_unknown" in df_behavioral.columns:
+        rename_map["score_unknown"] = "behavioral_unknown"
+        rename_map["stderr_unknown"] = "behavioral_unknown_stderr"
+    df_behavioral = df_behavioral.rename(columns=rename_map)
 
     df_prediction = df_prediction[
         key_cols

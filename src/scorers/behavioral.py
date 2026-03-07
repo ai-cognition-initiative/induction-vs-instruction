@@ -20,12 +20,21 @@ from inspect_ai.solver import TaskState
 from src.scorers.classify import classify_actual
 
 
-@scorer(metrics=[accuracy(), stderr()])
+@scorer(
+    metrics={
+        "instruction_following": [accuracy(), stderr()],
+        "unknown": [accuracy(), stderr()],
+    }
+)
 def behavioral_scorer() -> Scorer:
     """Score Protocol 1 (Behavioral) output.
 
     Uses the same classification logic as the task's built-in scorers,
     dispatching based on condition type in metadata.
+
+    Returns a dict with two metrics:
+    - instruction_following: Did the output follow the instruction (T)?
+    - unknown: Was the output neither target nor pattern?
     """
 
     async def score(state: TaskState, target: Target) -> Score:
@@ -36,7 +45,10 @@ def behavioral_scorer() -> Scorer:
         followed_instruction = choice == "target"
 
         return Score(
-            value=CORRECT if followed_instruction else INCORRECT,
+            value={
+                "instruction_following": CORRECT if followed_instruction else INCORRECT,
+                "unknown": CORRECT if choice == "unknown" else INCORRECT,
+            },
             answer=output,
             explanation=f"Classified as: {choice}",
             metadata={

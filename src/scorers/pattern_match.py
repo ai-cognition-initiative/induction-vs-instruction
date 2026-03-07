@@ -12,6 +12,8 @@ from inspect_ai.scorer import (
 )
 from inspect_ai.solver import TaskState
 
+from src.scorers.classify import _extract_answer, classify_static
+
 
 @scorer(metrics=[accuracy(), stderr()])
 def pattern_match() -> Scorer:
@@ -22,52 +24,32 @@ def pattern_match() -> Scorer:
     """
 
     async def score(state: TaskState, target: Target) -> Score:
-        output = state.output.completion.lower().strip()
-        pattern = state.metadata["pattern"].lower()
-        target_text = state.metadata["target"].lower()
+        output_to_score = _extract_answer(state.output.completion)
+        pattern = state.metadata["pattern"]
+        target_text = state.metadata["target"]
 
-        pattern_match_score = _fuzzy_match(output, pattern)
-        target_match_score = _fuzzy_match(output, target_text)
+        choice = classify_static(output_to_score, pattern, target_text)
 
-        if target_match_score > pattern_match_score:
+        if choice == "target":
             return Score(
                 value=CORRECT,
                 answer=state.output.completion,
-                explanation=f"Output matched target '{target_text}' (instruction-following)",
+                explanation=f"Output matched target '{target_text}' (instruction-following). Scored on: '{output_to_score}'",
                 metadata={"classification": "target"},
             )
-        elif pattern_match_score > target_match_score:
+        elif choice == "pattern":
             return Score(
                 value=INCORRECT,
                 answer=state.output.completion,
-                explanation=f"Output matched pattern '{pattern}' (induction)",
+                explanation=f"Output matched pattern '{pattern}' (induction). Scored on: '{output_to_score}'",
                 metadata={"classification": "pattern"},
             )
         else:
             return Score(
                 value=INCORRECT,
                 answer=state.output.completion,
-                explanation=f"Output matched neither target '{target_text}' nor pattern '{pattern}'",
+                explanation=f"Output matched neither target '{target_text}' nor pattern '{pattern}'. Scored on: '{output_to_score}'",
                 metadata={"classification": "unknown"},
             )
 
     return score
-
-
-def _fuzzy_match(text: str, pattern: str) -> float:
-    """Check if pattern appears in text with fuzzy matching.
-
-    Returns a score from 0 to 1 indicating match quality.
-    """
-    text = text.lower().strip()
-    pattern = pattern.lower().strip()
-
-    if pattern in text:
-        return 1.0
-
-    words = pattern.split()
-    if len(words) > 1:
-        matches = sum(1 for word in words if word in text)
-        return matches / len(words)
-
-    return 0.0
