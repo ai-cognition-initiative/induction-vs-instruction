@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import Sequence
@@ -184,6 +185,20 @@ def _common_prep(log_dir: str, output_dir: str) -> tuple[pd.DataFrame, Path]:
     # Shorten model names (extract just the model name after the last /)
     df["model"] = df["model"].astype(str).str.split("/").str[-1]
     df["model"] = df["model"].str.replace(r"^(openai-|anthropic-)", "", regex=True)
+
+    # Append reasoning effort to model name when non-default
+    def _get_effort(config_str: object) -> str | None:
+        if not isinstance(config_str, str):
+            return None
+        try:
+            effort = json.loads(config_str).get("reasoning_effort")
+            return effort if effort and effort != "none" else None
+        except (ValueError, TypeError):
+            return None
+
+    _effort = df["model_generate_config"].map(_get_effort)
+    _mask = _effort.notna()
+    df.loc[_mask, "model"] = df.loc[_mask, "model"] + " (" + _effort[_mask] + ")"
 
     # Add pairing columns
     df = add_pairing_columns(df)
