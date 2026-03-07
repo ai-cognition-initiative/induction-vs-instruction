@@ -23,9 +23,9 @@
   },
   "Qwen3-235B-A22B-Instruct-2507": {
     "false": {
-      "artificial_analysis_intelligence_index": 25,
-      "artificial_analysis_coding_index": 22.1,
-      "artificial_analysis_math_index": 71.7,
+      "intelligence_index": 25,
+      "coding_index": 22.1,
+      "math_index": 71.7,
       "mmlu_pro": 0.828,
       "gpqa": 0.753,
       "hle": 0.106,
@@ -38,6 +38,25 @@
       "lcr": 0.312,
       "terminalbench_hard": 0.152,
       "tau2": 0.333
+    }
+  },
+  "Qwen3-30B-A3B-Instruct-2507": {
+    "false": {
+      "intelligence_index": 19.3,
+      "coding_index": 14.2,
+      "math_index": 66.3,
+      "mmlu_pro": 0.777,
+      "gpqa": 0.659,
+      "hle": 0.068,
+      "livecodebench": 0.515,
+      "scicode": 0.304,
+      "math_500": 0.975,
+      "aime": 0.727,
+      "aime_25": 0.663,
+      "ifbench": 0.331,
+      "lcr": 0.227,
+      "terminalbench_hard": 0.061,
+      "tau2": 0.102
     }
   },
   "llama-3.3-70b-instruct": {
@@ -157,7 +176,7 @@
     },
     "false": {}
   },
-  "claude-sonnet-4.6": {
+  "claude-4.6-sonnet": {
     "true": {
       "api_name": "Claude Sonnet 4.6 (Adaptive Reasoning, Max Effort)",
       "intelligence_index": 51.7,
@@ -256,6 +275,114 @@
       "gpqa": 0.789,
       "livecodebench": null,
       "ifbench": 0.437
+    }
+  },
+  "kimi-k2": {
+    "true": {
+      "intelligence_index": 40.9,
+      "coding_index": 34.8,
+      "math_index": 94.7,
+      "mmlu_pro": 0.848,
+      "gpqa": 0.838,
+      "hle": 0.223,
+      "livecodebench": 0.853,
+      "scicode": 0.424,
+      "math_500": null,
+      "aime": null,
+      "aime_25": 0.947,
+      "ifbench": 0.681,
+      "lcr": 0.663,
+      "terminalbench_hard": 0.311,
+      "tau2": 0.93
+    },
+    "false": {
+      "intelligence_index": 26.3,
+      "coding_index": 22.1,
+      "math_index": 57,
+      "mmlu_pro": 0.824,
+      "gpqa": 0.766,
+      "hle": 0.07,
+      "livecodebench": 0.556,
+      "scicode": 0.345,
+      "math_500": 0.971,
+      "aime": 0.693,
+      "aime_25": 0.57,
+      "ifbench": 0.415,
+      "lcr": 0.51,
+      "terminalbench_hard": 0.159,
+      "tau2": 0.611
+    }
+  },
+  "hermes-4-70B": {
+    "true": {
+      "artificial_analysis_intelligence_index": 20.4,
+      "artificial_analysis_coding_index": 14.4,
+      "artificial_analysis_math_index": 68.7,
+      "mmlu_pro": 0.811,
+      "gpqa": 0.699,
+      "hle": 0.079,
+      "livecodebench": 0.653,
+      "scicode": 0.341,
+      "math_500": null,
+      "aime": null,
+      "aime_25": 0.687,
+      "ifbench": 0.313,
+      "lcr": 0.067,
+      "terminalbench_hard": 0.045,
+      "tau2": 0.225
+    },
+    "false": {
+      "intelligence_index": 13.6,
+      "coding_index": 9.2,
+      "math_index": 11.3,
+      "mmlu_pro": 0.664,
+      "gpqa": 0.491,
+      "hle": 0.036,
+      "livecodebench": 0.269,
+      "scicode": 0.277,
+      "math_500": null,
+      "aime": null,
+      "aime_25": 0.113,
+      "ifbench": 0.29,
+      "lcr": 0.02,
+      "terminalbench_hard": 0,
+      "tau2": 0.216
+    }
+  },
+  "hermes-4-405B": {
+    "true": {
+      "intelligence_index": 21.7,
+      "coding_index": 16,
+      "ath_index": 69.7,
+      "mmlu_pro": 0.829,
+      "gpqa": 0.727,
+      "hle": 0.103,
+      "livecodebench": 0.686,
+      "scicode": 0.252,
+      "math_500": null,
+      "aime": null,
+      "aime_25": 0.697,
+      "ifbench": 0.327,
+      "lcr": 0.207,
+      "terminalbench_hard": 0.114,
+      "tau2": 0.222
+    },
+    "false": {
+      "intelligence_index": 17.1,
+      "coding_index": 18.1,
+      "math_index": 15.3,
+      "mmlu_pro": 0.729,
+      "gpqa": 0.536,
+      "hle": 0.042,
+      "livecodebench": 0.546,
+      "scicode": 0.346,
+      "math_500": null,
+      "aime": null,
+      "aime_25": 0.153,
+      "ifbench": 0.348,
+      "lcr": 0.2,
+      "terminalbench_hard": 0.098,
+      "tau2": 0.266
     }
   },
   "qwen3.5-plus-02-15": {
