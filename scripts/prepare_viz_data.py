@@ -15,6 +15,7 @@ from inspect_ai.analysis import (
     evals_df,
     samples_df,
 )
+from inspect_ai.log import read_eval_log
 
 
 def _n_turns_to_string(df: pd.DataFrame) -> pd.DataFrame:
@@ -55,8 +56,7 @@ ALIGNED_CONDITIONS = {
     "preference_aligned_cats",
     "preference_aligned_helpful",
     "token_countries_states",
-    "language_fr_ru"
-
+    "language_fr_ru",
 }
 
 MISALIGNED_CONDITIONS = {
@@ -66,7 +66,7 @@ MISALIGNED_CONDITIONS = {
     "preference_misaligned_cats",
     "preference_misaligned_helpful",
     "token_states_countries",
-    "language_ru_fr"
+    "language_ru_fr",
 }
 
 # Condition pairs where "aligned" means instruction agrees with model values/truth.
@@ -95,6 +95,49 @@ PREDICTION_SCORE_RENAME = {
     "score_prediction_unknown_accuracy": "score_prediction_unknown",
     "score_prediction_unknown_stderr": "stderr_prediction_unknown",
 }
+
+
+def _get_reasoning_suffix_from_config(config_str: object) -> str | None:
+    """Extract non-default reasoning_effort from a model_generate_config JSON string."""
+    if not isinstance(config_str, str):
+        return None
+    try:
+        effort = json.loads(config_str).get("reasoning_effort")
+        return effort if effort and effort != "none" else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _load_model_args_map(log_dirs: str | Sequence[str]) -> dict[str, dict]:
+    """Build eval_id → model_args dict by reading log headers.
+
+    evals_df() does not expose model_args (always NA), so we read raw log
+    headers to extract reasoning_enabled and other model-level settings.
+    """
+    if isinstance(log_dirs, str):
+        log_dirs = [log_dirs]
+
+    result: dict[str, dict] = {}
+    for log_dir in log_dirs:
+        for f in sorted(Path(log_dir).glob("*.eval")):
+            try:
+                log = read_eval_log(str(f), header_only=True)
+                result[log.eval.eval_id] = log.eval.model_args or {}
+            except Exception:
+                pass
+    return result
+
+
+def _get_reasoning_suffix(config_str: object, model_args: dict | None) -> str | None:
+    """Return reasoning suffix for model name, or None if no reasoning active.
+
+    Checks (in order):
+      1. reasoning_enabled=True in model_args → returns "reasoning"
+      2. non-default reasoning_effort in model_generate_config → returns that effort string
+    """
+    if model_args and model_args.get("reasoning_enabled") is True:
+        return "reasoning"
+    return _get_reasoning_suffix_from_config(config_str)
 
 
 def _get_reasoning_tokens(model_usage: object) -> int:
@@ -193,20 +236,20 @@ def _common_prep(log_dir: str, output_dir: str) -> tuple[pd.DataFrame, Path]:
     # Shorten model names (extract just the model name after the last /)
     df["model"] = df["model"].astype(str).str.split("/").str[-1]
     df["model"] = df["model"].str.replace(r"^(openai-|anthropic-)", "", regex=True)
+    df["model"] = df["model"].str.lower()
 
-    # Append reasoning effort to model name when non-default
-    def _get_effort(config_str: object) -> str | None:
-        if not isinstance(config_str, str):
-            return None
-        try:
-            effort = json.loads(config_str).get("reasoning_effort")
-            return effort if effort and effort != "none" else None
-        except (ValueError, TypeError):
-            return None
-
-    _effort = df["model_generate_config"].map(_get_effort)
-    _mask = _effort.notna()
-    df.loc[_mask, "model"] = df.loc[_mask, "model"] + " (" + _effort[_mask] + ")"
+    # Append reasoning suffix to model name when non-default (e.g. "modelname-medium", "modelname-reasoning")
+    _args_map = _load_model_args_map(log_dir)
+    _model_args_col = df["eval_id"].map(_args_map)
+    _suffix = pd.Series(
+        [
+            _get_reasoning_suffix(cfg, args)
+            for cfg, args in zip(df["model_generate_config"], _model_args_col)
+        ],
+        index=df.index,
+    )
+    _mask = _suffix.notna()
+    df.loc[_mask, "model"] = df.loc[_mask, "model"] + "-" + _suffix[_mask]
 
     # Add pairing columns
     df = add_pairing_columns(df)
@@ -247,11 +290,13 @@ def prepare_behavioral(log_dir: str, output_dir: str) -> None:
         )
         sys.exit(1)
 
-    # Try multi-metric rename first; fall back to coalesce for older logs
-    if "score_instruction_following_accuracy" in df.columns:
-        df = df.rename(columns=BEHAVIORAL_SCORE_RENAME)
-    else:
-        df = _coalesce_scores(df)
+    # Coalesce all *_accuracy columns into a single score (handles mixed old/new scorer logs)
+    df = _coalesce_scores(df)
+    # Rename unknown metric columns from multi-metric scorer if present
+    unknown_renames = {
+        k: v for k, v in BEHAVIORAL_SCORE_RENAME.items() if "unknown" in k
+    }
+    df = df.rename(columns=unknown_renames)
     df = df.dropna(subset=["score"])
 
     if df.empty:
@@ -388,8 +433,17 @@ def load_evals_from_folders(log_dirs: Sequence[str]) -> pd.DataFrame:
     return pd.concat(dfs, ignore_index=True)
 
 
-def process_raw_evals(df: pd.DataFrame) -> pd.DataFrame:
-    """Apply common transformations to raw evals dataframe."""
+def process_raw_evals(
+    df: pd.DataFrame,
+    model_args_map: dict[str, dict] | None = None,
+) -> pd.DataFrame:
+    """Apply common transformations to raw evals dataframe.
+
+    Args:
+        df: Raw evals dataframe from load_evals_from_folders().
+        model_args_map: Optional eval_id → model_args dict from _load_model_args_map().
+            Required to detect reasoning_enabled=True for model name suffixes.
+    """
     df = df.rename(
         columns={
             "task_arg_condition": "condition",
@@ -399,6 +453,26 @@ def process_raw_evals(df: pd.DataFrame) -> pd.DataFrame:
     )
     df["model"] = df["model"].astype(str).str.split("/").str[-1]
     df["model"] = df["model"].str.replace(r"^(openai-|anthropic-)", "", regex=True)
+    df["model"] = df["model"].str.lower()
+
+    # Append reasoning suffix to model name when non-default (e.g. "modelname-medium", "modelname-reasoning")
+    if "model_generate_config" in df.columns or model_args_map:
+        _model_args_col = (
+            df["eval_id"].map(model_args_map) if model_args_map else pd.Series(
+                [None] * len(df), index=df.index
+            )
+        )
+        _config_col = df.get("model_generate_config", pd.Series([None] * len(df), index=df.index))
+        _suffix = pd.Series(
+            [
+                _get_reasoning_suffix(cfg, args)
+                for cfg, args in zip(_config_col, _model_args_col)
+            ],
+            index=df.index,
+        )
+        _mask = _suffix.notna()
+        df.loc[_mask, "model"] = df.loc[_mask, "model"] + "-" + _suffix[_mask]
+
     df = add_pairing_columns(df)
     df["n_turns"] = pd.to_numeric(df["n_turns"], errors="coerce").astype(int)
     df = df.sort_values(["model", "condition", "instruction", "n_turns"])
@@ -427,11 +501,13 @@ def process_behavioral_df(
     if not acc_cols:
         raise ValueError("No score columns found in behavioral dataframe")
 
-    # Try multi-metric rename first; fall back to coalesce for older logs
-    if "score_instruction_following_accuracy" in df.columns:
-        df = df.rename(columns=BEHAVIORAL_SCORE_RENAME)
-    else:
-        df = _coalesce_scores(df)
+    # Coalesce all *_accuracy columns into a single score (handles mixed old/new scorer logs)
+    df = _coalesce_scores(df)
+    # Rename unknown metric columns from multi-metric scorer if present
+    unknown_renames = {
+        k: v for k, v in BEHAVIORAL_SCORE_RENAME.items() if "unknown" in k
+    }
+    df = df.rename(columns=unknown_renames)
     df = df.dropna(subset=["score"])
 
     if df.empty:
@@ -546,11 +622,12 @@ def _merge_behavioral_prediction(
     if not acc_cols:
         raise ValueError("No score columns found in behavioral logs")
 
-    # Try multi-metric rename first; fall back to coalesce for older logs
-    if "score_instruction_following_accuracy" in df_behavioral.columns:
-        df_behavioral = df_behavioral.rename(columns=BEHAVIORAL_SCORE_RENAME)
-    else:
-        df_behavioral = _coalesce_scores(df_behavioral)
+    # Coalesce all *_accuracy columns into a single score (handles mixed old/new scorer logs)
+    df_behavioral = _coalesce_scores(df_behavioral)
+    unknown_renames = {
+        k: v for k, v in BEHAVIORAL_SCORE_RENAME.items() if "unknown" in k
+    }
+    df_behavioral = df_behavioral.rename(columns=unknown_renames)
 
     if "score_prediction_accuracy_accuracy" not in df_prediction.columns:
         raise ValueError("Missing prediction scores in prediction logs")
@@ -606,7 +683,8 @@ def prepare_behavioral_multi(
     out.mkdir(parents=True, exist_ok=True)
 
     df = load_evals_from_folders(log_dirs)
-    df = process_raw_evals(df)
+    model_args_map = _load_model_args_map(log_dirs)
+    df = process_raw_evals(df, model_args_map=model_args_map)
 
     reasoning = load_reasoning_tokens(log_dirs)
     df = df.merge(reasoning, on="eval_id", how="left")
@@ -636,7 +714,8 @@ def prepare_prediction_multi(
     out.mkdir(parents=True, exist_ok=True)
 
     df = load_evals_from_folders(log_dirs)
-    df = process_raw_evals(df)
+    model_args_map = _load_model_args_map(log_dirs)
+    df = process_raw_evals(df, model_args_map=model_args_map)
 
     reasoning = load_reasoning_tokens(log_dirs)
     df = df.merge(reasoning, on="eval_id", how="left")
@@ -667,7 +746,8 @@ def prepare_combined_multi(
     out.mkdir(parents=True, exist_ok=True)
 
     df_behavioral = load_evals_from_folders(behavioral_log_dirs)
-    df_behavioral = process_raw_evals(df_behavioral)
+    model_args_b = _load_model_args_map(behavioral_log_dirs)
+    df_behavioral = process_raw_evals(df_behavioral, model_args_map=model_args_b)
     reasoning_b = load_reasoning_tokens(behavioral_log_dirs)
     df_behavioral = df_behavioral.merge(reasoning_b, on="eval_id", how="left")
     df_behavioral["reasoning_tokens"] = (
@@ -675,7 +755,8 @@ def prepare_combined_multi(
     )
 
     df_prediction = load_evals_from_folders(prediction_log_dirs)
-    df_prediction = process_raw_evals(df_prediction)
+    model_args_p = _load_model_args_map(prediction_log_dirs)
+    df_prediction = process_raw_evals(df_prediction, model_args_map=model_args_p)
     reasoning_p = load_reasoning_tokens(prediction_log_dirs)
     df_prediction = df_prediction.merge(reasoning_p, on="eval_id", how="left")
     df_prediction["reasoning_tokens"] = (
