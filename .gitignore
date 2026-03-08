@@ -13,3 +13,4 @@ outputs/
 configs/
 *pyrightconfig.json
 .vscode/
+paper/
