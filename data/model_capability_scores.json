@@ -21,7 +21,19 @@
       "ifbench": 0.474
     }
   },
-  "Qwen3-235B-A22B-Instruct-2507": {
+  "gpt-5.2 (medium)": {
+    "true": {
+      "api_name": "GPT-5.2 (medium)",
+      "intelligence_index": 46.6,
+      "coding_index": 44.2,
+      "math_index": 96.7,
+      "mmlu_pro": 0.859,
+      "gpqa": 0.864,
+      "livecodebench": 0.894,
+      "ifbench": 0.652
+    }
+  },
+  "qwen3-235B-a22B-instruct-2507": {
     "false": {
       "intelligence_index": 25,
       "coding_index": 22.1,
@@ -40,7 +52,7 @@
       "tau2": 0.333
     }
   },
-  "Qwen3-30B-A3B-Instruct-2507": {
+  "qwen3-30b-A3b-instruct-2507": {
     "false": {
       "intelligence_index": 19.3,
       "coding_index": 14.2,
@@ -57,6 +69,26 @@
       "lcr": 0.227,
       "terminalbench_hard": 0.061,
       "tau2": 0.102
+    }
+  },
+  "llama-3.1-70b-instruct": {
+    "true": {},
+    "false": {
+      "artificial_analysis_intelligence_index": 13.1,
+      "artificial_analysis_coding_index": 10.9,
+      "artificial_analysis_math_index": 4,
+      "mmlu_pro": 0.676,
+      "gpqa": 0.409,
+      "hle": 0.046,
+      "livecodebench": 0.232,
+      "scicode": 0.267,
+      "math_500": 0.649,
+      "aime": 0.173,
+      "aime_25": 0.04,
+      "ifbench": 0.344,
+      "lcr": 0.063,
+      "terminalbench_hard": 0.03,
+      "tau2": 0.152
     }
   },
   "llama-3.3-70b-instruct": {
@@ -277,24 +309,7 @@
       "ifbench": 0.437
     }
   },
-  "kimi-k2": {
-    "true": {
-      "intelligence_index": 40.9,
-      "coding_index": 34.8,
-      "math_index": 94.7,
-      "mmlu_pro": 0.848,
-      "gpqa": 0.838,
-      "hle": 0.223,
-      "livecodebench": 0.853,
-      "scicode": 0.424,
-      "math_500": null,
-      "aime": null,
-      "aime_25": 0.947,
-      "ifbench": 0.681,
-      "lcr": 0.663,
-      "terminalbench_hard": 0.311,
-      "tau2": 0.93
-    },
+  "kimi-k2-instruct": {"true":{},
     "false": {
       "intelligence_index": 26.3,
       "coding_index": 22.1,
@@ -313,7 +328,7 @@
       "tau2": 0.611
     }
   },
-  "hermes-4-70B": {
+  "hermes-4-70b": {
     "true": {
       "artificial_analysis_intelligence_index": 20.4,
       "artificial_analysis_coding_index": 14.4,
@@ -349,7 +364,18 @@
       "tau2": 0.216
     }
   },
-  "hermes-4-405B": {
+  "olmo-3.1-32b-instruct": {
+    "true": {},
+    "false": {
+      "intelligence_index": 12,
+      "mmlu_pro": 0.76,
+      "gpqa": 0.54,
+      "hle": 0.6,
+      "ifbench": 0.39,
+      "terminalbench_hard": 0.098
+    }
+  },
+  "hermes-4-405b": {
     "true": {
       "intelligence_index": 21.7,
       "coding_index": 16,
