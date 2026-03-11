@@ -12,7 +12,7 @@ from inspect_ai.scorer import (
 )
 from inspect_ai.solver import TaskState
 
-from src.scorers.classify import classify_language
+from src.scorers.classify import _extract_answer, classify_language
 
 
 @scorer(metrics=[accuracy(), stderr()])
@@ -27,28 +27,28 @@ def language_scorer(
     """
 
     async def score(state: TaskState, target: Target) -> Score:
-        output = state.output.completion.strip()
+        output = _extract_answer(state.output.completion)
         classification = await classify_language(output, pattern_language, target_language)
 
         if classification == "target":
             return Score(
                 value=CORRECT,
-                answer=output,
-                explanation=f"Detected target language ({target_language})",
+                answer=state.output.completion,
+                explanation=f"Detected target language ({target_language}). Scored on: '{output}'",
                 metadata={"classification": "target"},
             )
         elif classification == "pattern":
             return Score(
                 value=INCORRECT,
-                answer=output,
-                explanation=f"Detected pattern language ({pattern_language})",
+                answer=state.output.completion,
+                explanation=f"Detected pattern language ({pattern_language}). Scored on: '{output}'",
                 metadata={"classification": "pattern"},
             )
         else:
             return Score(
                 value=INCORRECT,
-                answer=output,
-                explanation="Detected neither target nor pattern language",
+                answer=state.output.completion,
+                explanation=f"Detected neither target nor pattern language. Scored on: '{output}'",
                 metadata={"classification": "unknown"},
             )
 

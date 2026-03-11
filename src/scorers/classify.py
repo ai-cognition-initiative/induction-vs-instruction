@@ -13,7 +13,7 @@ from pathlib import Path
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 
 # Grader model used for all LLM-judge calls — configurable via GRADER_MODEL env var
-GRADER_MODEL = os.environ.get("GRADER_MODEL", "openai-api/gradient/anthropic-claude-4.5-haiku")
+GRADER_MODEL = os.environ.get("GRADER_MODEL", "openrouter/openai/gpt-5-mini")
 
 _set_cache: dict[str, list[str]] = {}
 

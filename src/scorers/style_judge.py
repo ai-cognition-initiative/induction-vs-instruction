@@ -13,7 +13,7 @@ from inspect_ai.scorer import (
 )
 from inspect_ai.solver import TaskState
 
-from src.scorers.classify import GRADER_MODEL, PERSONA_RUBRIC, PREFERENCE_RUBRIC
+from src.scorers.classify import GRADER_MODEL, PERSONA_RUBRIC, PREFERENCE_RUBRIC, _extract_answer
 
 
 @scorer(metrics=[accuracy(), stderr()])
@@ -27,7 +27,7 @@ def style_scorer(
     rubric = PREFERENCE_RUBRIC if condition_type == "preference" else PERSONA_RUBRIC
 
     async def score(state: TaskState, target: Target) -> Score:
-        output = state.output.completion.strip()
+        output = _extract_answer(state.output.completion)
 
         prompt = rubric.format(
             target_description=target_description,
@@ -50,22 +50,22 @@ def style_scorer(
         if "TARGET" in judgment:
             return Score(
                 value=CORRECT,
-                answer=output,
-                explanation=f"Judge classified as TARGET ({target_description})",
+                answer=state.output.completion,
+                explanation=f"Judge classified as TARGET ({target_description}). Scored on: '{output}'",
                 metadata={"judge_response": judgment, "classification": "target"},
             )
         elif "PATTERN" in judgment:
             return Score(
                 value=INCORRECT,
-                answer=output,
-                explanation=f"Judge classified as PATTERN ({pattern_description})",
+                answer=state.output.completion,
+                explanation=f"Judge classified as PATTERN ({pattern_description}). Scored on: '{output}'",
                 metadata={"judge_response": judgment, "classification": "pattern"},
             )
         else:
             return Score(
                 value=INCORRECT,
-                answer=output,
-                explanation=f"Judge classified as NEITHER (judge said: {judgment})",
+                answer=state.output.completion,
+                explanation=f"Judge classified as NEITHER (judge said: {judgment}). Scored on: '{output}'",
                 metadata={"judge_response": judgment, "classification": "unknown"},
             )
 
