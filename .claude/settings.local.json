@@ -58,7 +58,8 @@
       "Bash(cd:*)",
       "Bash(git commit:*)",
       "Bash(uv:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []

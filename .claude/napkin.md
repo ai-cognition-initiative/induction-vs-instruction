@@ -17,6 +17,8 @@
 | 2026-03-03 | user | Cross-model analyses are meaningless when models have different transition curves | Models behave completely differently at the same N. Don't treat models as interchangeable "raters" of seeds. All seed analyses must be within-model. |
 | 2026-03-03 | user | Within-N seed effects (unanimity, overdispersion) don't prove question content matters | A seed unanimous at one N could be noise — if it flips at adjacent N values, it's stochasticity not content. The decisive test is **cross-N stability**: do seed residuals (centered by model mean at each N) correlate across N values? ICC on residual matrix, Kendall's W, seeds consistently above/below median at ALL transition-zone Ns. |
 | 2026-03-07 | self | Substring matching (`pattern in text`) in scorers causes false positives | Model outputs like "I can't comply... USA... femur" falsely match as TARGET. Use normalized exact equality: `text.strip().lower().strip("\"'.,!?;:")` then `==`. This handles trailing punctuation but rejects substring containment in longer text. |
+| 2026-03-08 | user | Reasoning effort suffix format was `"modelname (effort)"` | Should be `"modelname-effort"` (hyphen-separated). Similarly `reasoning_enabled=true` → `"modelname-reasoning"`. |
+| 2026-03-08 | self | `evals_df()` shows `model_args: <NA>` even when model_args has `reasoning_enabled=True` | evals_df doesn't serialize model_args properly. Must use `read_eval_log(f, header_only=True)` to read `log.eval.model_args` directly. Added `_load_model_args_map(log_dirs)` helper in prepare_viz_data.py. |
 
 ## User Preferences
 - Project is single-purpose (induction vs instruction evals) - no need for extra subfolder nesting

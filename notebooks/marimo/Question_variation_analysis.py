@@ -54,17 +54,30 @@ def _(Path, pd):
 
     _samples = samples_df(logs=_log_dir, columns=SampleSummary + EvalModel)
 
-    # Coalesce score columns into a single binary score.
-    # inspect-ai uses "C" (CORRECT = follows instruction) and "I" (INCORRECT = follows pattern).
+    # Coalesce score columns into a single binary instruction-following score.
+    # Handles two formats inspect-ai uses in samples_df:
+    # - Plain "C"/"I"/"P" string (single-metric scorers like pattern_match)
+    # - JSON string '{"instruction_following": "C", "unknown": "I"}' (multi-metric behavioral_scorer)
+    import json as _json
     _SCORE_MAP = {"C": 1.0, "I": 0.0, "P": 0.5}
+
+    def _extract_score(v) -> float | None:
+        if pd.isna(v):
+            return None
+        s = str(v).strip()
+        if s.startswith("{"):
+            try:
+                raw = _json.loads(s).get("instruction_following")
+                return _SCORE_MAP.get(str(raw)) if raw is not None else None
+            except (ValueError, TypeError):
+                return None
+        return _SCORE_MAP.get(s)
+
     _score_cols = [c for c in _samples.columns if c.startswith("score_")]
     _samples["score"] = pd.NA
     for _col in _score_cols:
-        _mapped = _samples[_col].map(
-            lambda v: _SCORE_MAP.get(str(v)) if pd.notna(v) else pd.NA
-        )
-        _samples["score"] = _samples["score"].fillna(_mapped)
-    _samples["score"] = _samples["score"].astype(float)
+        _samples["score"] = _samples["score"].fillna(_samples[_col].map(_extract_score))
+    _samples["score"] = pd.to_numeric(_samples["score"], errors="coerce")
 
     _samples["model"] = _samples["model"].astype(str).str.split("/").str[-1]
 
@@ -119,7 +132,7 @@ def _(all_models, all_n_values, mo):
     )
     n_selector = mo.ui.dropdown(
         options=[str(n) for n in all_n_values],
-        value="10",
+        value='11',
         label="N value",
     )
     mo.hstack([model_selector, n_selector])
