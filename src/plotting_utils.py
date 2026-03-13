@@ -8,6 +8,8 @@ import altair as alt
 import pandas as pd
 
 
+COLOR_SCHEME = "set2"
+
 BENCHMARKS = {
     "intelligence_index": "Intelligence Index",
     "mmlu_pro": "MMLU Pro",
@@ -75,9 +77,7 @@ def prep_benchmark_data(
     )
     parts = []
     for _col, _label in BENCHMARKS.items():
-        _part = (
-            _wide[["model", y_col, "reasoning", _col]].dropna(subset=[_col]).copy()
-        )
+        _part = _wide[["model", y_col, "reasoning", _col]].dropna(subset=[_col]).copy()
         if len(_part) == 0:
             continue
         _part = _part.rename(columns={_col: "benchmark_value"})
@@ -86,21 +86,38 @@ def prep_benchmark_data(
             _part["benchmark_value"].min() * 0.95,
             _part["benchmark_value"].max() * 1.05,
         ]
-        _yr = [0, 1] if y_col in ["avg_if_rate", "prediction_rate"] else None
+        _yr = [0, 1] if y_col in ["avg_if_rate", "prediction_rate", "prediction_accuracy"] else None
         if _yr:
             _part = nudge_fn(_part, "benchmark_value", y_col, _xr, _yr)
         else:
             _yr = [_part[y_col].min() - 5, _part[y_col].max() + 5]
             _part = nudge_fn(_part, "benchmark_value", y_col, _xr, _yr)
+        if "label_x" not in _part.columns:
+            _part = _part.copy()
+            _part["label_x"] = _part["benchmark_value"]
+            _part["label_y"] = _part[y_col]
         parts.append(_part)
     result = pd.concat(parts, ignore_index=True)
     return result.where(pd.notnull(result), None)
 
 
 def make_scatter_chart(
-    df: pd.DataFrame, y_col: str, y_title: str, title: str
+    df: pd.DataFrame,
+    y_col: str,
+    y_title: str,
+    title: str,
+    log_x: bool = False,
+    log_y: bool = False,
+    y_domain: list[float] | None = None,
 ) -> alt.FacetChart:
     """Create a faceted scatter chart with labels and trendline."""
+    x_scale = alt.Scale(type="log") if log_x else alt.Scale(zero=False)
+    if log_y:
+        y_scale = alt.Scale(type="log")
+    elif y_domain is not None:
+        y_scale = alt.Scale(domain=y_domain)
+    else:
+        y_scale = alt.Scale(zero=False)
     points = (
         alt.Chart(df)
         .mark_point(size=100, filled=True)
@@ -108,10 +125,10 @@ def make_scatter_chart(
             x=alt.X(
                 "benchmark_value:Q",
                 title="Benchmark Score",
-                scale=alt.Scale(zero=False),
+                scale=x_scale,
             ),
-            y=alt.Y(f"{y_col}:Q", title=y_title),
-            color=alt.Color("model:N", legend=None),
+            y=alt.Y(f"{y_col}:Q", title=y_title, scale=y_scale),
+            color=alt.Color("model:N", scale=alt.Scale(scheme=COLOR_SCHEME), legend=None),
             shape=alt.Shape("reasoning:N", scale=SHAPE_SCALE, title="Model type"),
             tooltip=[
                 "model",
@@ -176,75 +193,104 @@ def make_radar_chart(Plot, js, points, categories, title, width=600, height=500)
     _cats_json = json.dumps(categories)
     _lon_js = f"d3.scalePoint({_cats_json}, [180, -180]).padding(0.5).align(1)"
 
-    return Plot.plot({
-        "projection": {
-            "type": "azimuthal-equidistant",
-            "rotate": [0, -90],
-            "domain": js("d3.geoCircle().center([0, 90]).radius(0.625)()"),
-        },
-        "marks": [
-            Plot.geo([0.5, 0.4, 0.3, 0.2, 0.1], {
-                "geometry": js("(r) => d3.geoCircle().center([0, 90]).radius(r)()"),
-                "stroke": "currentColor",
-                "strokeOpacity": 0.2,
-            }),
-            Plot.link(js(f"({_lon_js}).domain()"), {
-                "x1": js(f"(d) => ({_lon_js})(d)"),
-                "y1": 90,
-                "x2": 0,
-                "y2": 90,
-                "stroke": "currentColor",
-                "strokeOpacity": 0.2,
-            }),
-            Plot.text(js(f"({_lon_js}).domain()"), {
-                "x": js(f"(d) => ({_lon_js})(d)"),
-                "y": 89.4,
-                "text": js("Plot.identity"),
-                "lineWidth": 5,
-            }),
-            Plot.text([0.5, 0.4, 0.3, 0.2, 0.1], {
-                "x": 180,
-                "y": js("(r) => 90 - r"),
-                "dx": 2,
-                "textAnchor": "start",
-                "text": js("(r) => `${r * 200}%`"),
-                "fill": "currentColor",
-                "stroke": "white",
-                "fontSize": 8,
-            }),
-            Plot.area(points, {
-                "x1": js(f"(d) => ({_lon_js})(d.key)"),
-                "y1": js("(d) => 90 - d.value * 0.5"),
-                "fill": "name",
-                "stroke": "name",
-                "curve": "cardinal-closed",
-                "fillOpacity": 0.2,
-                "strokeWidth": 1.5,
-            }),
-            Plot.dot(points, {
-                "x": js(f"(d) => ({_lon_js})(d.key)"),
-                "y": js("(d) => 90 - d.value * 0.5"),
-                "fill": "name",
-                "stroke": "white",
-                "r": 3,
-            }),
-            Plot.text(points, Plot.pointer({
-                "x": js(f"(d) => ({_lon_js})(d.key)"),
-                "y": js("(d) => 90 - d.value * 0.5"),
-                "text": js("(d) => `${d.name}: ${(d.value * 100).toFixed(1)}%`"),
-                "fill": "currentColor",
-                "stroke": "white",
-                "fontSize": 10,
-                "dy": -10,
-            })),
-        ],
-        "width": width,
-        "marginLeft": 100,
-        "marginRight": 100,
-        "height": height,
-        "title": title,
-        "color": {"legend": True},
-    })
+    return Plot.plot(
+        {
+            "projection": {
+                "type": "azimuthal-equidistant",
+                "rotate": [0, -90],
+                "domain": js("d3.geoCircle().center([0, 90]).radius(0.625)()"),
+            },
+            "marks": [
+                Plot.geo(
+                    [0.5, 0.4, 0.3, 0.2, 0.1],
+                    {
+                        "geometry": js(
+                            "(r) => d3.geoCircle().center([0, 90]).radius(r)()"
+                        ),
+                        "stroke": "currentColor",
+                        "strokeOpacity": 0.2,
+                    },
+                ),
+                Plot.link(
+                    js(f"({_lon_js}).domain()"),
+                    {
+                        "x1": js(f"(d) => ({_lon_js})(d)"),
+                        "y1": 90,
+                        "x2": 0,
+                        "y2": 90,
+                        "stroke": "currentColor",
+                        "strokeOpacity": 0.2,
+                    },
+                ),
+                Plot.text(
+                    js(f"({_lon_js}).domain()"),
+                    {
+                        "x": js(f"(d) => ({_lon_js})(d)"),
+                        "y": 89.4,
+                        "text": js("Plot.identity"),
+                        "lineWidth": 5,
+                    },
+                ),
+                Plot.text(
+                    [0.5, 0.4, 0.3, 0.2, 0.1],
+                    {
+                        "x": 180,
+                        "y": js("(r) => 90 - r"),
+                        "dx": 2,
+                        "textAnchor": "start",
+                        "text": js("(r) => `${r * 200}%`"),
+                        "fill": "currentColor",
+                        "stroke": "white",
+                        "fontSize": 8,
+                    },
+                ),
+                Plot.area(
+                    points,
+                    {
+                        "x1": js(f"(d) => ({_lon_js})(d.key)"),
+                        "y1": js("(d) => 90 - d.value * 0.5"),
+                        "fill": "name",
+                        "stroke": "name",
+                        "curve": "cardinal-closed",
+                        "fillOpacity": 0.2,
+                        "strokeWidth": 1.5,
+                    },
+                ),
+                Plot.dot(
+                    points,
+                    {
+                        "x": js(f"(d) => ({_lon_js})(d.key)"),
+                        "y": js("(d) => 90 - d.value * 0.5"),
+                        "fill": "name",
+                        "stroke": "white",
+                        "r": 3,
+                    },
+                ),
+                Plot.text(
+                    points,
+                    Plot.pointer(
+                        {
+                            "x": js(f"(d) => ({_lon_js})(d.key)"),
+                            "y": js("(d) => 90 - d.value * 0.5"),
+                            "text": js(
+                                "(d) => `${d.name}: ${(d.value * 100).toFixed(1)}%`"
+                            ),
+                            "fill": "currentColor",
+                            "stroke": "white",
+                            "fontSize": 10,
+                            "dy": -10,
+                        }
+                    ),
+                ),
+            ],
+            "width": width,
+            "marginLeft": 100,
+            "marginRight": 100,
+            "height": height,
+            "title": title,
+            "color": {"legend": True, "scheme": COLOR_SCHEME.capitalize()},
+        }
+    )
 
 
 # Likert offset JS for diverging stacked bars

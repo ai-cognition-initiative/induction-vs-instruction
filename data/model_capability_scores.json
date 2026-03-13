@@ -21,7 +21,7 @@
       "ifbench": 0.474
     }
   },
-  "gpt-5.2 (medium)": {
+  "gpt-5.2-medium": {
     "true": {
       "api_name": "GPT-5.2 (medium)",
       "intelligence_index": 46.6,
@@ -33,7 +33,7 @@
       "ifbench": 0.652
     }
   },
-  "qwen3-235B-a22B-instruct-2507": {
+  "qwen3-235b-a22b-instruct-2507": {
     "false": {
       "intelligence_index": 25,
       "coding_index": 22.1,
@@ -52,7 +52,7 @@
       "tau2": 0.333
     }
   },
-  "qwen3-30b-A3b-instruct-2507": {
+  "qwen3-30b-a3b-instruct-2507": {
     "false": {
       "intelligence_index": 19.3,
       "coding_index": 14.2,
@@ -328,6 +328,25 @@
       "tau2": 0.611
     }
   },
+    "hermes-4-70b-reasoninh": {
+    "true": {
+      "artificial_analysis_intelligence_index": 20.4,
+      "artificial_analysis_coding_index": 14.4,
+      "artificial_analysis_math_index": 68.7,
+      "mmlu_pro": 0.811,
+      "gpqa": 0.699,
+      "hle": 0.079,
+      "livecodebench": 0.653,
+      "scicode": 0.341,
+      "math_500": null,
+      "aime": null,
+      "aime_25": 0.687,
+      "ifbench": 0.313,
+      "lcr": 0.067,
+      "terminalbench_hard": 0.045,
+      "tau2": 0.225
+    }},
+
   "hermes-4-70b": {
     "true": {
       "artificial_analysis_intelligence_index": 20.4,

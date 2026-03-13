@@ -46,7 +46,7 @@ CONDITION_PAIR_MAP = {
     "style_javascript_python": "style_code",
     "style_python_javascript": "style_code",
     "preference_aligned_helpful": "preference",
-    "preference_misaligned_unhelpful": "preference",
+    "preference_misaligned_helpful": "preference",
 }
 
 ALIGNED_CONDITIONS = {
