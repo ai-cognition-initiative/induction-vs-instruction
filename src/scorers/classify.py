@@ -46,6 +46,19 @@ def _exact_match(text: str, pattern: str) -> bool:
     return _normalize_answer(text) == _normalize_answer(pattern)
 
 
+def classify_fixed(text: str, condition_name: str, pattern: str) -> str:
+    """Classify classify_fixed condition output (sync)."""
+    from src.scorers.classify_fixed import VALID_CATEGORIES
+
+    normalized = _normalize_answer(text)
+    valid_cats = VALID_CATEGORIES.get(condition_name, set())
+    if normalized in valid_cats:
+        return "target"
+    if normalized == _normalize_answer(pattern):
+        return "pattern"
+    return "unknown"
+
+
 def classify_static(text: str, pattern: str, target: str) -> str:
     """Classify static-condition output. Canonical source for pattern_match scorer."""
     is_target = _exact_match(text, target)
@@ -363,6 +376,8 @@ async def classify_actual(text: str, metadata: dict) -> str:
             metadata["pattern_description"],
             condition_type=condition_type,
         )
+    if condition_type == "classify_fixed":
+        return classify_fixed(text, condition_name, metadata["pattern"])
     return "unknown"
 
 

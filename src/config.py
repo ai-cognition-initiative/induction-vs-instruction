@@ -281,4 +281,25 @@ CONDITIONS: dict[str, Condition] = {
         target_data_key="preference_misaligned_helpful",
         question_bank="questions_subjective.json",
     ),
+    # --- Classify fixed (task engagement with single-token output) ---
+    "classify_sh_history": Condition(
+        name="classify_sh_history",
+        pattern="history",
+        target="science/humanities",
+        purpose="Classify-fixed control: must read question to classify, but output is a single token",
+        target_description="classify each question as either 'science' or 'humanities' and respond with ONLY that one word",
+        pattern_description="output 'history'",
+        condition_type="classify_fixed",
+        scorer_type="classify_fixed",
+    ),
+    "classify_mc_history": Condition(
+        name="classify_mc_history",
+        pattern="history",
+        target="math/culture",
+        purpose="Classify-fixed control: must read question to classify, but output is a single token",
+        target_description="classify each question as either 'math' or 'culture' and respond with ONLY that one word",
+        pattern_description="output 'history'",
+        condition_type="classify_fixed",
+        scorer_type="classify_fixed",
+    ),
 }
