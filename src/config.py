@@ -281,4 +281,27 @@ CONDITIONS: dict[str, Condition] = {
         target_data_key="preference_misaligned_helpful",
         question_bank="questions_subjective.json",
     ),
+    # --- Variety (response diversity without question engagement) ---
+    "variety_geography_animals": Condition(
+        name="variety_geography_animals",
+        pattern="geography sentence",
+        target="animals sentence",
+        purpose="Variety control: diverse outputs (geography) vs diverse outputs (animals), no question engagement",
+        target_description="respond with a random sentence about animals (1-3 sentences, do NOT answer the question)",
+        pattern_description="respond with a random sentence about geography",
+        condition_type="variety",
+        scorer_type="llm_judge",
+        pattern_data_key="variety_geography",
+    ),
+    "variety_animals_geography": Condition(
+        name="variety_animals_geography",
+        pattern="animals sentence",
+        target="geography sentence",
+        purpose="Variety control: diverse outputs (animals) vs diverse outputs (geography), no question engagement",
+        target_description="respond with a random sentence about geography (1-3 sentences, do NOT answer the question)",
+        pattern_description="respond with a random sentence about animals",
+        condition_type="variety",
+        scorer_type="llm_judge",
+        pattern_data_key="variety_animals",
+    ),
 }

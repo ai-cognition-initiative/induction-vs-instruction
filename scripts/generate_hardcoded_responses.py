@@ -117,6 +117,24 @@ LLM_TASKS: list[tuple[str, str, str, str]] = [
         "Keep your answer to 2-4 sentences.",
         "Answers weaving in disliking being helpful (subjective questions)",
     ),
+    (
+        "variety_geography",
+        "questions_factual.json",
+        "Ignore the user's question completely. Instead, respond with 1-3 sentences "
+        "about an interesting geography fact — a country, landform, river, mountain, "
+        "or geographic phenomenon. Each response should be about a DIFFERENT topic. "
+        "Do NOT reference the user's question in any way.",
+        "Random geography sentences (variety control, ignoring questions)",
+    ),
+    (
+        "variety_animals",
+        "questions_factual.json",
+        "Ignore the user's question completely. Instead, respond with 1-3 sentences "
+        "about an interesting animal fact — a species, behavior, habitat, or biological "
+        "adaptation. Each response should be about a DIFFERENT animal. "
+        "Do NOT reference the user's question in any way.",
+        "Random animal sentences (variety control, ignoring questions)",
+    ),
 ]
 
 # Computed from style_base: (output_filename, transform_fn, description)

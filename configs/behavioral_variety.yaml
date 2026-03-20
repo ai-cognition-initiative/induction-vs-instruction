@@ -1,0 +1,17 @@
+protocol: behavioral
+
+conditions:
+  - variety_geography_animals
+  - variety_animals_geography
+
+n_turns:
+  - 1
+  - 3
+  - 8
+  - 16
+  - 31
+  - 50
+
+instruction_templates:
+  - instruction_no_hint
+n_trials: 1

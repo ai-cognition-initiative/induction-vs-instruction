@@ -13,7 +13,7 @@ from inspect_ai.scorer import (
 )
 from inspect_ai.solver import TaskState
 
-from src.scorers.classify import GRADER_MODEL, PERSONA_RUBRIC, PREFERENCE_RUBRIC, _extract_answer
+from src.scorers.classify import GRADER_MODEL, PERSONA_RUBRIC, PREFERENCE_RUBRIC, TOPIC_RUBRIC, _extract_answer
 
 
 @scorer(metrics=[accuracy(), stderr()])
@@ -24,7 +24,12 @@ def style_scorer(
 ) -> Scorer:
     """LLM judge scorer for persona drift and preference weaving conditions."""
 
-    rubric = PREFERENCE_RUBRIC if condition_type == "preference" else PERSONA_RUBRIC
+    if condition_type == "preference":
+        rubric = PREFERENCE_RUBRIC
+    elif condition_type == "variety":
+        rubric = TOPIC_RUBRIC
+    else:
+        rubric = PERSONA_RUBRIC
 
     async def score(state: TaskState, target: Target) -> Score:
         output = _extract_answer(state.output.completion)
