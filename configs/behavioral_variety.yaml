@@ -6,12 +6,18 @@ conditions:
 
 n_turns:
   - 1
+  - 2
   - 3
+  - 4
+  - 6
   - 8
+  - 11
   - 16
+  - 22
   - 31
+  - 43
   - 50
 
 instruction_templates:
   - instruction_no_hint
-n_trials: 1
+n_trials: 3
