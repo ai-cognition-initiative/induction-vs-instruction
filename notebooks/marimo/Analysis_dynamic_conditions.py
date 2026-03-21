@@ -246,7 +246,7 @@ def _(
                 "width": 700,
                 "height": 450,
                 "marginLeft": 160,
-                "title": f"N-value classification (threshold={_threshold})",
+                "title": f"Model behavior, aggregated by turn (threshold={_threshold})",
             }
         )
     )
@@ -929,17 +929,10 @@ def _(all_models, mo):
 
 
 @app.cell
-def _(
-    Plot,
-    evals_filtered,
-    js,
-    mo,
-    reasoning_model_selector,
-    reasoning_models,
-):
+def _(Plot, evals, js, mo, reasoning_model_selector, reasoning_models):
     # Plot R1: Reasoning vs non-reasoning transition curves, faceted by alignment
     _selected = reasoning_model_selector.value
-    _r1_data = evals_filtered[evals_filtered["model"].isin(_selected)].copy()
+    _r1_data = evals[evals["model"].isin(_selected)].copy()
     _r1_data = _r1_data[_r1_data["instruction_aligned"].notna()].copy()
 
 

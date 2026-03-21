@@ -310,7 +310,7 @@ def _(
                 "width": 700,
                 "height": 450,
                 "marginLeft": 250,
-                "title": f"N-value classification (threshold={_threshold})",
+                "title": f"Model behavior, aggregated by turn (threshold={_threshold})",
             }
         )
     )
