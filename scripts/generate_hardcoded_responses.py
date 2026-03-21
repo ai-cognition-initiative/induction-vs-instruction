@@ -25,10 +25,10 @@ MAX_WORKERS = 20
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 OUTPUT_DIR = DATA_DIR / "hardcoded_responses"
-DEFAULT_MODEL = "anthropic/claude-haiku-4-5"
+DEFAULT_MODEL = "openai/gpt-5-mini"
 
-# Each entry: (output_filename, question_bank_file, system_prompt, description)
-LLM_TASKS: list[tuple[str, str, str, str]] = [
+# Each entry: (output_filename, question_bank_file, system_prompt, description[, temperature])
+LLM_TASKS: list[tuple[str, str, str, str] | tuple[str, str, str, str, float]] = [
     (
         "language_french",
         "questions_factual.json",
@@ -117,6 +117,31 @@ LLM_TASKS: list[tuple[str, str, str, str]] = [
         "Keep your answer to 2-4 sentences.",
         "Answers weaving in disliking being helpful (subjective questions)",
     ),
+    (
+        "variety_geography",
+        "questions_factual.json",
+        "Ignore the user's question completely. Instead, write 1-3 sentences about "
+        "a random geography topic. Pick from a WIDE range: rivers, mountains, deserts, "
+        "islands, cities, tectonic plates, ocean trenches, glaciers, volcanoes, caves, "
+        "peninsulas, straits, deltas, fjords, atolls, plateaus, canyons, waterfalls, "
+        "climate zones, or any other geographic feature. Be creative and specific — "
+        "mention lesser-known places, not just famous ones. Never start with "
+        "'Did you know'. Do NOT reference the user's question.",
+        "Random geography sentences (variety control, ignoring questions)",
+        1.0,
+    ),
+    (
+        "variety_animals",
+        "questions_factual.json",
+        "Ignore the user's question completely. Instead, write 1-3 sentences about "
+        "a random animal. Pick from a WIDE range: mammals, birds, reptiles, amphibians, "
+        "fish, insects, arachnids, crustaceans, mollusks, cnidarians, echinoderms, "
+        "or any other animal group. Be creative — mention obscure species, unusual "
+        "behaviors, bizarre adaptations, or surprising facts. Never start with "
+        "'Did you know'. Vary your sentence structure. Do NOT reference the user's question.",
+        "Random animal sentences (variety control, ignoring questions)",
+        1.0,
+    ),
 ]
 
 # Computed from style_base: (output_filename, transform_fn, description)
@@ -134,12 +159,13 @@ def load_questions(filename: str) -> list[str]:
 
 
 def _call_llm(
-    client: OpenAI, model: str, system_prompt: str, question: str
+    client: OpenAI, model: str, system_prompt: str, question: str,
+    temperature: float = 0,
 ) -> tuple[str, str]:
     """Single LLM call. Returns (question, response)."""
     resp = client.chat.completions.create(
         model=model,
-        temperature=0,
+        temperature=temperature,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": question},
@@ -154,11 +180,12 @@ def generate_llm_responses(
     questions: list[str],
     system_prompt: str,
     desc: str,
+    temperature: float = 0,
 ) -> dict[str, str]:
     responses: dict[str, str] = {}
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = {
-            pool.submit(_call_llm, client, model, system_prompt, q): q
+            pool.submit(_call_llm, client, model, system_prompt, q, temperature): q
             for q in questions
         }
         for future in tqdm(
@@ -203,6 +230,10 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         print("Error: OPENROUTER_API_KEY not set in environment.", file=sys.stderr)
@@ -222,7 +253,12 @@ def main() -> None:
             print(f"Error: Unknown condition '{args.condition}'", file=sys.stderr)
             sys.exit(1)
 
-    for filename, bank_file, system_prompt, description in all_llm_tasks:
+    for task in all_llm_tasks:
+        filename = task[0]
+        bank_file = task[1]
+        system_prompt = task[2]
+        description = task[3]
+        temperature = task[4] if len(task) > 4 else 0
         path = OUTPUT_DIR / f"{filename}.json"
         if path.exists() and not args.force:
             print(f"Skipping {filename} (exists, use --force to regenerate)")
@@ -231,7 +267,8 @@ def main() -> None:
         print(f"Generating {filename}...")
         questions = load_questions(bank_file)
         responses = generate_llm_responses(
-            client, args.model, questions, system_prompt, filename
+            client, args.model, questions, system_prompt, filename,
+            temperature=temperature,
         )
         save_responses(filename, description, responses)
 
