@@ -154,3 +154,8 @@
 - `scripts/generate_hardcoded_responses.py` — generates 9 LLM files + 2 computed (uppercase/lowercase from style_base)
 - `style_lowercase_uppercase` and `style_uppercase_lowercase` conditions need `pattern_data_key` set to `style_uppercase`/`style_lowercase` respectively
 - Preference conditions use `questions_subjective.json` question bank (set via `question_bank` field on Condition)
+
+### Git Worktrees
+- Never place worktrees inside the main repo directory — git sees them as untracked files. Use sibling directories (e.g. `../response-variety`).
+- `configs/` is gitignored — use `git add -f configs/file.yaml` to track config files in worktrees.
+- Each worktree creates its own `.venv` when running `uv run` — first command in a new worktree is slow (installs packages).

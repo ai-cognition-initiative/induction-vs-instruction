@@ -59,7 +59,8 @@
       "Bash(git commit:*)",
       "Bash(uv:*)",
       "Bash(node:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(uvx marimo:*)"
     ],
     "deny": [],
     "ask": []
