@@ -1,0 +1,6 @@
+provider: openrouter
+
+models:
+  - openai/gpt-5.2
+
+

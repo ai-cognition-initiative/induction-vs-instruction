@@ -1,0 +1,25 @@
+# OLMo 3.1 32B served via Modal (vLLM OpenAI-compatible endpoint)
+#
+# Setup:
+#   1. pip install modal && modal setup
+#   2. modal deploy scripts/deploy_olmo_modal.py          # SFT (default)
+#      MODEL_VARIANT=dpo modal deploy scripts/deploy_olmo_modal.py  # DPO
+#   3. Copy the URL Modal prints (e.g. https://you--olmo-31-32b-sft-serve.modal.run)
+#   4. Paste it below as the url value
+#   5. No API key needed (Modal handles auth via your account)
+#
+# Run evals:
+#   uv run python run.py configs/behavioral_static_conditions.yaml \
+#     --models-yaml configs/models/olmo_modal.yaml
+
+provider: olmo-modal
+url: https://carolina-camassa--olmo-31-32b-sft-serve.modal.run/v1
+#https://carolina-camassa--olmo-31-32b-dpo-serve.modal.run/v1
+
+models:
+  - allenai/OLMo-3.1-32B-Instruct-SFT
+  #- allenai/OLMo-3.1-32B-Instruct-DPO
+
+# No API key required — set OLMO_MODAL_API_KEY to any non-empty string
+# if the run.py provider logic requires one, e.g.:
+#   export OLMO_MODAL_API_KEY=dummy

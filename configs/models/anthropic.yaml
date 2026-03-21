@@ -1,0 +1,5 @@
+provider: gradient
+url: https://inference.do-ai.run/v1/
+
+models:
+  - anthropic-claude-4.6-sonnet

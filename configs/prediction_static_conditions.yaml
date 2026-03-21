@@ -1,0 +1,35 @@
+# Example task configuration for run.py
+#
+# Usage:
+#   uv run python run.py configs/example.yaml \
+#     --model openrouter/google/gemini-2.0-flash-001
+
+protocol: prediction      # "behavioral" or "prediction"
+
+conditions:
+  - neutral
+  - value_aligned_helpful
+  - value_misaligned_helpful
+  - factual_aligned_earth
+  - factual_misaligned_earth
+  - token_countries_states
+  - token_states_countries
+
+n_turns:                       # log-spaced: exp(k * ln(50)/11), k=0..11
+  - 1
+  - 2
+  - 3
+  - 4
+  - 6
+  - 8
+  - 11
+  - 16
+  - 22
+  - 31
+  - 43
+  - 50
+
+
+instruction_templates:
+  - instruction_no_hint
+n_trials: 35

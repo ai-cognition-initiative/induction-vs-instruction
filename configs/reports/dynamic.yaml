@@ -1,0 +1,37 @@
+# Example report config file
+# Usage: just report-config configs/reports/example.yaml
+
+report_name: dynamic
+
+# Behavioral protocol logs (Protocol 1)
+# All logs from these folders will be merged
+behavioral:
+  log_folders:
+    - logs/protocol1/T0/dynamic/gpt-5-2
+    - logs/protocol1/T0/dynamic/gpt-5-2-medium
+    - logs/protocol1/T0/dynamic/opus-4-6
+    - logs/protocol1/T0/dynamic/sonnet-4-6
+    - logs/protocol1/T0/dynamic/gemini-2-5-flash
+    - logs/protocol1/T0/dynamic/llama3
+    - logs/protocol1/T0/dynamic/kimi-k2
+    - logs/protocol1/T0/dynamic/gemma
+    - logs/protocol1/T0/dynamic/gemma-12b
+    - logs/protocol1/T0/dynamic/olmo-3-1
+    - logs/protocol1/T0/dynamic/qwen3
+    - logs/protocol1/T0/dynamic/qwen3-30b
+    - logs/protocol1/T0/dynamic/hermes4
+    - logs/protocol1/T0/dynamic/hermes4-reasoning
+    
+
+
+
+
+
+# prediction:
+#   log_folders:
+
+# Notes:
+# - If only 'behavioral' is specified → renders behavioral_analysis.qmd
+# - If only 'prediction' is specified → renders prediction_analysis.qmd
+# - If both are specified → renders behavioral_vs_prediction_analysis.qmd (combined)
+# - All log folders must exist (will error if missing)

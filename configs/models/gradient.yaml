@@ -1,0 +1,40 @@
+provider: gradient
+url: https://inference.do-ai.run/v1/
+
+models:
+  # Anthropic
+  - anthropic-claude-4.6-sonnet
+  - anthropic-claude-4.5-sonnet
+  - anthropic-claude-sonnet-4
+  - anthropic-claude-4.5-haiku
+  - anthropic-claude-opus-4.6
+  - anthropic-claude-opus-4.5
+  - anthropic-claude-4.1-opus
+  - anthropic-claude-opus-4
+  # Meta
+  - llama3.3-70b-instruct
+  - llama3-8b-instruct
+  # Mistral
+  - mistral-nemo-instruct-2407
+  # OpenAI
+  - openai-gpt-oss-120b
+  - openai-gpt-oss-20b
+  - openai-gpt-5.2
+  - openai-gpt-5
+  - openai-gpt-5-mini
+  - openai-gpt-5-nano
+  - openai-gpt-4.1
+  - openai-gpt-4o
+  - openai-gpt-4o-mini
+  - openai-o1
+  - openai-o3
+  - openai-o3-mini
+  # Alibaba
+  - alibaba-qwen3-32b
+  # DeepSeek
+  - deepseek-r1-distill-llama-70b
+
+# Run with:
+#   npx dotenv-cli -- uv run python run.py <config.yaml> --models-yaml configs/models/gradient.yaml
+#
+# Requires GRADIENT_API_KEY in .env

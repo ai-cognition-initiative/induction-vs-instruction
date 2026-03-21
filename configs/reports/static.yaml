@@ -1,0 +1,50 @@
+# Example report config file
+# Usage: just report-config configs/reports/example.yaml
+
+report_name: static
+
+# Behavioral protocol logs (Protocol 1)
+# All logs from these folders will be merged
+behavioral:
+  log_folders:
+    - logs/protocol1/T0/static/gpt-5-2
+    - logs/protocol1/T0/static/gpt-5-2-medium
+    - logs/protocol1/T0/static/gemini-2-5-flash
+    - logs/protocol1/T0/static/llama3
+    - logs/protocol1/T0/static/opus-4-6
+    - logs/protocol1/T0/static/sonnet-4-6
+    - logs/protocol1/T0/static/hermes4
+    - logs/protocol1/T0/static/hermes4-reasoning
+    - logs/protocol1/T0/static/qwen3
+    - logs/protocol1/T0/static/olmo-3-1
+   # - logs/protocol1/T0/static/qwen3-5
+    - logs/protocol1/T0/static/kimi-k2
+    - logs/protocol1/T0/static/gemma
+    - logs/protocol1/T0/static/gemma-12b
+    
+
+# Prediction protocol logs (Protocol 2)
+# All logs from these folders will be merged
+prediction:
+  log_folders:
+    - logs/protocol2/T0/static/opus-4-6
+    - logs/protocol2/T0/static/sonnet-4-6
+    - logs/protocol2/T0/static/gemini-2-5-flash
+    - logs/protocol2/T0/static/olmo-3-1
+  #  - logs/protocol1/T0/static/qwen3-5
+    - logs/protocol2/T0/static/llama3
+    - logs/protocol2/T0/static/gpt-5-2-medium
+    - logs/protocol2/T0/static/kimi-k2
+    - logs/protocol2/T0/static/gemma
+    - logs/protocol2/T0/static/hermes4
+    - logs/protocol2/T0/static/hermes4-reasoning
+    - logs/protocol2/T0/static/gpt-5-2
+    - logs/protocol2/T0/static/qwen3  
+    - logs/protocol2/T0/static/gemma-12b
+
+
+# Notes:
+# - If only 'behavioral' is specified → renders behavioral_analysis.qmd
+# - If only 'prediction' is specified → renders prediction_analysis.qmd
+# - If both are specified → renders behavioral_vs_prediction_analysis.qmd (combined)
+# - All log folders must exist (will error if missing)

@@ -1,0 +1,4 @@
+provider: openrouter
+models:
+ # - google/gemma-3-27b-it
+  - google/gemma-3-12b-it

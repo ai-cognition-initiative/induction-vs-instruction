@@ -1,0 +1,9 @@
+provider: nebius
+url: https://api.tokenfactory.nebius.com/v1/
+
+models:
+  - moonshotai/Kimi-K2-Instruct
+
+
+
+

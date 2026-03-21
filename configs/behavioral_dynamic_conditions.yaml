@@ -1,0 +1,35 @@
+# Example task configuration for run.py
+#
+# Usage:
+#   uv run python run.py configs/example.yaml \
+#     --model openrouter/google/gemini-2.0-flash-001
+
+protocol: behavioral          # "behavioral" or "prediction"
+
+conditions:
+  - language_ru_fr
+  - language_fr_ru
+  - persona_casual_formal
+  - persona_formal_casual
+  - style_javascript_python
+  - style_python_javascript
+  - preference_aligned_helpful
+  - preference_misaligned_helpful
+
+n_turns:                 
+  - 1
+  - 2
+  - 3
+  - 4
+  - 6
+  - 8
+  - 11
+  - 16
+  - 22
+  - 31
+  - 43
+  - 50
+
+instruction_templates:
+  - instruction_no_hint
+n_trials: 35

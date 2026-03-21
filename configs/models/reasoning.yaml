@@ -1,0 +1,19 @@
+provider: openrouter
+
+models:
+  # - google/gemini-3-pro-preview #reasoning is mandatory for this endpoint: does not work with none
+  # - minimax/minimax-m2.5 #reasoning is mandatory for this endpoint: does not work with none
+  # - moonshotai/kimi-k2.5  # works with effort none
+  # - openai/gpt-5.2  # works with effort none
+  # - openai/gpt-5-mini  #reasoning is mandatory for this endpoint: does not work with none
+  # - x-ai/grok-4.1-fast # works with effort none
+  # - google/gemini-3-flash-preview # works with effort none
+  # - google/gemini-2.5-pro #reasoning is mandatory for this endpoint
+  # - anthropic/claude-sonnet-4.6 # works with effort none
+  # - anthropic/claude-sonnet-4.5 # works with effort none
+  # - anthropic/claude-opus-4.6 # works with effort none
+  # - anthropic/claude-3.5-haiku # works with effort none
+  # - anthropic/claude-opus-4.5 # works with effort none
+  # - deepseek/deepseek-v3.2 must select reasoning low or higher
+provider_args:
+  quantizations: ["fp16", "bf16", "unknown"]

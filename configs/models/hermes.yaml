@@ -1,0 +1,12 @@
+provider: openrouter
+reasoning_enabled: true
+
+models:
+  - NousResearch/Hermes-4-70B
+ # - NousResearch/Hermes-4-405B
+
+
+
+
+
+
