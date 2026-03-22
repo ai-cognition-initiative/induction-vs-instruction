@@ -10,16 +10,89 @@ import pandas as pd
 
 COLOR_SCHEME = "set2"
 
+DISPLAY_NAMES: dict[str, str] = {
+    "claude-4.6-sonnet": "Claude 4.6 Sonnet",
+    "claude-opus-4.6": "Claude 4.6 Opus",
+    "gemini-2.5-flash": "Gemini 2.5 Flash",
+    "gemma-3-12b-it": "Gemma-3 12B",
+    "gemma-3-27b-it": "Gemma-3 27B",
+    "gpt-5.2": "GPT-5.2",
+    "gpt-5.2-medium": "GPT-5.2 (medium)",
+    "hermes-4-70b": "Hermes-4 70B",
+    "hermes-4-70b-reasoning": "Hermes-4 70B (reasoning)",
+    "kimi-k2-instruct": "Kimi K2",
+    "llama-3.1-70b-instruct": "Llama 3.1 70B",
+    "llama-3.3-70b-instruct": "Llama 3.3 70B",
+    "olmo-3.1-32b-instruct": "OLMo 3.1 32B",
+    "olmo-3.1-32b-instruct-dpo": "OLMo 3.1 32B (SFT+DPO)",
+    "olmo-3.1-32b-instruct-sft": "OLMo 3.1 32B (SFT)",
+    "qwen3-235b-a22b-instruct-2507": "Qwen3 235B A22B",
+    "qwen3-30b-a3b-instruct-2507": "Qwen3 30B A3B",
+}
+
+_FONT = "Helvetica Neue, Arial, sans-serif"
+
+
+def _paper_theme() -> dict:
+    """Altair theme suitable for a two-column academic paper."""
+    return {
+        "config": {
+            "background": "white",
+            "font": _FONT,
+            "title": {
+                "font": _FONT,
+                "fontSize": 13,
+                "fontWeight": "normal",
+                "anchor": "start",
+                "color": "#222",
+            },
+            "axis": {
+                "labelFont": _FONT,
+                "labelFontSize": 10,
+                "titleFont": _FONT,
+                "titleFontSize": 11,
+                "titleFontWeight": "normal",
+                "gridColor": "#e0e0e0",
+                "domainColor": "#999",
+                "tickColor": "#999",
+                "labelColor": "#444",
+                "titleColor": "#222",
+            },
+            "legend": {
+                "labelFont": _FONT,
+                "labelFontSize": 10,
+                "titleFont": _FONT,
+                "titleFontSize": 11,
+                "titleFontWeight": "normal",
+            },
+            "header": {
+                "labelFont": _FONT,
+                "labelFontSize": 10,
+                "titleFont": _FONT,
+                "titleFontSize": 11,
+            },
+            "mark": {"tooltip": True},
+            "view": {
+                "width": 300,
+                "height": 280,
+                "stroke": "transparent",
+            },
+            "range": {
+                "category": {"scheme": COLOR_SCHEME},
+                "ordinal": {"scheme": COLOR_SCHEME},
+            },
+        }
+    }
+
+
+alt.themes.register("paper", _paper_theme)
+alt.themes.enable("paper")
+
+
 BENCHMARKS = {
-    "intelligence_index": "Intelligence Index",
-    "mmlu_pro": "MMLU Pro",
     "gpqa": "GPQA",
     "ifbench": "IFBench",
 }
-
-SHAPE_SCALE = alt.Scale(
-    domain=["non-reasoning", "reasoning"], range=["circle", "diamond"]
-)
 
 
 def nudge_labels(
@@ -65,19 +138,13 @@ def prep_benchmark_data(
     df: pd.DataFrame,
     y_col: str,
     caps_df: pd.DataFrame,
-    reasoning_models: set[str],
     nudge_fn=nudge_labels,
 ) -> pd.DataFrame:
     """Prepare data for benchmark scatter plots."""
     _wide = df.merge(caps_df, on="model", how="inner")
-    _wide["reasoning"] = (
-        _wide["model"]
-        .isin(reasoning_models)
-        .map({True: "reasoning", False: "non-reasoning"})
-    )
     parts = []
     for _col, _label in BENCHMARKS.items():
-        _part = _wide[["model", y_col, "reasoning", _col]].dropna(subset=[_col]).copy()
+        _part = _wide[["model", y_col, _col]].dropna(subset=[_col]).copy()
         if len(_part) == 0:
             continue
         _part = _part.rename(columns={_col: "benchmark_value"})
@@ -129,13 +196,11 @@ def make_scatter_chart(
             ),
             y=alt.Y(f"{y_col}:Q", title=y_title, scale=y_scale),
             color=alt.Color("model:N", scale=alt.Scale(scheme=COLOR_SCHEME), legend=None),
-            shape=alt.Shape("reasoning:N", scale=SHAPE_SCALE, title="Model type"),
             tooltip=[
                 "model",
                 f"{y_col}:Q",
                 "benchmark_value:Q",
                 "benchmark:N",
-                "reasoning:N",
             ],
         )
     )

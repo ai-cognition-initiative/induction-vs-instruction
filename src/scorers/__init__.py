@@ -4,7 +4,7 @@ from inspect_ai.scorer import Scorer
 
 from src.config import Condition
 from src.scorers.classify import classify_actual, classify_prediction
-from src.scorers.classify_fixed import classify_fixed_scorer
+from src.scorers.classify_question import classify_question_scorer
 from src.scorers.format_check import format_scorer
 from src.scorers.language_detect import language_scorer
 from src.scorers.pattern_match import pattern_match
@@ -14,7 +14,7 @@ from src.scorers.style_judge import style_scorer
 
 __all__ = [
     "classify_actual",
-    "classify_fixed_scorer",
+    "classify_question_scorer",
     "classify_prediction",
     "format_scorer",
     "get_behavioral_scorer",
@@ -49,7 +49,7 @@ def get_behavioral_scorer(condition: Condition) -> Scorer:
             )
         case "format_check":
             return format_scorer(condition_name=condition.name)
-        case "classify_fixed":
-            return classify_fixed_scorer(condition_name=condition.name)
+        case "classify_question":
+            return classify_question_scorer(condition_name=condition.name)
         case _:
             raise ValueError(f"Unknown scorer_type: {condition.scorer_type}")

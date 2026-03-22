@@ -20,4 +20,4 @@ n_turns:
 
 instruction_templates:
   - instruction_no_hint
-n_trials: 3
+n_trials: 15
