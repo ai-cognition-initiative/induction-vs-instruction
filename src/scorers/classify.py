@@ -46,9 +46,9 @@ def _exact_match(text: str, pattern: str) -> bool:
     return _normalize_answer(text) == _normalize_answer(pattern)
 
 
-def classify_fixed(text: str, condition_name: str, pattern: str) -> str:
-    """Classify classify_fixed condition output (sync)."""
-    from src.scorers.classify_fixed import VALID_CATEGORIES
+def classify_question(text: str, condition_name: str, pattern: str) -> str:
+    """Classify classify_question condition output (sync)."""
+    from src.scorers.classify_question import VALID_CATEGORIES
 
     normalized = _normalize_answer(text)
     valid_cats = VALID_CATEGORIES.get(condition_name, set())
@@ -400,8 +400,8 @@ async def classify_actual(text: str, metadata: dict) -> str:
             metadata["pattern_description"],
             condition_type=condition_type,
         )
-    if condition_type == "classify_fixed":
-        return classify_fixed(text, condition_name, metadata["pattern"])
+    if condition_type == "classify_question":
+        return classify_question(text, condition_name, metadata["pattern"])
     return "unknown"
 
 

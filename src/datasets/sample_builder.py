@@ -74,7 +74,7 @@ def _load_hardcoded_responses(data_key: str) -> dict[str, str]:
 
 def _get_hardcoded_response(condition: Condition, question: str) -> str:
     """Get the hardcoded P-response for a given question and condition."""
-    if condition.condition_type in ("static", "classify_fixed"):
+    if condition.condition_type in ("static", "classify_question"):
         return condition.pattern
 
     if condition.condition_type == "token_pattern":

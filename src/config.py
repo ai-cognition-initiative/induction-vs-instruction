@@ -312,7 +312,7 @@ CONDITIONS: dict[str, Condition] = {
         purpose="Classify-fixed control: must read question to classify, but output is a single token",
         target_description="classify each question as either 'science' or 'humanities' and respond with ONLY that one word",
         pattern_description="output 'economics'",
-        condition_type="classify_fixed",
-        scorer_type="classify_fixed",
+        condition_type="classify_question",
+        scorer_type="classify_question",
     ),
 }

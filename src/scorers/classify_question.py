@@ -1,4 +1,4 @@
-"""Scorer for classify_fixed conditions.
+"""Scorer for classify_question conditions.
 
 The model is instructed to classify questions into categories (e.g. science/humanities).
 Any valid category word = target (instruction followed). The pattern token = pattern.
@@ -19,14 +19,12 @@ from inspect_ai.solver import TaskState
 
 # Maps condition name -> set of valid target category words
 VALID_CATEGORIES: dict[str, set[str]] = {
-    "classify_sh_history": {"science", "humanities"},
-    "classify_mc_history": {"math", "culture"},
+    "classify_sh_economics": {"science", "humanities"},
 }
 
 # Maps condition name -> the pattern token
 PATTERN_TOKENS: dict[str, str] = {
-    "classify_sh_history": "history",
-    "classify_mc_history": "history",
+    "classify_sh_economics": "economics",
 }
 
 
@@ -36,8 +34,8 @@ def _normalize(text: str) -> str:
 
 
 @scorer(metrics=[accuracy(), stderr()])
-def classify_fixed_scorer(condition_name: str) -> Scorer:
-    """Scorer for classify_fixed conditions."""
+def classify_question_scorer(condition_name: str) -> Scorer:
+    """Scorer for classify_question conditions."""
     valid_cats = VALID_CATEGORIES[condition_name]
     pattern_token = PATTERN_TOKENS[condition_name]
 

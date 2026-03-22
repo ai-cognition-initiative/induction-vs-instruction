@@ -1,8 +1,7 @@
 protocol: behavioral
 
 conditions:
-  - classify_sh_history
-  - classify_mc_history
+  - classify_sh_economics
 
 n_turns:
   - 1
@@ -20,5 +19,5 @@ n_turns:
 
 instruction_templates:
   - instruction_no_hint
-n_trials: 3
+n_trials: 15
 
