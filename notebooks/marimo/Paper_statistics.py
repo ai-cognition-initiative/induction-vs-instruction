@@ -99,6 +99,7 @@ def _(MODEL_ALIASES, ROOT, json, pl):
     _t1_path = ROOT / "outputs" / "viz" / "static-T1"
     _dynamic_path = ROOT / "outputs" / "viz" / "dynamic"
     _training_path = ROOT / "outputs" / "viz" / "training-comparison"
+    _followup_path = ROOT / "outputs" / "viz" / "additional-dynamic"
 
     static_raw = _normalize(
         pl.read_parquet(_static_path / "evals.parquet").filter(
@@ -119,6 +120,11 @@ def _(MODEL_ALIASES, ROOT, json, pl):
     )
     combined_raw = _normalize(
         pl.read_parquet(_static_path / "_combined_filtered.parquet").filter(
+            pl.col("instruction") == "instruction_no_hint"
+        )
+    )
+    followup_raw = _normalize(
+        pl.read_parquet(_followup_path / "evals.parquet").filter(
             pl.col("instruction") == "instruction_no_hint"
         )
     )
@@ -149,6 +155,7 @@ def _(MODEL_ALIASES, ROOT, json, pl):
         caps_df,
         combined_raw,
         dynamic_raw,
+        followup_raw,
         pred_raw,
         static_raw,
         t1_raw,
@@ -177,6 +184,7 @@ def _(
     combined_raw,
     core_model_select,
     dynamic_raw,
+    followup_raw,
     pl,
     pred_raw,
     static_raw,
@@ -189,6 +197,7 @@ def _(
 
     static_df = static_raw.filter(pl.col("model").is_in(_core))
     dynamic_df = dynamic_raw.filter(pl.col("model").is_in(_core))
+    followup_df = followup_raw  # only 3 models, no core filter needed
     training_df = training_raw.filter(pl.col("model").is_in(_training))
     pred_df = pred_raw.filter(pl.col("model").is_in(_core))
     combined_df = combined_raw.filter(pl.col("model").is_in(_core))
@@ -201,6 +210,7 @@ def _(
     return (
         combined_df,
         dynamic_df,
+        followup_df,
         pred_df,
         static_df,
         t1_df,
@@ -1035,6 +1045,220 @@ def _(DISPLAY_NAMES, combined_df, mo, np, pl, stats):
         """),
         _per_model_delta,
     ])
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## Static vs Dynamic IF rate per model
+
+    Average IF rate per model for static conditions vs dynamic conditions (T=0, no-hint).
+    Only models present in both datasets are shown.
+    """)
+    return
+
+
+@app.cell
+def _(DISPLAY_NAMES, alt, dynamic_df, mo, pl, static_df):
+    _static_models = set(static_df["model"].unique().to_list())
+    _dynamic_models = set(dynamic_df["model"].unique().to_list())
+    _common = sorted(_static_models & _dynamic_models)
+
+    def _avg_if_by_model(df, label):
+        return (
+            df.filter(pl.col("model").is_in(_common))
+            .group_by("model")
+            .agg(
+                pl.col("score").mean().alias("mean_if"),
+                pl.col("score").std().alias("sd"),
+                pl.col("score").len().alias("n"),
+            )
+            .with_columns(
+                (pl.col("sd") / pl.col("n").sqrt()).alias("se"),
+                pl.lit(label).alias("condition_type"),
+                pl.col("model").replace(DISPLAY_NAMES).alias("display_name"),
+            )
+            .with_columns(
+                (pl.col("mean_if") - 1.96 * pl.col("se")).alias("ci_lo"),
+                (pl.col("mean_if") + 1.96 * pl.col("se")).alias("ci_hi"),
+            )
+            .select(["model", "display_name", "condition_type", "mean_if", "ci_lo", "ci_hi"])
+            .with_columns(
+                pl.col("mean_if").round(3),
+                pl.col("ci_lo").round(3),
+                pl.col("ci_hi").round(3),
+            )
+        )
+
+    _sd_combined = pl.concat([
+        _avg_if_by_model(static_df, "static"),
+        _avg_if_by_model(dynamic_df, "dynamic"),
+    ])
+    _sd_pd = _sd_combined.to_pandas()
+
+    _table_sd = (
+        _sd_combined
+        .pivot(on="condition_type", index=["model", "display_name"], values="mean_if")
+        .with_columns(
+            (pl.col("dynamic") - pl.col("static")).round(3).alias("dynamic_advantage")
+        )
+        .sort("dynamic_advantage", descending=True)
+        .select(["display_name", "static", "dynamic", "dynamic_advantage"])
+    )
+
+    _bars_sd = (
+        alt.Chart(_sd_pd)
+        .mark_bar()
+        .encode(
+            x=alt.X("mean_if:Q", title="Avg IF Rate", scale=alt.Scale(domain=[0, 1])),
+            y=alt.Y("display_name:N", sort="-x", title=None),
+            color=alt.Color(
+                "condition_type:N",
+                scale=alt.Scale(
+                    domain=["static", "dynamic"],
+                    range=["#e41a1c", "#4daf4a"],
+                ),
+                legend=alt.Legend(title="Condition type"),
+            ),
+            yOffset=alt.YOffset(
+                "condition_type:N",
+                scale=alt.Scale(domain=["static", "dynamic"]),
+            ),
+            tooltip=[
+                "display_name", "condition_type",
+                alt.Tooltip("mean_if:Q", format=".3f"),
+                alt.Tooltip("ci_lo:Q", format=".3f"),
+                alt.Tooltip("ci_hi:Q", format=".3f"),
+            ],
+        )
+        .properties(
+            width=500,
+            height=max(300, len(_common) * 35),
+            title="Static vs Dynamic avg IF rate per model",
+        )
+    )
+
+    mo.vstack([_bars_sd, _table_sd])
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## Follow-up conditions (variety and classify)
+
+    Three new conditions run on 3 models (gemma-3-12b-it, gpt-5.2, llama-3.3-70b-instruct):
+    - **classify_sh_economics**: single-token output (science/humanities), requires reading the question
+    - **variety_geography_animals**: 1–3 sentences about animals, ignoring the question
+    - **variety_animals_geography**: 1–3 sentences about geography, ignoring the question
+
+    Compared to static (neutral) and dynamic (avg) baselines for the same 3 models.
+    """)
+    return
+
+
+@app.cell
+def _(DISPLAY_NAMES, alt, dynamic_raw, followup_df, mo, pl, static_raw):
+    _fu_models = {"gemma-3-12b-it", "gpt-5.2", "llama-3.3-70b-instruct"}
+    _fu_label_map = {
+        "classify_sh_economics": "classify",
+        "variety_geography_animals": "variety: geo→animals",
+        "variety_animals_geography": "variety: animals→geo",
+    }
+    _cg_order = [
+        "static (neutral)", "classify",
+        "variety: geo→animals", "variety: animals→geo",
+        "dynamic (avg)",
+    ]
+
+    def _base_agg(df, label, model_filter=None):
+        _d = df if model_filter is None else df.filter(pl.col("model").is_in(model_filter))
+        return (
+            _d.group_by("model")
+            .agg(
+                pl.col("score").mean().alias("mean_if"),
+                pl.col("score").std().alias("sd"),
+                pl.col("score").len().alias("n"),
+            )
+            .with_columns(
+                (pl.col("sd") / pl.col("n").sqrt()).alias("se"),
+                pl.lit(label).alias("condition_group"),
+                pl.col("model").replace(DISPLAY_NAMES).alias("display_name"),
+            )
+            .with_columns(
+                (pl.col("mean_if") - 1.96 * pl.col("se")).alias("ci_lo"),
+                (pl.col("mean_if") + 1.96 * pl.col("se")).alias("ci_hi"),
+            )
+        )
+
+    _fu_agg = (
+        followup_df
+        .with_columns(pl.col("condition").replace(_fu_label_map).alias("condition_group"))
+        .group_by(["model", "condition_group"])
+        .agg(
+            pl.col("score").mean().alias("mean_if"),
+            pl.col("score").std().alias("sd"),
+            pl.col("score").len().alias("n"),
+        )
+        .with_columns(
+            (pl.col("sd") / pl.col("n").sqrt()).alias("se"),
+            pl.col("model").replace(DISPLAY_NAMES).alias("display_name"),
+        )
+        .with_columns(
+            (pl.col("mean_if") - 1.96 * pl.col("se")).alias("ci_lo"),
+            (pl.col("mean_if") + 1.96 * pl.col("se")).alias("ci_hi"),
+        )
+    )
+
+    _static_base = _base_agg(
+        static_raw.filter(pl.col("condition") == "neutral", pl.col("model").is_in(_fu_models)),
+        "static (neutral)",
+    )
+    _dynamic_base = _base_agg(
+        dynamic_raw.filter(pl.col("model").is_in(_fu_models)),
+        "dynamic (avg)",
+    )
+
+    _cols = ["model", "display_name", "condition_group", "mean_if", "ci_lo", "ci_hi"]
+    _all_fu = pl.concat([
+        _static_base.select(_cols),
+        _dynamic_base.select(_cols),
+        _fu_agg.select(_cols),
+    ]).with_columns(
+        pl.col("mean_if").round(3),
+        pl.col("ci_lo").round(3),
+        pl.col("ci_hi").round(3),
+    )
+
+    _all_fu_pd = _all_fu.to_pandas()
+
+    _bars_fu = (
+        alt.Chart(_all_fu_pd)
+        .mark_bar()
+        .encode(
+            x=alt.X("mean_if:Q", title="Avg IF Rate", scale=alt.Scale(domain=[0, 1])),
+            y=alt.Y("condition_group:N", sort=_cg_order, title=None),
+            color=alt.Color(
+                "condition_group:N",
+                scale=alt.Scale(
+                    domain=_cg_order,
+                    range=["#e41a1c", "#ff7f00", "#984ea3", "#a65628", "#4daf4a"],
+                ),
+                legend=None,
+            ),
+            tooltip=[
+                "display_name", "condition_group",
+                alt.Tooltip("mean_if:Q", format=".3f"),
+            ],
+        )
+        .facet(facet=alt.Facet("display_name:N", title=None), columns=3)
+        .properties(title="Follow-up conditions vs baselines, per model")
+    )
+
+    _table_fu = _all_fu.sort(["display_name", "condition_group"])
+
+    mo.vstack([_bars_fu, _table_fu])
     return
 
 

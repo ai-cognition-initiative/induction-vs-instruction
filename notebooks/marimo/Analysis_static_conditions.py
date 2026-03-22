@@ -15,7 +15,7 @@ def _():
     from src.plotting_utils import (
         BENCHMARKS,
         COLOR_SCHEME,
-        SHAPE_SCALE,
+        DISPLAY_NAMES,
         nudge_labels,
         prep_benchmark_data,
         make_scatter_chart,
@@ -29,7 +29,7 @@ def _():
         CATEGORY_COLORS,
         CATEGORY_ORDER,
         COLOR_SCHEME,
-        LIKERT_OFFSET_JS,
+        DISPLAY_NAMES,
         Path,
         Plot,
         alt,
@@ -122,17 +122,13 @@ def _(Path, json, pd):
         scores = caps_data.get(mode, {}) or {}
         return {
             "model": model_name,
-            "intelligence_index": scores.get("intelligence_index"),
-            "mmlu_pro": scores.get("mmlu_pro"),
             "gpqa": scores.get("gpqa"),
             "ifbench": scores.get("ifbench"),
         }
 
 
     caps_df = pd.DataFrame([_get_caps(k, v) for k, v in _caps_raw.items()])
-    caps_df = caps_df.dropna(
-        how="all", subset=["intelligence_index", "mmlu_pro", "gpqa", "ifbench"]
-    )
+    caps_df = caps_df.dropna(how="all", subset=["gpqa", "ifbench"])
 
     n_values_sorted = sorted(evals["n_turns"].unique(), key=int)
     all_models = sorted(evals_all["model"].unique().tolist())
@@ -156,7 +152,7 @@ def _(all_models, mo):
             "hermes-4-70b-reasoning",
             "gpt-5.2-medium",
             "hermes-4-405b",
-          #  "qwen3-235b-a22b-instruct-2507",
+            #  "llama-3.1-70b-instruct",
         ],
         label="Models to exclude",
     )
@@ -166,6 +162,7 @@ def _(all_models, mo):
 
 @app.cell
 def _(
+    DISPLAY_NAMES,
     caps_df,
     combined_errors,
     evals,
@@ -174,27 +171,28 @@ def _(
     model_exclusion,
 ):
     _excluded = model_exclusion.value
-    evals_filtered = (
+    _rename = lambda df: df.assign(model=df["model"].map(lambda m: DISPLAY_NAMES.get(m, m)))
+    evals_filtered = _rename(
         evals[~evals["model"].isin(_excluded)].copy()
         if _excluded
         else evals.copy()
     )
-    evals_all_filtered = (
+    evals_all_filtered = _rename(
         evals_all[~evals_all["model"].isin(_excluded)].copy()
         if _excluded
         else evals_all.copy()
     )
-    combined_errors_filtered = (
+    combined_errors_filtered = _rename(
         combined_errors[~combined_errors["model"].isin(_excluded)].copy()
         if _excluded
         else combined_errors.copy()
     )
-    evals_prediction_filtered = (
+    evals_prediction_filtered = _rename(
         evals_prediction[~evals_prediction["model"].isin(_excluded)].copy()
         if _excluded
         else evals_prediction.copy()
     )
-    caps_df_filtered = (
+    caps_df_filtered = _rename(
         caps_df[~caps_df["model"].isin(_excluded)].copy()
         if _excluded
         else caps_df.copy()
@@ -206,6 +204,18 @@ def _(
         evals_filtered,
         evals_prediction_filtered,
     )
+
+
+@app.cell
+def _(Path):
+    plots_dir = (
+        Path(__file__).resolve().parent.parent.parent
+        / "outputs"
+        / "plots"
+        / "static"
+    )
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    return (plots_dir,)
 
 
 @app.cell
@@ -246,21 +256,17 @@ def _(mo):
 def _(
     CATEGORY_COLORS,
     CATEGORY_ORDER,
-    LIKERT_OFFSET_JS,
-    Plot,
+    alt,
     evals_filtered,
-    js,
-    mo,
     n_values_sorted,
+    pd,
+    plots_dir,
     threshold_slider,
 ):
     # Plot A1: Diverging stacked bar — N values classified as IF/PF/Mixed
     _threshold = threshold_slider.value
-    _avg = (
-        evals_filtered.groupby(["model", "n_turns"])["score"].mean().reset_index()
-    )
+    _avg = evals_filtered.groupby(["model", "n_turns"])["score"].mean().reset_index()
 
-    # Expand each N value into a unit row with its classification
     _unit_records = []
     for _model in _avg["model"].unique():
         _model_df = _avg[_avg["model"] == _model].sort_values(
@@ -278,42 +284,76 @@ def _(
 
     _n_total = len(n_values_sorted)
 
-    mo.ui.anywidget(
-        Plot.plot(
-            {
-                "x": {
-                    "label": f"← PF-dominant · Number of N values (out of {_n_total}) · IF-dominant →",
-                    "tickFormat": js("Math.abs"),
-                },
-                "y": {"label": None},
-                "color": {
-                    "domain": CATEGORY_ORDER,
-                    "range": CATEGORY_COLORS,
-                    "legend": True,
-                },
-                "marks": [
-                    Plot.barX(
-                        _unit_records,
-                        Plot.groupY(
-                            {"x": "count"},
-                            {
-                                "y": "model",
-                                "fill": "category",
-                                "order": CATEGORY_ORDER,
-                                "offset": js(LIKERT_OFFSET_JS),
-                                "sort": {"y": "-x"},
-                            },
-                        ),
-                    ),
-                    Plot.ruleX([0]),
-                ],
-                "width": 700,
-                "height": 450,
-                "marginLeft": 250,
-                "title": f"Model behavior, aggregated by turn (threshold={_threshold})",
-            }
+    _counts = (
+        pd.DataFrame(_unit_records)
+        .groupby(["model", "category"])
+        .size()
+        .unstack(fill_value=0)
+        .reset_index()
+    )
+    for _cat in CATEGORY_ORDER:
+        if _cat not in _counts.columns:
+            _counts[_cat] = 0
+
+    _counts = _counts.sort_values("IF-dominant", ascending=True)
+    _model_order = _counts["model"].tolist()
+
+    # Diverging offsets: Mixed straddles 0, PF extends left, IF extends right
+    _counts["x1_pf"] = -(_counts["PF-dominant"] + _counts["Mixed"] / 2)
+    _counts["x2_pf"] = -(_counts["Mixed"] / 2)
+    _counts["x1_mix"] = -(_counts["Mixed"] / 2)
+    _counts["x2_mix"] = _counts["Mixed"] / 2
+    _counts["x1_if"] = _counts["Mixed"] / 2
+    _counts["x2_if"] = _counts["Mixed"] / 2 + _counts["IF-dominant"]
+
+    _rows = []
+    for _, _row in _counts.iterrows():
+        for _cat, _x1c, _x2c in [
+            ("PF-dominant", "x1_pf", "x2_pf"),
+            ("Mixed", "x1_mix", "x2_mix"),
+            ("IF-dominant", "x1_if", "x2_if"),
+        ]:
+            _rows.append({
+                "model": _row["model"],
+                "category": _cat,
+                "x1": _row[_x1c],
+                "x2": _row[_x2c],
+                "count": int(_row[_cat]),
+            })
+    _long = pd.DataFrame(_rows)
+
+    _bars = (
+        alt.Chart(_long)
+        .mark_bar()
+        .encode(
+            y=alt.Y("model:N", sort=_model_order, title=None),
+            x=alt.X(
+                "x1:Q",
+                title=f"← PF-dominant  ·  N values (out of {_n_total})  ·  IF-dominant →",
+                axis=alt.Axis(labelExpr="Math.abs(datum.value)"),
+            ),
+            x2=alt.X2("x2:Q"),
+            color=alt.Color(
+                "category:N",
+                scale=alt.Scale(domain=CATEGORY_ORDER, range=CATEGORY_COLORS),
+                sort=CATEGORY_ORDER,
+                title="Category",
+            ),
+            tooltip=["model:N", "category:N", "count:Q"],
         )
     )
+    _rule = (
+        alt.Chart(pd.DataFrame({"x": [0]}))
+        .mark_rule(color="#333", strokeWidth=1)
+        .encode(x="x:Q")
+    )
+    _a1_chart = (_bars + _rule).properties(
+        title=f"Model behavior, aggregated by turn (threshold={_threshold})",
+        width=500,
+        height=350,
+    )
+    _a1_chart.save(str(plots_dir / "a1_model_behavior_diverging.png"), scale_factor=3)
+    _a1_chart
     return
 
 
@@ -328,8 +368,8 @@ def _(
     caps_df_filtered,
     evals_filtered,
     make_scatter_chart,
+    plots_dir,
     prep_benchmark_data,
-    reasoning_models,
 ):
     # Plot A2: Scatter — avg IF rate vs capability (faceted by benchmark)
     _avg_if = (
@@ -338,11 +378,13 @@ def _(
         .reset_index(name="avg_if_rate")
     )
     _a2_df = prep_benchmark_data(
-        _avg_if, "avg_if_rate", caps_df_filtered, reasoning_models, lambda *a: a[0]
+        _avg_if, "avg_if_rate", caps_df_filtered, lambda *a: a[0]
     )
-    make_scatter_chart(
+    _a2_chart = make_scatter_chart(
         _a2_df, "avg_if_rate", "Avg IF Rate", "Avg IF Rate vs Model Capability"
     )
+    _a2_chart.save(str(plots_dir / "a2_if_rate_vs_capability.png"), scale_factor=3)
+    _a2_chart
     return
 
 
@@ -358,7 +400,7 @@ def _(mo):
 
 
 @app.cell
-def _(COLOR_SCHEME, alt, evals_all_filtered, instruction_dropdown):
+def _(COLOR_SCHEME, alt, evals_all_filtered, instruction_dropdown, plots_dir):
     # Plot A3: Horizontal bar + error bars, faceted by condition
     _sel = instruction_dropdown.value
     _a3_data = evals_all_filtered[evals_all_filtered["instruction"] == _sel].copy()
@@ -397,12 +439,91 @@ def _(COLOR_SCHEME, alt, evals_all_filtered, instruction_dropdown):
             y=alt.Y("model:N", sort="-x"),
         )
     )
-    (
+    _a3_chart = (
         (_bars + _error)
         .facet(facet=alt.Facet("condition:N", title="Condition"), columns=2)
         .resolve_scale(y="independent")
         .properties(title=f"IF Rate by Model and Condition ({_sel})")
     )
+    _a3_chart.save(str(plots_dir / "a3_if_rate_by_condition.png"), scale_factor=3)
+    _a3_chart
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### Per-condition IF rate (averaged across models and turns)
+
+    Each bar shows the grand mean IF rate for one condition, averaged over all included models
+    and N values. Error bars show ±1 SE, accounting for two sources of variance:
+
+    - **Between-cell** (across models & turns): variance of the cell means around the grand mean
+    - **Within-cell** (resampling): each (model × N) cell has its own `score_stderr`
+
+    SE = sqrt((Var_between + mean(σ²_within)) / K), where K = number of (model × N) cells.
+    """)
+    return
+
+
+@app.cell
+def _(alt, evals_all_filtered, instruction_dropdown, pd, plots_dir):
+    # Plot A6: Per-condition IF rate averaged across models and N turns
+    # SE combines between-cell variance and mean within-cell resampling variance
+    _sel_a6 = instruction_dropdown.value
+    _a6_data = evals_all_filtered[
+        evals_all_filtered["instruction"] == _sel_a6
+    ].copy()
+    _a6_records = []
+    for _cond, _grp in _a6_data.groupby("condition"):
+        _cell_means = _grp["score"]
+        _cell_ses = _grp["score_stderr"]
+        _k = len(_cell_means)
+        _mean_if = float(_cell_means.mean())
+        _between_var = float(_cell_means.var(ddof=1)) if _k > 1 else 0.0
+        _within_var = float((_cell_ses**2).mean())
+        _se = ((_between_var + _within_var) / _k) ** 0.5
+        _a6_records.append(
+            {
+                "condition": _cond,
+                "mean_if": _mean_if,
+                "se": _se,
+                "k": _k,
+                "ci_lo": max(0.0, _mean_if - _se),
+                "ci_hi": min(1.0, _mean_if + _se),
+            }
+        )
+    _a6_df = pd.DataFrame(_a6_records)
+    _a6_bars = (
+        alt.Chart(_a6_df)
+        .mark_bar()
+        .encode(
+            x=alt.X("mean_if:Q", title="IF Rate", scale=alt.Scale(domain=[0, 1])),
+            y=alt.Y("condition:N", sort="-x", title=None),
+            tooltip=[
+                "condition",
+                alt.Tooltip("mean_if:Q", format=".3f", title="Mean IF Rate"),
+                alt.Tooltip("se:Q", format=".4f", title="±SE"),
+                alt.Tooltip("k:Q", title="# cells (model×N)"),
+            ],
+        )
+    )
+    _a6_err = (
+        alt.Chart(_a6_df)
+        .mark_errorbar(color="black", ticks=True)
+        .encode(
+            x=alt.X("ci_lo:Q", title=""),
+            x2="ci_hi:Q",
+            y=alt.Y("condition:N", sort="-x"),
+        )
+    )
+    _a6_chart = (_a6_bars + _a6_err).properties(
+        width=500,
+        height=max(300, len(_a6_records) * 28),
+        title=f"IF Rate per Condition — avg over models & N",
+    )
+    _a6_chart.save(str(plots_dir / "a6_per_condition_if_rate.png"), scale_factor=3)
+    _a6_chart
     return
 
 
@@ -463,6 +584,67 @@ def _(Plot, evals_filtered, js, mo):
             }
         )
     )
+    return
+
+
+@app.cell
+def _(alt, evals_filtered, plots_dir):
+    # Altair equivalent of A4: heatmap of IF rate — model × N turns
+    _hm = (
+        evals_filtered.groupby(["model", "n_turns", "n_turns_int"])["score"]
+        .mean()
+        .reset_index(name="if_rate")
+        .sort_values("n_turns_int")
+    )
+    _n_order = sorted(_hm["n_turns"].unique(), key=int)
+    _rects = (
+        alt.Chart(_hm)
+        .mark_rect()
+        .encode(
+            x=alt.X("n_turns:O", sort=_n_order, title="N turns"),
+            y=alt.Y(
+                "model:N",
+                sort=alt.EncodingSortField(
+                    "if_rate", op="mean", order="descending"
+                ),
+                title=None,
+            ),
+            color=alt.Color(
+                "if_rate:Q",
+                scale=alt.Scale(scheme="redyellowgreen", domain=[0, 1]),
+                title="IF Rate",
+            ),
+            tooltip=[
+                "model",
+                "n_turns",
+                alt.Tooltip("if_rate:Q", format=".2f", title="IF Rate"),
+            ],
+        )
+    )
+    _texts = (
+        alt.Chart(_hm)
+        .mark_text(fontSize=7)
+        .encode(
+            x=alt.X("n_turns:O", sort=_n_order),
+            y=alt.Y(
+                "model:N",
+                sort=alt.EncodingSortField(
+                    "if_rate", op="mean", order="descending"
+                ),
+            ),
+            text=alt.Text("if_rate:Q", format=".2f"),
+            color=alt.condition(
+                "datum.if_rate > 0.5", alt.value("black"), alt.value("white")
+            ),
+        )
+    )
+    _hm_chart = (_rects + _texts).properties(
+        width=max(500, len(_n_order) * 28),
+        height=max(200, _hm["model"].nunique() * 28),
+        title="IF Rate Heatmap: Model × N turns (Altair)",
+    )
+    _hm_chart.save(str(plots_dir / "a4_if_rate_heatmap.png"), scale_factor=3)
+    _hm_chart
     return
 
 
@@ -582,8 +764,8 @@ def _(
     n_values_sorted,
     nudge_labels,
     pd,
+    plots_dir,
     prep_benchmark_data,
-    reasoning_models,
     threshold_slider_a5,
 ):
     # Plot A5: First N where IF drops to threshold, vs capability benchmarks
@@ -607,15 +789,17 @@ def _(
 
     _drop_df = pd.DataFrame(_records_a5)
     _a5_df = prep_benchmark_data(
-        _drop_df, "first_drop_n", caps_df_filtered, reasoning_models, nudge_labels
+        _drop_df, "first_drop_n", caps_df_filtered, nudge_labels
     )
-    make_scatter_chart(
+    _a5_chart = make_scatter_chart(
         _a5_df,
         "first_drop_n",
         f"First N where IF <= {_threshold_a5}",
         f"First IF Drop (threshold={_threshold_a5}) vs Model Capability",
         log_y=True,
     )
+    _a5_chart.save(str(plots_dir / "a5_first_if_drop_vs_capability.png"), scale_factor=3)
+    _a5_chart
     return
 
 
@@ -723,8 +907,8 @@ def _(
     caps_df_filtered,
     combined_errors_filtered,
     make_scatter_chart,
+    plots_dir,
     prep_benchmark_data,
-    reasoning_models,
 ):
     # Plot B2: Scatter — mean absolute calibration error vs capability (faceted by benchmark)
     combined_errors_filtered_copy = combined_errors_filtered.copy()
@@ -740,15 +924,16 @@ def _(
         _b2_agg,
         "mean_abs_calibration_error",
         caps_df_filtered,
-        reasoning_models,
         lambda *a: a[0],
     )
-    make_scatter_chart(
+    _b2_chart = make_scatter_chart(
         _b2_df,
         "mean_abs_calibration_error",
         "Mean |Calibration Error| (%)",
         "Absolute Calibration Error vs Model Capability",
     )
+    _b2_chart.save(str(plots_dir / "b2_calibration_error_vs_capability.png"), scale_factor=3)
+    _b2_chart
     return
 
 
@@ -833,7 +1018,7 @@ def _(Plot, combined_errors_filtered, js, mo):
 
 
 @app.cell
-def _(COLOR_SCHEME, alt, combined_errors_filtered, pd):
+def _(COLOR_SCHEME, alt, combined_errors_filtered, pd, plots_dir):
     # Plot B4: Box plot — distribution of calibration error per model
     _rule_b4 = (
         alt.Chart(pd.DataFrame({"x": [0]}))
@@ -852,9 +1037,11 @@ def _(COLOR_SCHEME, alt, combined_errors_filtered, pd):
             ),
         )
     )
-    (_box_b4 + _rule_b4).properties(
+    _b4_chart = (_box_b4 + _rule_b4).properties(
         width=500, height=400, title="Distribution of Calibration Error by Model"
     )
+    _b4_chart.save(str(plots_dir / "b4_calibration_error_distribution.png"), scale_factor=3)
+    _b4_chart
     return
 
 
@@ -873,8 +1060,8 @@ def _(
     caps_df_filtered,
     evals_prediction_filtered,
     make_scatter_chart,
+    plots_dir,
     prep_benchmark_data,
-    reasoning_models,
 ):
     # Plot C1: Scatter — avg prediction of IF rate vs capability (faceted by benchmark)
     _c1_agg = (
@@ -886,16 +1073,17 @@ def _(
         _c1_agg,
         "prediction_rate",
         caps_df_filtered,
-        reasoning_models,
         lambda *a: a[0],
     )
-    make_scatter_chart(
+    _c1_chart = make_scatter_chart(
         _c1_df,
         "prediction_rate",
         "Avg 'Predicts IF' Rate",
         "Prediction of IF Rate vs Model Capability",
         y_domain=[0, 0.55],
     )
+    _c1_chart.save(str(plots_dir / "c1_prediction_rate_vs_capability.png"), scale_factor=3)
+    _c1_chart
     return
 
 
@@ -904,8 +1092,8 @@ def _(
     caps_df_filtered,
     evals_prediction_filtered,
     make_scatter_chart,
+    plots_dir,
     prep_benchmark_data,
-    reasoning_models,
 ):
     # Plot C2: Scatter — prediction accuracy vs capability (faceted by benchmark)
     _c2_agg = (
@@ -917,106 +1105,17 @@ def _(
         _c2_agg,
         "prediction_accuracy",
         caps_df_filtered,
-        reasoning_models,
         lambda *a: a[0],
     )
-    make_scatter_chart(
+    _c2_chart = make_scatter_chart(
         _c2_df,
         "prediction_accuracy",
         "Prediction Accuracy",
         "Prediction Accuracy vs Model Capability",
         y_domain=[0, 1],
     )
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Effect of hint
-    - Plot D1: radar plot with non-hint IF rate overlapped with IF rate for each model: https://observablehq.com/@observablehq/plot-radar-chart
-    """)
-    return
-
-
-@app.cell
-def _(Plot, evals_all_filtered, js, make_radar_chart, mo, pd):
-    # Plot D1: Radar chart — hint vs no-hint IF rate per model
-    _d1_agg = (
-        evals_all_filtered.groupby(["model", "instruction"])["score"]
-        .mean()
-        .reset_index()
-    )
-    _d1_hint = (
-        _d1_agg[_d1_agg["instruction"] == "instruction_hint"]
-        .rename(columns={"score": "value"})
-        .assign(name="with hint")
-    )
-    _d1_nohint = (
-        _d1_agg[_d1_agg["instruction"] == "instruction_no_hint"]
-        .rename(columns={"score": "value"})
-        .assign(name="no hint")
-    )
-
-    _categories = sorted(_d1_agg["model"].unique().tolist())
-    _points = []
-    for _, _row in pd.concat([_d1_nohint, _d1_hint]).iterrows():
-        _points.append(
-            {"key": _row["model"], "value": _row["value"], "name": _row["name"]}
-        )
-
-    mo.ui.anywidget(
-        make_radar_chart(
-            Plot, js, _points, _categories, "Effect of Hint on IF Rate"
-        )
-    )
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Effect of prediction
-    - Plot D2: radar plot with IF rate without prediction overlapped with IF rate AFTER prediction for each model: https://observablehq.com/@observablehq/plot-radar-chart
-    """)
-    return
-
-
-@app.cell
-def _(Plot, combined_errors_filtered, js, make_radar_chart, mo):
-    # Plot D2: Radar chart — IF rate without prediction vs after prediction
-    _d2_agg = (
-        combined_errors_filtered.groupby("model")
-        .agg(
-            behavioral=("behavioral_score", "mean"),
-            after_prediction=("prediction_actual_score", "mean"),
-        )
-        .reset_index()
-    )
-
-    _categories = sorted(_d2_agg["model"].unique().tolist())
-    _points = []
-    for _, _row in _d2_agg.iterrows():
-        _points.append(
-            {
-                "key": _row["model"],
-                "value": _row["behavioral"],
-                "name": "behavioral (no prediction)",
-            }
-        )
-        _points.append(
-            {
-                "key": _row["model"],
-                "value": _row["after_prediction"],
-                "name": "after prediction",
-            }
-        )
-
-    mo.ui.anywidget(
-        make_radar_chart(
-            Plot, js, _points, _categories, "Effect of Prediction on IF Rate"
-        )
-    )
+    _c2_chart.save(str(plots_dir / "c2_prediction_accuracy_vs_capability.png"), scale_factor=3)
+    _c2_chart
     return
 
 
@@ -1068,7 +1167,7 @@ def _(Plot, evals_filtered, js, make_radar_chart, mo):
 
 
 @app.cell
-def _(alt, evals_filtered):
+def _(alt, evals_filtered, plots_dir):
     # Plot D4: Grouped bar — avg IF rate by alignment per model, sorted by alignment gap
     _d4_data = evals_filtered[evals_filtered["instruction_aligned"].notna()].copy()
     _d4_data["alignment"] = _d4_data["instruction_aligned"].map(
@@ -1129,11 +1228,13 @@ def _(alt, evals_filtered):
             yOffset=_d4_yoff,
         )
     )
-    (_d4_bars + _d4_err).properties(
+    _d4_chart = (_d4_bars + _d4_err).properties(
         width=450,
         height=500,
         title="Avg IF Rate: Aligned vs Misaligned Instructions (sorted by gap)",
     )
+    _d4_chart.save(str(plots_dir / "d4_aligned_misaligned_if_rate.png"), scale_factor=3)
+    _d4_chart
     return
 
 
@@ -1141,12 +1242,10 @@ def _(alt, evals_filtered):
 def _(mo):
     benchmark_dropdown = mo.ui.dropdown(
         options={
-            "Intelligence Index": "intelligence_index",
-            "MMLU-Pro": "mmlu_pro",
             "GPQA": "gpqa",
             "IFBench": "ifbench",
         },
-        value="Intelligence Index",
+        value="GPQA",
         label="Capability metric (color)",
     )
     benchmark_dropdown
@@ -1154,15 +1253,17 @@ def _(mo):
 
 
 @app.cell
-def _(alt, benchmark_dropdown, caps_df_filtered, evals_filtered, pd):
+def _(
+    alt,
+    benchmark_dropdown,
+    caps_df_filtered,
+    evals_filtered,
+    pd,
+    plots_dir,
+):
     # Plot D6: Quadrant scatter — aligned vs misaligned IF rate, color = capability
     _bm = benchmark_dropdown.value
-    _bm_label = {
-        "intelligence_index": "Intelligence Index",
-        "mmlu_pro": "MMLU-Pro",
-        "gpqa": "GPQA",
-        "ifbench": "IFBench",
-    }[_bm]
+    _bm_label = {"gpqa": "GPQA", "ifbench": "IFBench"}[_bm]
 
     _d6_data = evals_filtered[evals_filtered["instruction_aligned"].notna()].copy()
     _d6_data["alignment"] = _d6_data["instruction_aligned"].map(
@@ -1227,11 +1328,13 @@ def _(alt, benchmark_dropdown, caps_df_filtered, evals_filtered, pd):
             text="model:N",
         )
     )
-    (_diag_line + _pts + _labels).properties(
+    _d6_chart = (_diag_line + _pts + _labels).properties(
         width=450,
         height=450,
         title=f"Aligned vs Misaligned IF Rate (color = {_bm_label})",
     )
+    _d6_chart.save(str(plots_dir / "d6_aligned_vs_misaligned_quadrant.png"), scale_factor=3)
+    _d6_chart
     return
 
 
@@ -1595,11 +1698,11 @@ def _(alt, combined_errors_filtered, pd):
 
 
     _e2_agg = (
-            _e2_transition.groupby("model")["if_diff"]
-            .agg(["mean", "sem"])
-            .reset_index()
-            .rename(columns={"mean": "mean_diff", "sem": "stderr"})
-        )
+        _e2_transition.groupby("model")["if_diff"]
+        .agg(["mean", "sem"])
+        .reset_index()
+        .rename(columns={"mean": "mean_diff", "sem": "stderr"})
+    )
     _e2_agg["ci_lo"] = _e2_agg["mean_diff"] - 1.96 * _e2_agg["stderr"]
     _e2_agg["ci_hi"] = _e2_agg["mean_diff"] + 1.96 * _e2_agg["stderr"]
 
