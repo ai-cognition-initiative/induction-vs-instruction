@@ -10,7 +10,8 @@ outputs/
 *.css
 *.js
 *.woff
-
+configs/models
+configs/reports
 *pyrightconfig.json
 .vscode/
 paper/
