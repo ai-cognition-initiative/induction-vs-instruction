@@ -16,3 +16,4 @@ configs/reports
 .vscode/
 paper/
 *.tar
+*.zip
