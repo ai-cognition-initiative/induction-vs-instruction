@@ -25,6 +25,16 @@
 - Use OpenRouter as model provider
 - Don't reinvent the wheel — always check framework docs for native patterns before building custom solutions
 - Keep things transparent and controllable — user should see exactly what's running
+- Plot-generating scripts belong in marimo notebooks (notebooks/marimo/), not in scripts/
+- In appendix: use `[H]` placement (requires `\usepackage{float}`) so figures appear exactly where placed
+- LaTeX packages NOT loaded by colm2026_conference.sty: `amsmath`, `bm`, `amssymb` — use `\textbf{$...$}` and `\mathrm{}` instead
+- COLM 2026 is **single-column** (5.5in textwidth, no `\twocolumn`) — use `figure`/`table`, NOT `figure*`/`table*`
+- COLM style: table/figure captions go **below** content (caption after `\end{tabular}`, before `\end{table}`)
+- COLM style: minimum font size in tables/figures is `\small` — `\footnotesize` is forbidden
+- COLM style: need `\appendix` before appendix sections or they get regular section numbers
+- Citations must use natbib: `\citet{}` for inline, `\citep{}` for parenthetical — not plain `\cite{}`
+- When hint/no-hint T1 data have different N grids, filter to neutral condition only for clean comparison
+- Temperature comparison: the key result is dispersion (SD of per-model Δ), not mean; report SD prominently
 
 ## Inspect-AI
 
