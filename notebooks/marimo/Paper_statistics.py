@@ -71,12 +71,12 @@ def _(mo):
     | Section | Claim | Data source |
     |---------|-------|-------------|
     | §3.1a | Avg IF rate range 0.028 – 0.944  | `static/evals.parquet` |
-    | §3.1b | First N ≤ 0.5 ranges N=2 to never | static + dynamic |
-    | §3.1c | Static all p>0.14; dynamic IFBench r=0.62 p=0.015 | caps × IF rates |
-    | §3.2 | Value gap 15pp, factual 12pp, overall t=1.40 p=0.18 | static aligned/misaligned |
+    | §3.1b | First N ≤ 0.5 ranges N=2 to never | fixed-output + task-based |
+    | §3.1c | Fixed-output all p>0.14; task-based IFBench r=0.62 p=0.015 | caps × IF rates |
+    | §3.2 | Value gap 15pp, factual 12pp, overall t=1.40 p=0.18 | fixed-output aligned/misaligned |
     | §3.3 | OLMo SFT=0.057, +DPO=0.166, +RLVR=0.160 | training-comparison |
     | §3.3 | Llama 3.1=0.82, 3.3=0.94; at N=50: 3.1=0.38, 3.3=0.74 | training-comparison |
-    | §3.4 | GPT-5.2 0.17 vs GPT-5.2-medium 0.65 (static) | static/dynamic raw |
+    | §3.4 | GPT-5.2 0.17 vs GPT-5.2-medium 0.65 (fixed-output) | fixed-output/task-based raw |
     | §3.4b | T0 vs T1 temperature effect | static + static-T1 |
     | §3.4c | Hint substantially increases robustness | static-T1 |
     | §3.5a | Grand mean accuracy=76.4%; predicted IF=18.2%, actual IF=33.2% | prediction parquet |
@@ -94,6 +94,7 @@ def _(MODEL_ALIASES, ROOT, json, pl):
         _models = df["model"].unique().to_list()
         _full_map = {m: MODEL_ALIASES.get(m, m) for m in _models}
         return df.with_columns(pl.col("model").replace(_full_map))
+
 
     _static_path = ROOT / "outputs" / "viz" / "static"
     _t1_path = ROOT / "outputs" / "viz" / "static-T1"
@@ -194,13 +195,26 @@ def _(
 ):
     _core = core_model_select.value
     _training = training_model_select.value
+    _token_conditions = ["token_states_countries", "token_countries_states"]
 
-    static_df = static_raw.filter(pl.col("model").is_in(_core))
+    static_df = static_raw.filter(
+        pl.col("model").is_in(_core),
+        ~pl.col("condition").is_in(_token_conditions),
+    )
     dynamic_df = dynamic_raw.filter(pl.col("model").is_in(_core))
     followup_df = followup_raw  # only 3 models, no core filter needed
-    training_df = training_raw.filter(pl.col("model").is_in(_training))
-    pred_df = pred_raw.filter(pl.col("model").is_in(_core))
-    combined_df = combined_raw.filter(pl.col("model").is_in(_core))
+    training_df = training_raw.filter(
+        pl.col("model").is_in(_training),
+        ~pl.col("condition").is_in(_token_conditions),
+    )
+    pred_df = pred_raw.filter(
+        pl.col("model").is_in(_core),
+        ~pl.col("condition").is_in(_token_conditions),
+    )
+    combined_df = combined_raw.filter(
+        pl.col("model").is_in(_core),
+        ~pl.col("condition").is_in(_token_conditions),
+    )
 
     t1_no_hint_df = t1_raw.filter(
         pl.col("instruction") == "instruction_no_hint",
@@ -229,7 +243,7 @@ def _(mo):
 
 @app.cell
 def _(DISPLAY_NAMES, mo, pl, static_df):
-    mo.md("### §3.1a — Average IF rate per model (static T=0)")
+    mo.md("### §3.1a — Average IF rate per model (fixed-output T=0)")
 
     _avg = (
         static_df.group_by("model")
@@ -249,9 +263,15 @@ def _(DISPLAY_NAMES, mo, pl, static_df):
         .with_columns(
             pl.col("model").replace(DISPLAY_NAMES).alias("display_name"),
         )
-        .select([
-            "display_name", "mean_if", "ci_lo", "ci_hi", "n_cells",
-        ])
+        .select(
+            [
+                "display_name",
+                "mean_if",
+                "ci_lo",
+                "ci_hi",
+                "n_cells",
+            ]
+        )
         .with_columns(
             pl.col("mean_if").round(3),
             pl.col("ci_lo").round(3),
@@ -261,22 +281,25 @@ def _(DISPLAY_NAMES, mo, pl, static_df):
 
     _lo = _avg["mean_if"].min()
     _hi = _avg["mean_if"].max()
-    mo.vstack([
-        mo.md(
-            f"Range: **{_lo:.3f}** -- **{_hi:.3f}**. "
-            f"95% CIs are between-cell (across conditions x N), reflecting systematic + sampling variation."
-        ),
-        _avg,
-    ])
+    mo.vstack(
+        [
+            mo.md(
+                f"Range: **{_lo:.3f}** -- **{_hi:.3f}**. "
+                f"95% CIs are between-cell (across conditions x N), reflecting systematic + sampling variation."
+            ),
+            _avg,
+        ]
+    )
     return
 
 
 @app.cell
 def _(DISPLAY_NAMES, dynamic_df, mo, pl, static_df):
-    mo.md("""### §3.1b — First N where avg IF <= 0.5 (static and dynamic)
+    mo.md("""### §3.1b — First N where avg IF <= 0.5 (fixed-output and task-based)
 
     Score and within-cell SE at the threshold N show how sharp the crossing is.
     """)
+
 
     def _first_n_below(df, label):
         _by_model_n = (
@@ -300,13 +323,13 @@ def _(DISPLAY_NAMES, dynamic_df, mo, pl, static_df):
             )
         )
         _all_models = df["model"].unique().to_frame()
-        return (
-            _all_models.join(_below, on="model", how="left")
-            .with_columns(pl.lit(label).alias("dataset"))
+        return _all_models.join(_below, on="model", how="left").with_columns(
+            pl.lit(label).alias("dataset")
         )
 
-    _static_th = _first_n_below(static_df, "static")
-    _dynamic_th = _first_n_below(dynamic_df, "dynamic")
+
+    _static_th = _first_n_below(static_df, "fixed-output")
+    _dynamic_th = _first_n_below(dynamic_df, "task-based")
     _thresholds = pl.concat([_static_th, _dynamic_th])
 
     # Pivot for a compact display
@@ -330,12 +353,16 @@ def _(DISPLAY_NAMES, dynamic_df, mo, pl, static_df):
         .sort(["dataset", "first_n"])
     )
 
-    mo.vstack([
-        mo.md("**Threshold N (first N where mean IF <= 0.5)**"),
-        _first_n_pivot,
-        mo.md("**Score at threshold** (mean +/- within-cell SE across conditions at that N)"),
-        _detail,
-    ])
+    mo.vstack(
+        [
+            mo.md("**Threshold N (first N where mean IF <= 0.5)**"),
+            _first_n_pivot,
+            mo.md(
+                "**Score at threshold** (mean +/- within-cell SE across conditions at that N)"
+            ),
+            _detail,
+        ]
+    )
     return
 
 
@@ -365,7 +392,10 @@ def _(CORE_MODELS, caps_df, dynamic_df, mo, np, pl, static_df, stats):
     for _bm in _benchmarks:
         _valid = _joined.filter(pl.col(_bm).is_not_null())
         _x = _valid[_bm].to_numpy()
-        for _dataset, _col in [("static", "if_static"), ("dynamic", "if_dynamic")]:
+        for _dataset, _col in [
+            ("fixed-output", "if_static"),
+            ("task-based", "if_dynamic"),
+        ]:
             _y = _valid[_col].to_numpy()
             _n = len(_x)
             if _n < 4:
@@ -388,18 +418,23 @@ def _(CORE_MODELS, caps_df, dynamic_df, mo, np, pl, static_df, stats):
                     "pearson_p": round(float(_p_p), 3),
                     "spearman_r": round(float(_r_s), 3),
                     "spearman_p": round(float(_p_s), 3),
-                    "sig": "***" if _p_p < 0.001
-                    else "**" if _p_p < 0.01
-                    else "*" if _p_p < 0.05
+                    "sig": "***"
+                    if _p_p < 0.001
+                    else "**"
+                    if _p_p < 0.01
+                    else "*"
+                    if _p_p < 0.05
                     else "",
                 }
             )
 
     _corr_df = pl.DataFrame(_rows).sort(["dataset", "benchmark"])
-    mo.vstack([
-        mo.md("Claims: static all p>0.14; dynamic IFBench r=0.62 p=0.015. CIs via Fisher z-transform."),
-        _corr_df,
-    ])
+    mo.vstack(
+        [
+            mo.md(" CIs via Fisher z-transform."),
+            _corr_df,
+        ]
+    )
     return
 
 
@@ -427,11 +462,13 @@ def _(mo, np, pl, static_df, stats):
     )
     _aligned_rates = (
         _per_model.filter(pl.col("instruction_aligned"))
-        .sort("model")["mean_if"].to_numpy()
+        .sort("model")["mean_if"]
+        .to_numpy()
     )
     _misaligned_rates = (
         _per_model.filter(~pl.col("instruction_aligned"))
-        .sort("model")["mean_if"].to_numpy()
+        .sort("model")["mean_if"]
+        .to_numpy()
     )
 
     # Paired t-test across models
@@ -452,31 +489,38 @@ def _(mo, np, pl, static_df, stats):
         _pm = _pair_df.group_by(["model", "instruction_aligned"]).agg(
             pl.col("score").mean().alias("mean_if")
         )
-        _a = _pm.filter(pl.col("instruction_aligned")).sort("model")["mean_if"].to_numpy()
-        _m = _pm.filter(~pl.col("instruction_aligned")).sort("model")["mean_if"].to_numpy()
+        _a = (
+            _pm.filter(pl.col("instruction_aligned"))
+            .sort("model")["mean_if"]
+            .to_numpy()
+        )
+        _m = (
+            _pm.filter(~pl.col("instruction_aligned"))
+            .sort("model")["mean_if"]
+            .to_numpy()
+        )
         _d = _a - _m
         _gap = float(np.mean(_d))
         _se = float(np.std(_d, ddof=1) / np.sqrt(len(_d)))
         _tc = stats.t.ppf(0.975, len(_d) - 1)
-        _pair_rows.append({
-            "condition_pair": _pair,
-            "aligned": round(float(np.mean(_a)), 3),
-            "misaligned": round(float(np.mean(_m)), 3),
-            "gap_pp": round(_gap, 3),
-            "gap_ci_lo": round(_gap - _tc * _se, 3),
-            "gap_ci_hi": round(_gap + _tc * _se, 3),
-        })
+        _pair_rows.append(
+            {
+                "condition_pair": _pair,
+                "aligned": round(float(np.mean(_a)), 3),
+                "misaligned": round(float(np.mean(_m)), 3),
+                "gap_pp": round(_gap, 3),
+                "gap_ci_lo": round(_gap - _tc * _se, 3),
+                "gap_ci_hi": round(_gap + _tc * _se, 3),
+            }
+        )
 
     _pair_table = pl.DataFrame(_pair_rows)
 
-    mo.vstack([
-        mo.md(f"""
-    **Overall paired t-test** (aligned - misaligned, across {_n_models} models):
-    mean gap = **{_mean_diff:.3f}** [{_ci_lo_diff:.3f}, {_ci_hi_diff:.3f}],
-    t({_df}) = **{_t:.2f}**, p = **{_p:.3f}**
-        """),
-        _pair_table,
-    ])
+    mo.vstack(
+        [
+            _pair_table,
+        ]
+    )
     return
 
 
@@ -484,7 +528,9 @@ def _(mo, np, pl, static_df, stats):
 def _(DISPLAY_NAMES, mo, pl, static_df):
     mo.md("### §3.2b — Per-model alignment gap")
 
-    _align_df = static_df.filter(pl.col("condition_pair").is_in(["value", "factual"]))
+    _align_df = static_df.filter(
+        pl.col("condition_pair").is_in(["value", "factual"])
+    )
 
     # Per-(model, instruction_aligned): mean and between-cell SE
     _per_model_stats = (
@@ -499,13 +545,15 @@ def _(DISPLAY_NAMES, mo, pl, static_df):
         )
     )
 
-    _aligned = (
-        _per_model_stats.filter(pl.col("instruction_aligned"))
-        .select(["model", pl.col("mean_if").alias("aligned"), pl.col("se").alias("se_a")])
+    _aligned = _per_model_stats.filter(pl.col("instruction_aligned")).select(
+        ["model", pl.col("mean_if").alias("aligned"), pl.col("se").alias("se_a")]
     )
-    _misaligned = (
-        _per_model_stats.filter(~pl.col("instruction_aligned"))
-        .select(["model", pl.col("mean_if").alias("misaligned"), pl.col("se").alias("se_m")])
+    _misaligned = _per_model_stats.filter(~pl.col("instruction_aligned")).select(
+        [
+            "model",
+            pl.col("mean_if").alias("misaligned"),
+            pl.col("se").alias("se_m"),
+        ]
     )
 
     _gap_df = (
@@ -519,9 +567,16 @@ def _(DISPLAY_NAMES, mo, pl, static_df):
             (pl.col("gap_pp") - 1.96 * pl.col("se_gap")).alias("gap_ci_lo"),
             (pl.col("gap_pp") + 1.96 * pl.col("se_gap")).alias("gap_ci_hi"),
         )
-        .select([
-            "display_name", "aligned", "misaligned", "gap_pp", "gap_ci_lo", "gap_ci_hi",
-        ])
+        .select(
+            [
+                "display_name",
+                "aligned",
+                "misaligned",
+                "gap_pp",
+                "gap_ci_lo",
+                "gap_ci_hi",
+            ]
+        )
         .with_columns(
             pl.col("aligned").round(3),
             pl.col("misaligned").round(3),
@@ -531,10 +586,14 @@ def _(DISPLAY_NAMES, mo, pl, static_df):
         )
         .sort("gap_pp", descending=True)
     )
-    mo.vstack([
-        mo.md("Claim: Claude Opus gap = 81pp. CIs propagate between-cell SE for aligned and misaligned groups independently."),
-        _gap_df,
-    ])
+    mo.vstack(
+        [
+            mo.md(
+                "CIs propagate between-cell SE for aligned and misaligned groups independently."
+            ),
+            _gap_df,
+        ]
+    )
     return
 
 
@@ -583,7 +642,9 @@ def _(DISPLAY_NAMES, alt, mo, pl, training_df):
 
     # Per (model, n_turns): mean across conditions with SE
     _by_n = (
-        _olmo_df.with_columns(pl.col("n_turns").cast(pl.Int64).alias("n_turns_int"))
+        _olmo_df.with_columns(
+            pl.col("n_turns").cast(pl.Int64).alias("n_turns_int")
+        )
         .group_by(["model", "n_turns_int"])
         .agg(
             pl.col("score").mean().alias("mean_if"),
@@ -595,8 +656,12 @@ def _(DISPLAY_NAMES, alt, mo, pl, training_df):
             pl.col("model").replace(DISPLAY_NAMES).alias("display_name"),
         )
         .with_columns(
-            (pl.col("mean_if") - 1.96 * pl.col("se")).clip(0.0, 1.0).alias("ci_lo"),
-            (pl.col("mean_if") + 1.96 * pl.col("se")).clip(0.0, 1.0).alias("ci_hi"),
+            (pl.col("mean_if") - 1.96 * pl.col("se"))
+            .clip(0.0, 1.0)
+            .alias("ci_lo"),
+            (pl.col("mean_if") + 1.96 * pl.col("se"))
+            .clip(0.0, 1.0)
+            .alias("ci_hi"),
         )
         .sort(["model", "n_turns_int"])
     )
@@ -608,8 +673,14 @@ def _(DISPLAY_NAMES, alt, mo, pl, training_df):
         .encode(
             x=alt.X("n_turns_int:Q", title="N turns"),
             y=alt.Y("mean_if:Q", title="IF rate", scale=alt.Scale(domain=[0, 1])),
-            color=alt.Color("display_name:N", legend=alt.Legend(title="Training stage")),
-            tooltip=["display_name", "n_turns_int", alt.Tooltip("mean_if:Q", format=".3f")],
+            color=alt.Color(
+                "display_name:N", legend=alt.Legend(title="Training stage")
+            ),
+            tooltip=[
+                "display_name",
+                "n_turns_int",
+                alt.Tooltip("mean_if:Q", format=".3f"),
+            ],
         )
     )
     _band = (
@@ -622,16 +693,19 @@ def _(DISPLAY_NAMES, alt, mo, pl, training_df):
             color=alt.Color("display_name:N"),
         )
     )
-    _chart = (
-        (_line + _band)
-        .properties(title="OLMo: IF rate by N (band = 95% CI across conditions)", width=600, height=300)
+    _chart = (_line + _band).properties(
+        title="OLMo: IF rate by N (band = 95% CI across conditions)",
+        width=600,
+        height=300,
     )
 
-    mo.vstack([
-        mo.md("Claims: SFT=0.057, SFT+DPO=0.166, SFT+DPO+RLVR=0.160"),
-        _overall,
-        _chart,
-    ])
+    mo.vstack(
+        [
+            mo.md("Claims: SFT=0.057, SFT+DPO=0.166, SFT+DPO+RLVR=0.160"),
+            _overall,
+            _chart,
+        ]
+    )
     return
 
 
@@ -674,22 +748,34 @@ def _(DISPLAY_NAMES, mo, pl, training_df):
     _llama_table = (
         _overall_llama.join(_at_n50, on="model", how="left")
         .with_columns(pl.col("model").replace(DISPLAY_NAMES).alias("display_name"))
-        .select([
-            "display_name",
-            "mean_if", "ci_lo", "ci_hi",
-            "mean_n50", "n50_ci_lo", "n50_ci_hi",
-        ])
+        .select(
+            [
+                "display_name",
+                "mean_if",
+                "ci_lo",
+                "ci_hi",
+                "mean_n50",
+                "n50_ci_lo",
+                "n50_ci_hi",
+            ]
+        )
         .with_columns(
-            pl.col("mean_if").round(3), pl.col("ci_lo").round(3), pl.col("ci_hi").round(3),
-            pl.col("mean_n50").round(3), pl.col("n50_ci_lo").round(3), pl.col("n50_ci_hi").round(3),
+            pl.col("mean_if").round(3),
+            pl.col("ci_lo").round(3),
+            pl.col("ci_hi").round(3),
+            pl.col("mean_n50").round(3),
+            pl.col("n50_ci_lo").round(3),
+            pl.col("n50_ci_hi").round(3),
         )
         .sort("display_name")
     )
 
-    mo.vstack([
-        mo.md("Claims: 3.1=0.82, 3.3=0.94; at N=50: 3.1=0.38, 3.3=0.74"),
-        _llama_table,
-    ])
+    mo.vstack(
+        [
+            mo.md("Claims: 3.1=0.82, 3.3=0.94; at N=50: 3.1=0.38, 3.3=0.74"),
+            _llama_table,
+        ]
+    )
     return
 
 
@@ -706,12 +792,17 @@ def _(DISPLAY_NAMES, dynamic_raw, mo, pl, static_raw):
     mo.md("### §3.4a — Reasoning vs non-reasoning (unfiltered raw data)")
 
     _reasoning_models = [
-        "gpt-5.2", "gpt-5.2-medium",
-        "hermes-4-70b", "hermes-4-70b-reasoning",
+        "gpt-5.2",
+        "gpt-5.2-medium",
+        "hermes-4-70b",
+        "hermes-4-70b-reasoning",
     ]
 
     _results = []
-    for _ds_name, _ds in [("static", static_raw), ("dynamic", dynamic_raw)]:
+    for _ds_name, _ds in [
+        ("fixed-output", static_raw),
+        ("task-based", dynamic_raw),
+    ]:
         _sub = (
             _ds.filter(pl.col("model").is_in(_reasoning_models))
             .group_by("model")
@@ -723,28 +814,42 @@ def _(DISPLAY_NAMES, dynamic_raw, mo, pl, static_raw):
         )
         for _row in _sub.iter_rows(named=True):
             _se = _row["sd"] / (_row["n"] ** 0.5) if _row["n"] > 1 else 0.0
-            _results.append({
-                "dataset": _ds_name,
-                "model": _row["model"],
-                "display_name": DISPLAY_NAMES.get(_row["model"], _row["model"]),
-                "mean_if": round(_row["mean_if"], 3),
-                "ci_lo": round(_row["mean_if"] - 1.96 * _se, 3),
-                "ci_hi": round(_row["mean_if"] + 1.96 * _se, 3),
-                "n_cells": _row["n"],
-                "is_reasoning": _row["model"] in ["gpt-5.2-medium", "hermes-4-70b-reasoning"],
-            })
+            _results.append(
+                {
+                    "dataset": _ds_name,
+                    "model": _row["model"],
+                    "display_name": DISPLAY_NAMES.get(
+                        _row["model"], _row["model"]
+                    ),
+                    "mean_if": round(_row["mean_if"], 3),
+                    "ci_lo": round(_row["mean_if"] - 1.96 * _se, 3),
+                    "ci_hi": round(_row["mean_if"] + 1.96 * _se, 3),
+                    "n_cells": _row["n"],
+                    "is_reasoning": _row["model"]
+                    in ["gpt-5.2-medium", "hermes-4-70b-reasoning"],
+                }
+            )
 
     _reasoning_df = pl.DataFrame(_results)
 
     # Show as flat table (pivot loses the CIs)
-    _table = _reasoning_df.select([
-        "display_name", "dataset", "mean_if", "ci_lo", "ci_hi", "n_cells",
-    ]).sort(["display_name", "dataset"])
+    _table = _reasoning_df.select(
+        [
+            "display_name",
+            "dataset",
+            "mean_if",
+            "ci_lo",
+            "ci_hi",
+            "n_cells",
+        ]
+    ).sort(["display_name", "dataset"])
 
-    mo.vstack([
-        mo.md("Claim: GPT-5.2 0.17 vs GPT-5.2-medium 0.65 (static)"),
-        _table,
-    ])
+    mo.vstack(
+        [
+            mo.md("Claim: GPT-5.2 0.17 vs GPT-5.2-medium 0.65 (fixed-output)"),
+            _table,
+        ]
+    )
     return
 
 
@@ -787,20 +892,31 @@ def _(CORE_MODELS, DISPLAY_NAMES, mo, np, pl, static_df, stats, t1_no_hint_df):
         .with_columns(
             (pl.col("t1_if") - pl.col("t0_if")).alias("delta"),
             # Unpaired SE for delta (different sample sizes)
-            (pl.col("t0_se").pow(2) + pl.col("t1_se").pow(2)).sqrt().alias("se_delta"),
+            (pl.col("t0_se").pow(2) + pl.col("t1_se").pow(2))
+            .sqrt()
+            .alias("se_delta"),
             pl.col("model").replace(DISPLAY_NAMES).alias("display_name"),
         )
         .with_columns(
             (pl.col("delta") - 1.96 * pl.col("se_delta")).alias("delta_ci_lo"),
             (pl.col("delta") + 1.96 * pl.col("se_delta")).alias("delta_ci_hi"),
         )
-        .select([
-            "display_name", "t0_if", "t1_if", "delta", "delta_ci_lo", "delta_ci_hi",
-        ])
+        .select(
+            [
+                "display_name",
+                "t0_if",
+                "t1_if",
+                "delta",
+                "delta_ci_lo",
+                "delta_ci_hi",
+            ]
+        )
         .with_columns(
-            pl.col("t0_if").round(3), pl.col("t1_if").round(3),
+            pl.col("t0_if").round(3),
+            pl.col("t1_if").round(3),
             pl.col("delta").round(3),
-            pl.col("delta_ci_lo").round(3), pl.col("delta_ci_hi").round(3),
+            pl.col("delta_ci_lo").round(3),
+            pl.col("delta_ci_hi").round(3),
         )
         .sort("display_name")
     )
@@ -814,14 +930,16 @@ def _(CORE_MODELS, DISPLAY_NAMES, mo, np, pl, static_df, stats, t1_no_hint_df):
     _mean_d = float(np.mean(_deltas))
     _se_d = float(np.std(_deltas, ddof=1) / np.sqrt(_n_m))
 
-    mo.vstack([
-        mo.md(
-            f"**{len(_common_models)} models** in common. "
-            f"Grand mean delta (T1-T0): **{_mean_d:.3f}** [{_mean_d - _t_crit * _se_d:.3f}, {_mean_d + _t_crit * _se_d:.3f}], "
-            f"t({_df}) = {_t_stat:.2f}, p = {_p_val:.3f}"
-        ),
-        _temp_df,
-    ])
+    mo.vstack(
+        [
+            mo.md(
+                f"**{len(_common_models)} models** in common. "
+                f"Grand mean delta (T1-T0): **{_mean_d:.3f}** [{_mean_d - _t_crit * _se_d:.3f}, {_mean_d + _t_crit * _se_d:.3f}], "
+                f"t({_df}) = {_t_stat:.2f}, p = {_p_val:.3f}"
+            ),
+            _temp_df,
+        ]
+    )
     return
 
 
@@ -831,11 +949,13 @@ def _(CORE_MODELS, DISPLAY_NAMES, mo, np, pl, stats, t1_df):
 
     _t1_models_with_hint = set(
         t1_df.filter(pl.col("instruction") == "instruction_hint")["model"]
-        .unique().to_list()
+        .unique()
+        .to_list()
     )
     _t1_models_no_hint = set(
         t1_df.filter(pl.col("instruction") == "instruction_no_hint")["model"]
-        .unique().to_list()
+        .unique()
+        .to_list()
     )
     _hint_models = sorted(
         (_t1_models_with_hint & _t1_models_no_hint) & set(CORE_MODELS)
@@ -872,21 +992,35 @@ def _(CORE_MODELS, DISPLAY_NAMES, mo, np, pl, stats, t1_df):
         _no_hint_avg.join(_hint_avg, on="model")
         .with_columns(
             (pl.col("hint_if") - pl.col("no_hint_if")).alias("hint_effect"),
-            (pl.col("nh_se").pow(2) + pl.col("h_se").pow(2)).sqrt().alias("se_effect"),
+            (pl.col("nh_se").pow(2) + pl.col("h_se").pow(2))
+            .sqrt()
+            .alias("se_effect"),
             pl.col("model").replace(DISPLAY_NAMES).alias("display_name"),
         )
         .with_columns(
-            (pl.col("hint_effect") - 1.96 * pl.col("se_effect")).alias("effect_ci_lo"),
-            (pl.col("hint_effect") + 1.96 * pl.col("se_effect")).alias("effect_ci_hi"),
+            (pl.col("hint_effect") - 1.96 * pl.col("se_effect")).alias(
+                "effect_ci_lo"
+            ),
+            (pl.col("hint_effect") + 1.96 * pl.col("se_effect")).alias(
+                "effect_ci_hi"
+            ),
         )
-        .select([
-            "display_name", "no_hint_if", "hint_if",
-            "hint_effect", "effect_ci_lo", "effect_ci_hi",
-        ])
+        .select(
+            [
+                "display_name",
+                "no_hint_if",
+                "hint_if",
+                "hint_effect",
+                "effect_ci_lo",
+                "effect_ci_hi",
+            ]
+        )
         .with_columns(
-            pl.col("no_hint_if").round(3), pl.col("hint_if").round(3),
+            pl.col("no_hint_if").round(3),
+            pl.col("hint_if").round(3),
             pl.col("hint_effect").round(3),
-            pl.col("effect_ci_lo").round(3), pl.col("effect_ci_hi").round(3),
+            pl.col("effect_ci_lo").round(3),
+            pl.col("effect_ci_hi").round(3),
         )
         .sort("hint_effect", descending=True)
     )
@@ -900,14 +1034,16 @@ def _(CORE_MODELS, DISPLAY_NAMES, mo, np, pl, stats, t1_df):
     _mean_e = float(np.mean(_effects))
     _se_e = float(np.std(_effects, ddof=1) / np.sqrt(_n_m))
 
-    mo.vstack([
-        mo.md(
-            f"**{len(_hint_models)} models** with both hint/no-hint in T=1. "
-            f"Grand mean hint effect: **{_mean_e:.3f}** [{_mean_e - _t_crit * _se_e:.3f}, {_mean_e + _t_crit * _se_e:.3f}], "
-            f"t({_df}) = {_t_stat:.2f}, p = {_p_val:.3f}"
-        ),
-        _hint_effect_df,
-    ])
+    mo.vstack(
+        [
+            mo.md(
+                f"**{len(_hint_models)} models** with both hint/no-hint in T=1. "
+                f"Grand mean hint effect: **{_mean_e:.3f}** [{_mean_e - _t_crit * _se_e:.3f}, {_mean_e + _t_crit * _se_e:.3f}], "
+                f"t({_df}) = {_t_stat:.2f}, p = {_p_val:.3f}"
+            ),
+            _hint_effect_df,
+        ]
+    )
     return
 
 
@@ -931,40 +1067,60 @@ def _(DISPLAY_NAMES, mo, pl, pred_df):
 
     _agg_exprs = []
     for _src, _alias in _metrics:
-        _agg_exprs.extend([
-            pl.col(_src).mean().alias(_alias),
-            pl.col(_src).std().alias(f"{_alias}_sd"),
-            pl.col(_src).len().alias(f"{_alias}_n"),
-        ])
+        _agg_exprs.extend(
+            [
+                pl.col(_src).mean().alias(_alias),
+                pl.col(_src).std().alias(f"{_alias}_sd"),
+                pl.col(_src).len().alias(f"{_alias}_n"),
+            ]
+        )
 
     _pred_summary = pred_df.group_by("model").agg(_agg_exprs)
 
     # Compute SE and CIs for each metric
     for _, _alias in _metrics:
         _pred_summary = _pred_summary.with_columns(
-            (pl.col(f"{_alias}_sd") / pl.col(f"{_alias}_n").sqrt()).alias(f"{_alias}_se"),
+            (pl.col(f"{_alias}_sd") / pl.col(f"{_alias}_n").sqrt()).alias(
+                f"{_alias}_se"
+            ),
         )
         _pred_summary = _pred_summary.with_columns(
-            (pl.col(_alias) - 1.96 * pl.col(f"{_alias}_se")).alias(f"{_alias}_ci_lo"),
-            (pl.col(_alias) + 1.96 * pl.col(f"{_alias}_se")).alias(f"{_alias}_ci_hi"),
+            (pl.col(_alias) - 1.96 * pl.col(f"{_alias}_se")).alias(
+                f"{_alias}_ci_lo"
+            ),
+            (pl.col(_alias) + 1.96 * pl.col(f"{_alias}_se")).alias(
+                f"{_alias}_ci_hi"
+            ),
         )
 
     _pred_summary = (
-        _pred_summary
-        .with_columns(pl.col("model").replace(DISPLAY_NAMES).alias("display_name"))
-        .select([
-            "display_name",
-            "pred_accuracy", "pred_accuracy_ci_lo", "pred_accuracy_ci_hi",
-            "predicted_if", "predicted_if_ci_lo", "predicted_if_ci_hi",
-            "actual_if", "actual_if_ci_lo", "actual_if_ci_hi",
-        ])
+        _pred_summary.with_columns(
+            pl.col("model").replace(DISPLAY_NAMES).alias("display_name")
+        )
+        .select(
+            [
+                "display_name",
+                "pred_accuracy",
+                "pred_accuracy_ci_lo",
+                "pred_accuracy_ci_hi",
+                "predicted_if",
+                "predicted_if_ci_lo",
+                "predicted_if_ci_hi",
+                "actual_if",
+                "actual_if_ci_lo",
+                "actual_if_ci_hi",
+            ]
+        )
         .with_columns(
             pl.col("pred_accuracy").round(3),
-            pl.col("pred_accuracy_ci_lo").round(3), pl.col("pred_accuracy_ci_hi").round(3),
+            pl.col("pred_accuracy_ci_lo").round(3),
+            pl.col("pred_accuracy_ci_hi").round(3),
             pl.col("predicted_if").round(3),
-            pl.col("predicted_if_ci_lo").round(3), pl.col("predicted_if_ci_hi").round(3),
+            pl.col("predicted_if_ci_lo").round(3),
+            pl.col("predicted_if_ci_hi").round(3),
             pl.col("actual_if").round(3),
-            pl.col("actual_if_ci_lo").round(3), pl.col("actual_if_ci_hi").round(3),
+            pl.col("actual_if_ci_lo").round(3),
+            pl.col("actual_if_ci_hi").round(3),
         )
         .sort("pred_accuracy", descending=True)
     )
@@ -977,15 +1133,17 @@ def _(DISPLAY_NAMES, mo, pl, pred_df):
         _se = _vals.std() / (len(_vals) ** 0.5)
         _grand[_alias] = (_mean, _mean - 1.96 * _se, _mean + 1.96 * _se)
 
-    mo.vstack([
-        mo.md(f"""
+    mo.vstack(
+        [
+            mo.md(f"""
     Grand means (95% CI across all cells):
-    - Prediction accuracy: **{_grand['pred_accuracy'][0]:.3f}** [{_grand['pred_accuracy'][1]:.3f}, {_grand['pred_accuracy'][2]:.3f}]
-    - Predicted IF rate: **{_grand['predicted_if'][0]:.3f}** [{_grand['predicted_if'][1]:.3f}, {_grand['predicted_if'][2]:.3f}]
-    - Actual IF rate: **{_grand['actual_if'][0]:.3f}** [{_grand['actual_if'][1]:.3f}, {_grand['actual_if'][2]:.3f}]
+    - Prediction accuracy: **{_grand["pred_accuracy"][0]:.3f}** [{_grand["pred_accuracy"][1]:.3f}, {_grand["pred_accuracy"][2]:.3f}]
+    - Predicted IF rate: **{_grand["predicted_if"][0]:.3f}** [{_grand["predicted_if"][1]:.3f}, {_grand["predicted_if"][2]:.3f}]
+    - Actual IF rate: **{_grand["actual_if"][0]:.3f}** [{_grand["actual_if"][1]:.3f}, {_grand["actual_if"][2]:.3f}]
         """),
-        _pred_summary,
-    ])
+            _pred_summary,
+        ]
+    )
     return
 
 
@@ -994,7 +1152,9 @@ def _(DISPLAY_NAMES, combined_df, mo, np, pl, stats):
     mo.md("### §3.5b — Effect of self-prediction on actual behavior")
 
     _per_row_delta = combined_df.with_columns(
-        (pl.col("prediction_actual_score") - pl.col("behavioral_score")).alias("delta")
+        (pl.col("prediction_actual_score") - pl.col("behavioral_score")).alias(
+            "delta"
+        )
     )
 
     # Per-model: mean delta with between-cell CI
@@ -1011,18 +1171,30 @@ def _(DISPLAY_NAMES, combined_df, mo, np, pl, stats):
             (pl.col("delta_sd") / pl.col("delta_n").sqrt()).alias("delta_se"),
         )
         .with_columns(
-            (pl.col("mean_delta") - 1.96 * pl.col("delta_se")).alias("delta_ci_lo"),
-            (pl.col("mean_delta") + 1.96 * pl.col("delta_se")).alias("delta_ci_hi"),
+            (pl.col("mean_delta") - 1.96 * pl.col("delta_se")).alias(
+                "delta_ci_lo"
+            ),
+            (pl.col("mean_delta") + 1.96 * pl.col("delta_se")).alias(
+                "delta_ci_hi"
+            ),
             pl.col("model").replace(DISPLAY_NAMES).alias("display_name"),
         )
-        .select([
-            "display_name", "behavioral", "prediction_actual",
-            "mean_delta", "delta_ci_lo", "delta_ci_hi",
-        ])
+        .select(
+            [
+                "display_name",
+                "behavioral",
+                "prediction_actual",
+                "mean_delta",
+                "delta_ci_lo",
+                "delta_ci_hi",
+            ]
+        )
         .with_columns(
-            pl.col("behavioral").round(3), pl.col("prediction_actual").round(3),
+            pl.col("behavioral").round(3),
+            pl.col("prediction_actual").round(3),
             pl.col("mean_delta").round(3),
-            pl.col("delta_ci_lo").round(3), pl.col("delta_ci_hi").round(3),
+            pl.col("delta_ci_lo").round(3),
+            pl.col("delta_ci_hi").round(3),
         )
         .sort("mean_delta")
     )
@@ -1038,22 +1210,24 @@ def _(DISPLAY_NAMES, combined_df, mo, np, pl, stats):
     _mean_d = float(np.mean(_deltas))
     _se_d = float(np.std(_deltas, ddof=1) / np.sqrt(_n))
 
-    mo.vstack([
-        mo.md(f"""
+    mo.vstack(
+        [
+            mo.md(f"""
     Paired t-test on {_n} cells: mean delta = **{_mean_d:.3f}** [{_mean_d - _t_crit * _se_d:.3f}, {_mean_d + _t_crit * _se_d:.3f}],
     t({_df}) = **{_t:.2f}**, p = **{_p:.4f}**
         """),
-        _per_model_delta,
-    ])
+            _per_model_delta,
+        ]
+    )
     return
 
 
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## Static vs Dynamic IF rate per model
+    ## Fixed-output vs Task-based IF rate per model
 
-    Average IF rate per model for static conditions vs dynamic conditions (T=0, no-hint).
+    Average IF rate per model for fixed-output conditions vs task-based conditions (T=0, no-hint).
     Only models present in both datasets are shown.
     """)
     return
@@ -1064,6 +1238,7 @@ def _(DISPLAY_NAMES, alt, dynamic_df, mo, pl, static_df):
     _static_models = set(static_df["model"].unique().to_list())
     _dynamic_models = set(dynamic_df["model"].unique().to_list())
     _common = sorted(_static_models & _dynamic_models)
+
 
     def _avg_if_by_model(df, label):
         return (
@@ -1083,7 +1258,16 @@ def _(DISPLAY_NAMES, alt, dynamic_df, mo, pl, static_df):
                 (pl.col("mean_if") - 1.96 * pl.col("se")).alias("ci_lo"),
                 (pl.col("mean_if") + 1.96 * pl.col("se")).alias("ci_hi"),
             )
-            .select(["model", "display_name", "condition_type", "mean_if", "ci_lo", "ci_hi"])
+            .select(
+                [
+                    "model",
+                    "display_name",
+                    "condition_type",
+                    "mean_if",
+                    "ci_lo",
+                    "ci_hi",
+                ]
+            )
             .with_columns(
                 pl.col("mean_if").round(3),
                 pl.col("ci_lo").round(3),
@@ -1091,42 +1275,53 @@ def _(DISPLAY_NAMES, alt, dynamic_df, mo, pl, static_df):
             )
         )
 
-    _sd_combined = pl.concat([
-        _avg_if_by_model(static_df, "static"),
-        _avg_if_by_model(dynamic_df, "dynamic"),
-    ])
+
+    _sd_combined = pl.concat(
+        [
+            _avg_if_by_model(static_df, "fixed-output"),
+            _avg_if_by_model(dynamic_df, "task-based"),
+        ]
+    )
     _sd_pd = _sd_combined.to_pandas()
 
     _table_sd = (
-        _sd_combined
-        .pivot(on="condition_type", index=["model", "display_name"], values="mean_if")
-        .with_columns(
-            (pl.col("dynamic") - pl.col("static")).round(3).alias("dynamic_advantage")
+        _sd_combined.pivot(
+            on="condition_type", index=["model", "display_name"], values="mean_if"
         )
-        .sort("dynamic_advantage", descending=True)
-        .select(["display_name", "static", "dynamic", "dynamic_advantage"])
+        .with_columns(
+            (pl.col("task-based") - pl.col("fixed-output"))
+            .round(3)
+            .alias("task_based_advantage")
+        )
+        .sort("task_based_advantage", descending=True)
+        .select(
+            ["display_name", "fixed-output", "task-based", "task_based_advantage"]
+        )
     )
 
     _bars_sd = (
         alt.Chart(_sd_pd)
         .mark_bar()
         .encode(
-            x=alt.X("mean_if:Q", title="Avg IF Rate", scale=alt.Scale(domain=[0, 1])),
+            x=alt.X(
+                "mean_if:Q", title="Avg IF Rate", scale=alt.Scale(domain=[0, 1])
+            ),
             y=alt.Y("display_name:N", sort="-x", title=None),
             color=alt.Color(
                 "condition_type:N",
                 scale=alt.Scale(
-                    domain=["static", "dynamic"],
+                    domain=["fixed-output", "task-based"],
                     range=["#e41a1c", "#4daf4a"],
                 ),
                 legend=alt.Legend(title="Condition type"),
             ),
             yOffset=alt.YOffset(
                 "condition_type:N",
-                scale=alt.Scale(domain=["static", "dynamic"]),
+                scale=alt.Scale(domain=["fixed-output", "task-based"]),
             ),
             tooltip=[
-                "display_name", "condition_type",
+                "display_name",
+                "condition_type",
                 alt.Tooltip("mean_if:Q", format=".3f"),
                 alt.Tooltip("ci_lo:Q", format=".3f"),
                 alt.Tooltip("ci_hi:Q", format=".3f"),
@@ -1135,7 +1330,7 @@ def _(DISPLAY_NAMES, alt, dynamic_df, mo, pl, static_df):
         .properties(
             width=500,
             height=max(300, len(_common) * 35),
-            title="Static vs Dynamic avg IF rate per model",
+            title="Fixed-output vs Task-based avg IF rate per model",
         )
     )
 
@@ -1153,27 +1348,34 @@ def _(mo):
     - **variety_geography_animals**: 1–3 sentences about animals, ignoring the question
     - **variety_animals_geography**: 1–3 sentences about geography, ignoring the question
 
-    Compared to static (neutral) and dynamic (avg) baselines for the same 3 models.
+    Compared to fixed-output (neutral) and task-based (avg) baselines for the same 3 models.
     """)
     return
 
 
 @app.cell
 def _(DISPLAY_NAMES, alt, dynamic_raw, followup_df, mo, pl, static_raw):
-    _fu_models = {"gemma-3-12b-it", "gpt-5.2", "llama-3.3-70b-instruct"}
+    _fu_models = {"gemma-3-27b-it", "gpt-5.2", "llama-3.3-70b-instruct"}
     _fu_label_map = {
         "classify_sh_economics": "classify",
         "variety_geography_animals": "variety: geo→animals",
         "variety_animals_geography": "variety: animals→geo",
     }
     _cg_order = [
-        "static (neutral)", "classify",
-        "variety: geo→animals", "variety: animals→geo",
-        "dynamic (avg)",
+        "fixed-output (neutral)",
+        "classify",
+        "variety: geo→animals",
+        "variety: animals→geo",
+        "task-based (avg)",
     ]
 
+
     def _base_agg(df, label, model_filter=None):
-        _d = df if model_filter is None else df.filter(pl.col("model").is_in(model_filter))
+        _d = (
+            df
+            if model_filter is None
+            else df.filter(pl.col("model").is_in(model_filter))
+        )
         return (
             _d.group_by("model")
             .agg(
@@ -1192,9 +1394,11 @@ def _(DISPLAY_NAMES, alt, dynamic_raw, followup_df, mo, pl, static_raw):
             )
         )
 
+
     _fu_agg = (
-        followup_df
-        .with_columns(pl.col("condition").replace(_fu_label_map).alias("condition_group"))
+        followup_df.with_columns(
+            pl.col("condition").replace(_fu_label_map).alias("condition_group")
+        )
         .group_by(["model", "condition_group"])
         .agg(
             pl.col("score").mean().alias("mean_if"),
@@ -1212,20 +1416,31 @@ def _(DISPLAY_NAMES, alt, dynamic_raw, followup_df, mo, pl, static_raw):
     )
 
     _static_base = _base_agg(
-        static_raw.filter(pl.col("condition") == "neutral", pl.col("model").is_in(_fu_models)),
-        "static (neutral)",
+        static_raw.filter(
+            pl.col("condition") == "neutral", pl.col("model").is_in(_fu_models)
+        ),
+        "fixed-output (neutral)",
     )
     _dynamic_base = _base_agg(
         dynamic_raw.filter(pl.col("model").is_in(_fu_models)),
-        "dynamic (avg)",
+        "task-based (avg)",
     )
 
-    _cols = ["model", "display_name", "condition_group", "mean_if", "ci_lo", "ci_hi"]
-    _all_fu = pl.concat([
-        _static_base.select(_cols),
-        _dynamic_base.select(_cols),
-        _fu_agg.select(_cols),
-    ]).with_columns(
+    _cols = [
+        "model",
+        "display_name",
+        "condition_group",
+        "mean_if",
+        "ci_lo",
+        "ci_hi",
+    ]
+    _all_fu = pl.concat(
+        [
+            _static_base.select(_cols),
+            _dynamic_base.select(_cols),
+            _fu_agg.select(_cols),
+        ]
+    ).with_columns(
         pl.col("mean_if").round(3),
         pl.col("ci_lo").round(3),
         pl.col("ci_hi").round(3),
@@ -1237,7 +1452,9 @@ def _(DISPLAY_NAMES, alt, dynamic_raw, followup_df, mo, pl, static_raw):
         alt.Chart(_all_fu_pd)
         .mark_bar()
         .encode(
-            x=alt.X("mean_if:Q", title="Avg IF Rate", scale=alt.Scale(domain=[0, 1])),
+            x=alt.X(
+                "mean_if:Q", title="Avg IF Rate", scale=alt.Scale(domain=[0, 1])
+            ),
             y=alt.Y("condition_group:N", sort=_cg_order, title=None),
             color=alt.Color(
                 "condition_group:N",
@@ -1248,7 +1465,8 @@ def _(DISPLAY_NAMES, alt, dynamic_raw, followup_df, mo, pl, static_raw):
                 legend=None,
             ),
             tooltip=[
-                "display_name", "condition_group",
+                "display_name",
+                "condition_group",
                 alt.Tooltip("mean_if:Q", format=".3f"),
             ],
         )
@@ -1260,6 +1478,89 @@ def _(DISPLAY_NAMES, alt, dynamic_raw, followup_df, mo, pl, static_raw):
 
     mo.vstack([_bars_fu, _table_fu])
     return
+
+
+@app.cell
+def _(DISPLAY_NAMES, dynamic_raw, followup_df, mo, np, pl, static_raw, stats):
+    mo.md("### Follow-up conditions: key statistics for §I")
+    _fu_models = {"gemma-3-27b-it", "gpt-5.2", "llama-3.3-70b-instruct"}
+
+    _neutral = static_raw.filter(
+        pl.col("condition") == "neutral", pl.col("model").is_in(_fu_models)
+    ).with_columns(pl.col("n_turns").cast(pl.Int64))
+    _dynamic = dynamic_raw.filter(
+        pl.col("model").is_in(_fu_models)
+    ).with_columns(pl.col("n_turns").cast(pl.Int64))
+    _fu = followup_df.with_columns(pl.col("n_turns").cast(pl.Int64))
+
+    # Grand avg IF (across models) per condition
+    _labels = [
+        ("fixed-output (neutral)", _neutral),
+        ("classify_sh_economics", _fu.filter(pl.col("condition") == "classify_sh_economics")),
+        ("variety_animals_geography", _fu.filter(pl.col("condition") == "variety_animals_geography")),
+        ("variety_geography_animals", _fu.filter(pl.col("condition") == "variety_geography_animals")),
+        ("task-based (avg)", _dynamic),
+    ]
+    _grand_rows = []
+    for _lbl, _d in _labels:
+        _vals = _d["score"].to_numpy()
+        _m = float(np.mean(_vals))
+        _se = float(np.std(_vals, ddof=1) / np.sqrt(len(_vals)))
+        _ci = 1.96 * _se
+        _grand_rows.append({"condition": _lbl, "avg_if": round(_m, 3), "ci_lo": round(_m - _ci, 3), "ci_hi": round(_m + _ci, 3)})
+    _grand_df = pl.DataFrame(_grand_rows)
+
+    # N50: first N where avg IF rate < 0.5, per (model, condition)
+    _n50_rows = []
+    _cond_map = {
+        "neutral": _neutral,
+        "classify": _fu.filter(pl.col("condition") == "classify_sh_economics"),
+        "variety (a→g)": _fu.filter(pl.col("condition") == "variety_animals_geography"),
+        "variety (g→a)": _fu.filter(pl.col("condition") == "variety_geography_animals"),
+        "task-based": _dynamic,
+    }
+    for _cond_lbl, _d in _cond_map.items():
+        _cell = (
+            _d.group_by(["model", "n_turns"])
+            .agg(pl.col("score").mean().alias("if_rate"))
+            .sort(["model", "n_turns"])
+        )
+        for _model in sorted(_fu_models):
+            _sub = _cell.filter(pl.col("model") == _model)
+            _drops = _sub.filter(pl.col("if_rate") < 0.5)["n_turns"].to_list()
+            _n50 = int(min(_drops)) if _drops else None
+            _avg = float(_d.filter(pl.col("model") == _model)["score"].mean())
+            _n50_rows.append({
+                "condition": _cond_lbl,
+                "model": DISPLAY_NAMES.get(_model, _model),
+                "n50": str(_n50) if _n50 else "never",
+                "avg_if": round(_avg, 3),
+            })
+    _n50_df = pl.DataFrame(_n50_rows)
+
+    # t-test: classify avg IF vs neutral avg IF (paired by model)
+    _dyn_per_m = _dynamic.group_by("model").agg(pl.col("score").mean().alias("dyn"))
+    _cls_per_m = _fu.filter(pl.col("condition") == "classify_sh_economics").group_by("model").agg(pl.col("score").mean().alias("cls"))
+    _neu_per_m = _neutral.group_by("model").agg(pl.col("score").mean().alias("neu"))
+    _var_per_m = (_fu.filter(pl.col("condition").str.starts_with("variety"))
+                  .group_by("model").agg(pl.col("score").mean().alias("var")))
+    _joined = _neu_per_m.join(_cls_per_m, on="model").join(_dyn_per_m, on="model").join(_var_per_m, on="model")
+
+    _t_cls_neu, _p_cls_neu = stats.ttest_rel(_joined["cls"].to_numpy(), _joined["neu"].to_numpy())
+    _t_var_dyn, _p_var_dyn = stats.ttest_rel(_joined["var"].to_numpy(), _joined["dyn"].to_numpy())
+
+    mo.vstack([
+        mo.md(f"""
+**Grand avg IF rate:**
+
+{_grand_df.to_pandas().to_string(index=False)}
+
+**classify vs neutral** (paired t): t({len(_joined)-1})={_t_cls_neu:.2f}, p={_p_cls_neu:.3f}
+**variety vs task-based** (paired t): t({len(_joined)-1})={_t_var_dyn:.2f}, p={_p_var_dyn:.3f}
+        """),
+        mo.md("**N50 per model and condition:**"),
+        _n50_df.pivot(on="condition", values=["n50", "avg_if"], index="model"),
+    ])
 
 
 if __name__ == "__main__":

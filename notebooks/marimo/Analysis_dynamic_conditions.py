@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.20.2"
+__generated_with = "0.21.1"
 app = marimo.App(width="medium")
 
 
@@ -46,7 +46,7 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # Analysis of induction vs prediction experiments - Dynamic condition
+    # Analysis of induction vs prediction experiments - Task-based conditions
 
     Your job is to implement all plots in this notebook. Unless specified otherwise, the plotting library should be Altair. You might be provided with links to specific plot examples, if so, use that implementation. Familiarize yourself with the experiment first. Code cells marked as todo are where the code is going to go. Add descriptions to markdown cells where appropriate.
 
@@ -77,9 +77,9 @@ def _(mo):
 @app.cell
 def _(Path, json, pd):
     _root = Path(__file__).resolve().parent.parent.parent
-    _dynamic = _root / "outputs" / "viz" / "dynamic"
+    _task_based = _root / "outputs" / "viz" / "dynamic"
 
-    evals_all = pd.read_parquet(_dynamic / "evals.parquet")
+    evals_all = pd.read_parquet(_task_based / "evals.parquet")
     evals = evals_all[evals_all["instruction"] == "instruction_no_hint"].copy()
     evals["n_turns_int"] = evals["n_turns"].astype(int)
 
@@ -125,9 +125,11 @@ def _(Path, json, pd):
 def _(all_models, mo):
     model_exclusion = mo.ui.multiselect(
         options=all_models,
-        value=["hermes-4-70b-reasoning", "gpt-5.2-medium",  
-               #"llama-3.1-70b-instruct"
-              ],
+        value=[
+            "hermes-4-70b-reasoning",
+            "gpt-5.2-medium",
+            # "llama-3.1-70b-instruct"
+        ],
         label="Models to exclude",
     )
     model_exclusion
@@ -137,7 +139,9 @@ def _(all_models, mo):
 @app.cell
 def _(DISPLAY_NAMES, caps_df, evals, evals_all, model_exclusion):
     _excluded = model_exclusion.value
-    _rename = lambda df: df.assign(model=df["model"].map(lambda m: DISPLAY_NAMES.get(m, m)))
+    _rename = lambda df: df.assign(
+        model=df["model"].map(lambda m: DISPLAY_NAMES.get(m, m))
+    )
     evals_filtered = _rename(
         evals[~evals["model"].isin(_excluded)].copy()
         if _excluded
@@ -158,7 +162,12 @@ def _(DISPLAY_NAMES, caps_df, evals, evals_all, model_exclusion):
 
 @app.cell
 def _(Path):
-    plots_dir = Path(__file__).resolve().parent.parent.parent / "outputs" / "plots" / "dynamic"
+    plots_dir = (
+        Path(__file__).resolve().parent.parent.parent
+        / "outputs"
+        / "plots"
+        / "dynamic"
+    )
     plots_dir.mkdir(parents=True, exist_ok=True)
     return (plots_dir,)
 
@@ -196,9 +205,11 @@ def _(
     plots_dir,
     threshold_slider,
 ):
-    # Plot A1: Diverging stacked bar — N values classified as IF/PF/Mixed
+    # Plot A1: Horizontal stacked bar — N values classified as IF/PF/Mixed
     _threshold = threshold_slider.value
-    _avg = evals_filtered.groupby(["model", "n_turns"])["score"].mean().reset_index()
+    _avg = (
+        evals_filtered.groupby(["model", "n_turns"])["score"].mean().reset_index()
+    )
 
     _unit_records = []
     for _model in _avg["model"].unique():
@@ -221,71 +232,137 @@ def _(
         pd.DataFrame(_unit_records)
         .groupby(["model", "category"])
         .size()
-        .unstack(fill_value=0)
-        .reset_index()
+        .reset_index(name="count")
     )
-    for _cat in CATEGORY_ORDER:
-        if _cat not in _counts.columns:
-            _counts[_cat] = 0
-    _counts = _counts.sort_values("IF-dominant", ascending=True)
-    _model_order = _counts["model"].tolist()
+    # Ensure all categories present for all models
+    _all_combos = pd.MultiIndex.from_product(
+        [_counts["model"].unique(), CATEGORY_ORDER], names=["model", "category"]
+    ).to_frame(index=False)
+    _counts = _all_combos.merge(_counts, on=["model", "category"], how="left").fillna({"count": 0})
+    _counts["count"] = _counts["count"].astype(int)
 
-    # Diverging offsets: Mixed straddles 0, PF extends left, IF extends right
-    _counts["x1_pf"] = -(_counts["PF-dominant"] + _counts["Mixed"] / 2)
-    _counts["x2_pf"] = -(_counts["Mixed"] / 2)
-    _counts["x1_mix"] = -(_counts["Mixed"] / 2)
-    _counts["x2_mix"] = _counts["Mixed"] / 2
-    _counts["x1_if"] = _counts["Mixed"] / 2
-    _counts["x2_if"] = _counts["Mixed"] / 2 + _counts["IF-dominant"]
+    # Sort models by IF-dominant count ascending (most IF-dominant on top)
+    _if_counts = _counts[_counts["category"] == "IF-dominant"].set_index("model")["count"]
+    _model_order = _if_counts.sort_values(ascending=True).index.tolist()
 
-    _rows = []
-    for _, _row in _counts.iterrows():
-        for _cat, _x1c, _x2c in [
-            ("PF-dominant", "x1_pf", "x2_pf"),
-            ("Mixed", "x1_mix", "x2_mix"),
-            ("IF-dominant", "x1_if", "x2_if"),
-        ]:
-            _rows.append({
-                "model": _row["model"],
-                "category": _cat,
-                "x1": _row[_x1c],
-                "x2": _row[_x2c],
-                "count": int(_row[_cat]),
-            })
-    _long = pd.DataFrame(_rows)
+    # Stack order: PF-dominant left, Mixed middle, IF-dominant right
+    _stack_order = {cat: i for i, cat in enumerate(CATEGORY_ORDER)}
+    _counts["stack_order"] = _counts["category"].map(_stack_order)
 
-    _bars = (
-        alt.Chart(_long)
-        .mark_bar()
+    _a1_chart = (
+        alt.Chart(_counts)
+        .mark_bar(cornerRadius=4)
         .encode(
             y=alt.Y("model:N", sort=_model_order, title=None),
-            x=alt.X(
-                "x1:Q",
-                title=f"← PF-dominant  ·  N values (out of {_n_total})  ·  IF-dominant →",
-                axis=alt.Axis(labelExpr="Math.abs(datum.value)"),
-            ),
-            x2=alt.X2("x2:Q"),
+            x=alt.X("count:Q", stack=True, title=f"N values (out of {_n_total})"),
             color=alt.Color(
                 "category:N",
                 scale=alt.Scale(domain=CATEGORY_ORDER, range=CATEGORY_COLORS),
                 sort=CATEGORY_ORDER,
                 title="Category",
             ),
+            order=alt.Order("stack_order:Q"),
             tooltip=["model:N", "category:N", "count:Q"],
         )
+        .properties(
+            title=f"Model behavior by turn count (threshold={_threshold})",
+            width=500,
+            height=350,
+        )
     )
-    _rule = (
-        alt.Chart(pd.DataFrame({"x": [0]}))
-        .mark_rule(color="#333", strokeWidth=1)
-        .encode(x="x:Q")
-    )
-    _a1_chart = (_bars + _rule).properties(
-        title=f"Model behavior, aggregated by turn (threshold={_threshold})",
-        width=500,
-        height=350,
-    )
-    _a1_chart.save(str(plots_dir / "a1_model_behavior_diverging.png"), scale_factor=3)
+    _a1_chart.save(str(plots_dir / "a1_model_behavior_stacked.png"), scale_factor=2)
     _a1_chart
+    return
+
+
+@app.cell
+def _(evals_filtered, mo):
+    _a1d_conditions = sorted(evals_filtered["condition"].unique().tolist())
+    a1_detail_condition = mo.ui.dropdown(
+        options=_a1d_conditions, value=_a1d_conditions[0], label="Condition"
+    )
+    a1_detail_condition
+    return (a1_detail_condition,)
+
+
+@app.cell
+def _(
+    CATEGORY_COLORS,
+    CATEGORY_ORDER,
+    a1_detail_condition,
+    alt,
+    evals_filtered,
+    n_values_sorted,
+    pd,
+    threshold_slider,
+):
+    # A1 detail: same as A1 but for a single condition across all models (no save — interactive only)
+    _threshold_d = threshold_slider.value
+    _detail_df = evals_filtered[
+        evals_filtered["condition"] == a1_detail_condition.value
+    ]
+    _avg_d = _detail_df.groupby(["model", "n_turns"])["score"].mean().reset_index()
+
+    _detail_records = []
+    for _model_d in _avg_d["model"].unique():
+        _model_df_d = _avg_d[_avg_d["model"] == _model_d].sort_values(
+            "n_turns", key=lambda s: s.astype(int)
+        )
+        for _, _row_d in _model_df_d.iterrows():
+            _s = _row_d["score"]
+            if _s >= _threshold_d:
+                _cat_d = "IF-dominant"
+            elif (1 - _s) >= _threshold_d:
+                _cat_d = "PF-dominant"
+            else:
+                _cat_d = "Mixed"
+            _detail_records.append({"model": _model_d, "category": _cat_d})
+
+    _n_total_d = len(n_values_sorted)
+    _counts_d = (
+        pd.DataFrame(_detail_records)
+        .groupby(["model", "category"])
+        .size()
+        .reset_index(name="count")
+    )
+    _all_combos_d = pd.MultiIndex.from_product(
+        [_avg_d["model"].unique(), CATEGORY_ORDER], names=["model", "category"]
+    ).to_frame(index=False)
+    _counts_d = _all_combos_d.merge(
+        _counts_d, on=["model", "category"], how="left"
+    ).fillna({"count": 0})
+    _counts_d["count"] = _counts_d["count"].astype(int)
+    _stack_order_d = {cat: i for i, cat in enumerate(CATEGORY_ORDER)}
+    _counts_d["stack_order"] = _counts_d["category"].map(_stack_order_d)
+
+    _if_counts_d = _counts_d[_counts_d["category"] == "IF-dominant"].set_index("model")["count"]
+    _model_order_d = _if_counts_d.sort_values(ascending=True).index.tolist()
+
+    (
+        alt.Chart(_counts_d)
+        .mark_bar(cornerRadius=4)
+        .encode(
+            y=alt.Y("model:N", sort=_model_order_d, title=None),
+            x=alt.X(
+                "count:Q",
+                stack=True,
+                title=f"N values (out of {_n_total_d})",
+            ),
+            color=alt.Color(
+                "category:N",
+                scale=alt.Scale(domain=CATEGORY_ORDER, range=CATEGORY_COLORS),
+                sort=CATEGORY_ORDER,
+                title="Category",
+            ),
+            order=alt.Order("stack_order:Q"),
+            tooltip=["model:N", "category:N", "count:Q"],
+        )
+        .properties(
+            title=f"{a1_detail_condition.value} (threshold={_threshold_d})",
+            width=500,
+            height=350,
+        )
+    )
     return
 
 
@@ -309,7 +386,7 @@ def _(
     _a2_chart = make_scatter_chart(
         _a2_df, "avg_if_rate", "Avg IF Rate", "Avg IF Rate vs Model Capability"
     )
-    _a2_chart.save(str(plots_dir / "a2_if_rate_vs_capability.png"), scale_factor=3)
+    _a2_chart.save(str(plots_dir / "a2_if_rate_vs_capability.png"), scale_factor=2)
     _a2_chart
     return
 
@@ -371,7 +448,7 @@ def _(COLOR_SCHEME, alt, evals_all_filtered, instruction_dropdown, plots_dir):
         .resolve_scale(y="independent")
         .properties(title=f"IF Rate by Model and Condition ({_sel})")
     )
-    _a3_chart.save(str(plots_dir / "a3_if_rate_by_condition.png"), scale_factor=3)
+    _a3_chart.save(str(plots_dir / "a3_if_rate_by_condition.png"), scale_factor=2)
     _a3_chart
     return
 
@@ -407,7 +484,7 @@ def _(alt, evals_all_filtered, instruction_dropdown, pd, plots_dir):
         _k = len(_cell_means)
         _mean_if = float(_cell_means.mean())
         _between_var = float(_cell_means.var(ddof=1)) if _k > 1 else 0.0
-        _within_var = float((_cell_ses ** 2).mean())
+        _within_var = float((_cell_ses**2).mean())
         _se = ((_between_var + _within_var) / _k) ** 0.5
         _cond_records.append(
             {
@@ -445,10 +522,12 @@ def _(alt, evals_all_filtered, instruction_dropdown, pd, plots_dir):
     )
     _cond_chart = (_cond_bars + _cond_err).properties(
         width=500,
-        height=max(300, len(_cond_records) * 28),
-        title=f"IF Rate per Condition — avg over models & N ({_sel_cond})",
+        height=alt.Step(20),
+        title=f"IF Rate per Condition — average over models & N",
+    ).configure_axisY(labelLimit=300)
+    _cond_chart.save(
+        str(plots_dir / "a6_per_condition_if_rate.png"), scale_factor=2
     )
-    _cond_chart.save(str(plots_dir / "a6_per_condition_if_rate.png"), scale_factor=3)
     _cond_chart
     return
 
@@ -530,7 +609,9 @@ def _(alt, evals_filtered, plots_dir):
             x=alt.X("n_turns:O", sort=_n_order, title="N turns"),
             y=alt.Y(
                 "model:N",
-                sort=alt.EncodingSortField("if_rate", op="mean", order="descending"),
+                sort=alt.EncodingSortField(
+                    "if_rate", op="mean", order="descending"
+                ),
                 title=None,
             ),
             color=alt.Color(
@@ -552,7 +633,9 @@ def _(alt, evals_filtered, plots_dir):
             x=alt.X("n_turns:O", sort=_n_order),
             y=alt.Y(
                 "model:N",
-                sort=alt.EncodingSortField("if_rate", op="mean", order="descending"),
+                sort=alt.EncodingSortField(
+                    "if_rate", op="mean", order="descending"
+                ),
             ),
             text=alt.Text("if_rate:Q", format=".2f"),
             color=alt.condition(
@@ -565,7 +648,7 @@ def _(alt, evals_filtered, plots_dir):
         height=max(200, _hm["model"].nunique() * 28),
         title="IF Rate Heatmap: Model × N turns (Altair)",
     )
-    _hm_chart.save(str(plots_dir / "a4_if_rate_heatmap.png"), scale_factor=3)
+    _hm_chart.save(str(plots_dir / "a4_if_rate_heatmap.png"), scale_factor=2)
     _hm_chart
     return
 
@@ -715,7 +798,9 @@ def _(
         f"First IF Drop (threshold={_threshold_a5}) vs Model Capability",
         log_y=True,
     )
-    _a5_chart.save(str(plots_dir / "a5_first_if_drop_vs_capability.png"), scale_factor=3)
+    _a5_chart.save(
+        str(plots_dir / "a5_first_if_drop_vs_capability.png"), scale_factor=2
+    )
     _a5_chart
     return
 
@@ -877,7 +962,9 @@ def _(alt, evals_filtered, plots_dir):
         height=500,
         title="Avg IF Rate: Aligned vs Misaligned Instructions (sorted by gap)",
     )
-    _d4_chart.save(str(plots_dir / "d4_aligned_misaligned_if_rate.png"), scale_factor=3)
+    _d4_chart.save(
+        str(plots_dir / "d4_aligned_misaligned_if_rate.png"), scale_factor=2
+    )
     _d4_chart
     return
 
@@ -977,7 +1064,9 @@ def _(
         height=450,
         title=f"Aligned vs Misaligned IF Rate (color = {_bm_label})",
     )
-    _d6_chart.save(str(plots_dir / "d6_aligned_vs_misaligned_quadrant.png"), scale_factor=3)
+    _d6_chart.save(
+        str(plots_dir / "d6_aligned_vs_misaligned_quadrant.png"), scale_factor=2
+    )
     _d6_chart
     return
 
@@ -1224,13 +1313,13 @@ def _(mo):
     mo.md(r"""
     ## Follow-up conditions: variety and classification
 
-    Three new conditions test what drives the dynamic-condition advantage:
+    Three new conditions test what drives the task-based-condition advantage:
     - **Variety** (2 conditions): diverse 1–3 sentence responses on a fixed topic, ignoring the question. Tests whether response diversity alone confers resistance.
     - **Classification** (1 condition): single-token output (`science` or `humanities`), but requires reading the question. Tests whether question engagement alone confers resistance.
 
     Compared against baselines from the same 3 models:
-    - **Static baseline**: `neutral` (single-token, no engagement)
-    - **Dynamic baseline**: avg of all dynamic conditions (engagement + diversity)
+    - **Fixed-output baseline**: `neutral` (single-token, no engagement)
+    - **Task-based baseline**: avg of all task-based conditions (engagement + diversity)
 
     Data: 3 models (gemma-3-12b-it, gpt-5.2, llama-3.3-70b-instruct), no-hint only.
     """)
@@ -1244,7 +1333,7 @@ def _(Path, pd):
     _static_dir = _root / "outputs" / "viz" / "static"
     _dynamic_dir = _root / "outputs" / "viz" / "dynamic"
 
-    _followup_models = {"gemma-3-12b-it", "gpt-5.2", "llama-3.3-70b-instruct"}
+    _followup_models = {"gemma-3-27b-it", "gpt-5.2", "llama-3.3-70b-instruct"}
 
     # Load followup data
     followup_evals = pd.read_parquet(_followup_dir / "evals.parquet")
@@ -1253,7 +1342,7 @@ def _(Path, pd):
     ].copy()
     followup_evals["n_turns_int"] = followup_evals["n_turns"].astype(int)
 
-    # Load static baseline (neutral only, same 3 models)
+    # Load fixed-output baseline (neutral only, same 3 models)
     _static_all = pd.read_parquet(_static_dir / "evals.parquet")
     _static_baseline = _static_all[
         (_static_all["condition"] == "neutral")
@@ -1262,7 +1351,7 @@ def _(Path, pd):
     ].copy()
     _static_baseline["n_turns_int"] = _static_baseline["n_turns"].astype(int)
 
-    # Load dynamic baseline (all dynamic conditions, same 3 models)
+    # Load task-based baseline (all task-based conditions, same 3 models)
     _dynamic_all = pd.read_parquet(_dynamic_dir / "evals.parquet")
     _dynamic_baseline = _dynamic_all[
         (_dynamic_all["instruction"] == "instruction_no_hint")
@@ -1271,31 +1360,34 @@ def _(Path, pd):
     _dynamic_baseline["n_turns_int"] = _dynamic_baseline["n_turns"].astype(int)
 
     # Build combined comparison dataframe with condition_group labels
-    # Static baseline: avg across models per N → single "static (neutral)" line
+    # Static baseline: avg across models per N → single "fixed-output (neutral)" line
     _sb_agg = (
         _static_baseline.groupby("n_turns_int")["score"]
-        .mean().reset_index(name="if_rate")
+        .mean()
+        .reset_index(name="if_rate")
     )
-    _sb_agg["condition_group"] = "static (neutral)"
+    _sb_agg["condition_group"] = "fixed-output (neutral)"
 
     # Dynamic baseline: avg across conditions and models per N
     _db_agg = (
         _dynamic_baseline.groupby("n_turns_int")["score"]
-        .mean().reset_index(name="if_rate")
+        .mean()
+        .reset_index(name="if_rate")
     )
-    _db_agg["condition_group"] = "dynamic (avg)"
+    _db_agg["condition_group"] = "task-based (avg)"
 
     # Followup: avg across models per N, one line per condition
     _fu_agg = (
         followup_evals.groupby(["condition", "n_turns_int"])["score"]
-        .mean().reset_index(name="if_rate")
+        .mean()
+        .reset_index(name="if_rate")
     )
 
     # Map followup conditions to readable group labels
     _fu_label_map = {
-        "classify_sh_economics": "classify (engagement only)",
-        "variety_geography_animals": "variety: geo→animals",
-        "variety_animals_geography": "variety: animals→geo",
+        "classify_sh_economics": "classify-question",
+        "variety_geography_animals": "random-facts-geography",
+        "variety_animals_geography": "random-facts-animals",
     }
     _fu_agg["condition_group"] = _fu_agg["condition"].map(_fu_label_map)
     _fu_agg = _fu_agg[["n_turns_int", "if_rate", "condition_group"]]
@@ -1307,22 +1399,27 @@ def _(Path, pd):
     # Per-model version (for faceted F3)
     _sb_by_model = (
         _static_baseline.groupby(["model", "n_turns_int"])["score"]
-        .mean().reset_index(name="if_rate")
+        .mean()
+        .reset_index(name="if_rate")
     )
-    _sb_by_model["condition_group"] = "static (neutral)"
+    _sb_by_model["condition_group"] = "fixed-output (neutral)"
 
     _db_by_model = (
         _dynamic_baseline.groupby(["model", "n_turns_int"])["score"]
-        .mean().reset_index(name="if_rate")
+        .mean()
+        .reset_index(name="if_rate")
     )
-    _db_by_model["condition_group"] = "dynamic (avg)"
+    _db_by_model["condition_group"] = "task-based (avg)"
 
     _fu_by_model = (
         followup_evals.groupby(["model", "condition", "n_turns_int"])["score"]
-        .mean().reset_index(name="if_rate")
+        .mean()
+        .reset_index(name="if_rate")
     )
     _fu_by_model["condition_group"] = _fu_by_model["condition"].map(_fu_label_map)
-    _fu_by_model = _fu_by_model[["model", "n_turns_int", "if_rate", "condition_group"]]
+    _fu_by_model = _fu_by_model[
+        ["model", "n_turns_int", "if_rate", "condition_group"]
+    ]
 
     comparison_df_by_model = pd.concat(
         [_sb_by_model, _db_by_model, _fu_by_model], ignore_index=True
@@ -1334,22 +1431,22 @@ def _(Path, pd):
 
 @app.cell
 def _(Plot, comparison_df, js, mo):
-    # F1: All conditions compared — followup vs static/dynamic baselines (avg across models)
+    # F1: All conditions compared — followup vs fixed-output/task-based baselines (avg across models)
     _cmp_records = comparison_df.to_dict("records")
 
     _group_order = [
-        "static (neutral)",
-        "classify (engagement only)",
-        "variety: geo→animals",
-        "variety: animals→geo",
-        "dynamic (avg)",
+        "fixed-output (neutral)",
+        "classify-question",
+        # "random-facts-geography",
+        "random-facts-animals",
+        "task-based (avg)",
     ]
     _group_colors = [
-        "#e41a1c",  # red — static
+        "#e41a1c",  # red — fixed-output
         "#ff7f00",  # orange — classify
         "#984ea3",  # purple — variety
-        "#a65628",  # brown — variety
-        "#4daf4a",  # green — dynamic
+        #   "#a65628",  # brown — variety
+        "#4daf4a",  # green — task-based
     ]
 
     mo.ui.anywidget(
@@ -1416,57 +1513,68 @@ def _(Plot, comparison_df, js, mo):
 
 @app.cell
 def _(Path, Plot, followup_evals, js, mo, pd):
-    # F2: Per-model faceted view — followup conditions vs static & dynamic baselines
+    # F2: Per-model faceted view — followup conditions vs fixed-output & task-based baselines
     _root2 = Path(__file__).resolve().parent.parent.parent
-    _followup_models2 = {"gemma-3-12b-it", "gpt-5.2", "llama-3.3-70b-instruct"}
+    _followup_models2 = {"gemma-3-27b-it", "gpt-5.2", "llama-3.3-70b-instruct"}
 
-    _static2 = pd.read_parquet(_root2 / "outputs" / "viz" / "static" / "evals.parquet")
+    _static2 = pd.read_parquet(
+        _root2 / "outputs" / "viz" / "static" / "evals.parquet"
+    )
     _static2 = _static2[
         (_static2["condition"] == "neutral")
         & (_static2["instruction"] == "instruction_no_hint")
         & (_static2["model"].isin(_followup_models2))
     ].copy()
     _static2["n_turns_int"] = _static2["n_turns"].astype(int)
-    _static2["condition_group"] = "static (neutral)"
+    _static2["condition_group"] = "fixed-output (neutral)"
 
-    _dynamic2 = pd.read_parquet(_root2 / "outputs" / "viz" / "dynamic" / "evals.parquet")
+    _dynamic2 = pd.read_parquet(
+        _root2 / "outputs" / "viz" / "dynamic" / "evals.parquet"
+    )
     _dynamic2 = _dynamic2[
         (_dynamic2["instruction"] == "instruction_no_hint")
         & (_dynamic2["model"].isin(_followup_models2))
     ].copy()
     _dynamic2["n_turns_int"] = _dynamic2["n_turns"].astype(int)
-    # Average across dynamic conditions per model per N
+    # Average across task-based conditions per model per N
     _dyn_avg = (
         _dynamic2.groupby(["model", "n_turns_int"])["score"]
-        .mean().reset_index(name="score")
+        .mean()
+        .reset_index(name="score")
     )
-    _dyn_avg["condition_group"] = "dynamic (avg)"
+    _dyn_avg["condition_group"] = "task-based (avg)"
 
     _fu2 = followup_evals.copy()
     _fu_label_map2 = {
-        "classify_sh_economics": "classify",
-        "variety_geography_animals": "variety: geo→animals",
-        "variety_animals_geography": "variety: animals→geo",
+        "classify_sh_economics": "classify-question",
+        "variety_geography_animals": "random-facts-geography",
+        "variety_animals_geography": "random-facts-animals",
     }
     _fu2["condition_group"] = _fu2["condition"].map(_fu_label_map2)
 
-    _combined = pd.concat([
-        _static2[["model", "n_turns_int", "score", "condition_group"]],
-        _dyn_avg[["model", "n_turns_int", "score", "condition_group"]],
-        _fu2[["model", "n_turns_int", "score", "condition_group"]],
-    ], ignore_index=True)
+    _combined = pd.concat(
+        [
+            _static2[["model", "n_turns_int", "score", "condition_group"]],
+            _dyn_avg[["model", "n_turns_int", "score", "condition_group"]],
+            _fu2[["model", "n_turns_int", "score", "condition_group"]],
+        ],
+        ignore_index=True,
+    )
 
     _f2_agg = (
         _combined.groupby(["model", "condition_group", "n_turns_int"])["score"]
-        .mean().reset_index(name="if_rate")
+        .mean()
+        .reset_index(name="if_rate")
         .sort_values(["model", "condition_group", "n_turns_int"])
     )
     _f2_records = _f2_agg.to_dict("records")
 
     _grp_order2 = [
-        "static (neutral)", "classify",
-        "variety: geo→animals", "variety: animals→geo",
-        "dynamic (avg)",
+        "fixed-output (neutral)",
+        "classify-question",
+        "random-facts-geography",
+        "random-facts-animals",
+        "task-based (avg)",
     ]
     _grp_colors2 = ["#e41a1c", "#ff7f00", "#984ea3", "#a65628", "#4daf4a"]
 
@@ -1522,21 +1630,24 @@ def _(Path, Plot, followup_evals, js, mo, pd):
 
 
 @app.cell
-def _(alt, comparison_df_by_model):
+def _(alt, comparison_df_by_model, plots_dir):
     # F3: Bar chart — avg IF rate per condition group, faceted by model
     _f3_agg = (
         comparison_df_by_model.groupby(["model", "condition_group"])["if_rate"]
-        .mean().reset_index(name="avg_if")
+        .mean()
+        .reset_index(name="avg_if")
     )
     _f3_agg["group_type"] = _f3_agg["condition_group"].apply(
-        lambda g: "baseline" if "static" in g or "dynamic" in g else "followup"
+        lambda g: (
+            "baseline" if "fixed-output" in g or "task-based" in g else "followup"
+        )
     )
     _f3_order = [
-        "static (neutral)",
+        "fixed-output (neutral)",
         "classify (engagement only)",
         "variety: geo→animals",
         "variety: animals→geo",
-        "dynamic (avg)",
+        "task-based (avg)",
     ]
 
     _bars = (
@@ -1544,7 +1655,8 @@ def _(alt, comparison_df_by_model):
         .mark_bar()
         .encode(
             x=alt.X(
-                "avg_if:Q", title="Mean IF Rate",
+                "avg_if:Q",
+                title="Mean IF Rate",
                 scale=alt.Scale(domain=[0, 1]),
             ),
             y=alt.Y("condition_group:N", sort=_f3_order, title=None),
@@ -1568,6 +1680,7 @@ def _(alt, comparison_df_by_model):
         )
         .properties(title="Mean IF rate by condition group, per model")
     )
+    _bars.save(str(plots_dir / "f3_followup_by_model.png"), scale_factor=2)
     _bars
     return
 

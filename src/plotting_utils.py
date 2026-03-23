@@ -41,16 +41,16 @@ def _paper_theme() -> dict:
             "font": _FONT,
             "title": {
                 "font": _FONT,
-                "fontSize": 13,
+                "fontSize": 18,
                 "fontWeight": "normal",
                 "anchor": "start",
                 "color": "#222",
             },
             "axis": {
                 "labelFont": _FONT,
-                "labelFontSize": 10,
+                "labelFontSize": 15,
                 "titleFont": _FONT,
-                "titleFontSize": 11,
+                "titleFontSize": 16,
                 "titleFontWeight": "normal",
                 "gridColor": "#e0e0e0",
                 "domainColor": "#999",
@@ -60,16 +60,16 @@ def _paper_theme() -> dict:
             },
             "legend": {
                 "labelFont": _FONT,
-                "labelFontSize": 10,
+                "labelFontSize": 15,
                 "titleFont": _FONT,
-                "titleFontSize": 11,
+                "titleFontSize": 16,
                 "titleFontWeight": "normal",
             },
             "header": {
                 "labelFont": _FONT,
-                "labelFontSize": 10,
+                "labelFontSize": 15,
                 "titleFont": _FONT,
-                "titleFontSize": 11,
+                "titleFontSize": 16,
             },
             "mark": {"tooltip": True},
             "view": {
@@ -222,7 +222,7 @@ def make_scatter_chart(
     )
     text = (
         alt.Chart(df)
-        .mark_text(align="left", dx=3, fontSize=9)
+        .mark_text(align="left", dx=3, fontSize=14)
         .encode(x="label_x:Q", y="label_y:Q", text="model:N")
     )
     layers = points + trendline + leaders + text

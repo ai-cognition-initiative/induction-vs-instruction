@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.20.2"
+__generated_with = "0.21.1"
 app = marimo.App(width="medium")
 
 
@@ -47,7 +47,7 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # Analysis of induction vs prediction experiments - Static condition
+    # Analysis of induction vs prediction experiments - Fixed-output conditions
 
     Your job is to implement all plots in this notebook. Unless specified otherwise, the plotting library should be Altair. You might be provided with links to specific plot examples, if so, use that implementation. Familiarize yourself with the experiment first. Code cells marked as todo are where the code is going to go. Add descriptions to markdown cells where appropriate.
 
@@ -76,17 +76,21 @@ def _(mo):
 @app.cell
 def _(Path, json, pd):
     _root = Path(__file__).resolve().parent.parent.parent
-    _static = _root / "outputs" / "viz" / "static"
+    _fixed_output = _root / "outputs" / "viz" / "static"
 
-    _exclude_conditions = []
+    # Token-pattern conditions excluded: they produce varying responses (random set members),
+    # not a single fixed token, so they don't belong in the fixed-output analysis.
+    _exclude_conditions = ["token_states_countries", "token_countries_states"]
     # ["value_aligned_helpful", "value_misaligned_helpful"]
 
-    evals_all = pd.read_parquet(_static / "evals.parquet")
+    evals_all = pd.read_parquet(_fixed_output / "evals.parquet")
     evals_all = evals_all[~evals_all["condition"].isin(_exclude_conditions)].copy()
     evals = evals_all[evals_all["instruction"] == "instruction_no_hint"].copy()
     evals["n_turns_int"] = evals["n_turns"].astype(int)
 
-    combined_errors_all = pd.read_parquet(_static / "_combined_errors.parquet")
+    combined_errors_all = pd.read_parquet(
+        _fixed_output / "_combined_errors.parquet"
+    )
     combined_errors_all = combined_errors_all[
         ~combined_errors_all["condition"].isin(_exclude_conditions)
     ].copy()
@@ -95,7 +99,9 @@ def _(Path, json, pd):
     ].copy()
     combined_errors["n_turns_int"] = combined_errors["n_turns"].astype(int)
 
-    evals_prediction_all = pd.read_parquet(_static / "evals_prediction.parquet")
+    evals_prediction_all = pd.read_parquet(
+        _fixed_output / "evals_prediction.parquet"
+    )
     evals_prediction_all = evals_prediction_all[
         ~evals_prediction_all["condition"].isin(_exclude_conditions)
     ].copy()
@@ -171,7 +177,9 @@ def _(
     model_exclusion,
 ):
     _excluded = model_exclusion.value
-    _rename = lambda df: df.assign(model=df["model"].map(lambda m: DISPLAY_NAMES.get(m, m)))
+    _rename = lambda df: df.assign(
+        model=df["model"].map(lambda m: DISPLAY_NAMES.get(m, m))
+    )
     evals_filtered = _rename(
         evals[~evals["model"].isin(_excluded)].copy()
         if _excluded
@@ -263,9 +271,11 @@ def _(
     plots_dir,
     threshold_slider,
 ):
-    # Plot A1: Diverging stacked bar — N values classified as IF/PF/Mixed
+    # Plot A1: Horizontal stacked bar — N values classified as IF/PF/Mixed
     _threshold = threshold_slider.value
-    _avg = evals_filtered.groupby(["model", "n_turns"])["score"].mean().reset_index()
+    _avg = (
+        evals_filtered.groupby(["model", "n_turns"])["score"].mean().reset_index()
+    )
 
     _unit_records = []
     for _model in _avg["model"].unique():
@@ -288,78 +298,146 @@ def _(
         pd.DataFrame(_unit_records)
         .groupby(["model", "category"])
         .size()
-        .unstack(fill_value=0)
-        .reset_index()
+        .reset_index(name="count")
     )
-    for _cat in CATEGORY_ORDER:
-        if _cat not in _counts.columns:
-            _counts[_cat] = 0
+    # Ensure all categories present for all models
+    _all_combos = pd.MultiIndex.from_product(
+        [_counts["model"].unique(), CATEGORY_ORDER], names=["model", "category"]
+    ).to_frame(index=False)
+    _counts = _all_combos.merge(
+        _counts, on=["model", "category"], how="left"
+    ).fillna({"count": 0})
+    _counts["count"] = _counts["count"].astype(int)
 
-    _counts = _counts.sort_values("IF-dominant", ascending=True)
-    _model_order = _counts["model"].tolist()
+    # Sort models by IF-dominant count ascending (most IF-dominant on top)
+    _if_counts = _counts[_counts["category"] == "IF-dominant"].set_index("model")[
+        "count"
+    ]
+    _model_order = _if_counts.sort_values(ascending=True).index.tolist()
 
-    # Diverging offsets: Mixed straddles 0, PF extends left, IF extends right
-    _counts["x1_pf"] = -(_counts["PF-dominant"] + _counts["Mixed"] / 2)
-    _counts["x2_pf"] = -(_counts["Mixed"] / 2)
-    _counts["x1_mix"] = -(_counts["Mixed"] / 2)
-    _counts["x2_mix"] = _counts["Mixed"] / 2
-    _counts["x1_if"] = _counts["Mixed"] / 2
-    _counts["x2_if"] = _counts["Mixed"] / 2 + _counts["IF-dominant"]
+    # Stack order: PF-dominant left, Mixed middle, IF-dominant right
+    _stack_order = {cat: i for i, cat in enumerate(CATEGORY_ORDER)}
+    _counts["stack_order"] = _counts["category"].map(_stack_order)
 
-    _rows = []
-    for _, _row in _counts.iterrows():
-        for _cat, _x1c, _x2c in [
-            ("PF-dominant", "x1_pf", "x2_pf"),
-            ("Mixed", "x1_mix", "x2_mix"),
-            ("IF-dominant", "x1_if", "x2_if"),
-        ]:
-            _rows.append({
-                "model": _row["model"],
-                "category": _cat,
-                "x1": _row[_x1c],
-                "x2": _row[_x2c],
-                "count": int(_row[_cat]),
-            })
-    _long = pd.DataFrame(_rows)
-
-    _bars = (
-        alt.Chart(_long)
-        .mark_bar()
+    _a1_chart = (
+        alt.Chart(_counts)
+        .mark_bar(cornerRadius=4)
         .encode(
             y=alt.Y("model:N", sort=_model_order, title=None),
-            x=alt.X(
-                "x1:Q",
-                title=f"← PF-dominant  ·  N values (out of {_n_total})  ·  IF-dominant →",
-                axis=alt.Axis(labelExpr="Math.abs(datum.value)"),
-            ),
-            x2=alt.X2("x2:Q"),
+            x=alt.X("count:Q", stack=True, title=f"N values (out of {_n_total})"),
             color=alt.Color(
                 "category:N",
                 scale=alt.Scale(domain=CATEGORY_ORDER, range=CATEGORY_COLORS),
                 sort=CATEGORY_ORDER,
                 title="Category",
             ),
+            order=alt.Order("stack_order:Q"),
             tooltip=["model:N", "category:N", "count:Q"],
         )
+        .properties(
+            title=f"Model behavior by turn count (threshold={_threshold})",
+            width=500,
+            height=350,
+        )
     )
-    _rule = (
-        alt.Chart(pd.DataFrame({"x": [0]}))
-        .mark_rule(color="#333", strokeWidth=1)
-        .encode(x="x:Q")
+    _a1_chart.save(
+        str(plots_dir / "a1_model_behavior_stacked.png"), scale_factor=2
     )
-    _a1_chart = (_bars + _rule).properties(
-        title=f"Model behavior, aggregated by turn (threshold={_threshold})",
-        width=500,
-        height=350,
-    )
-    _a1_chart.save(str(plots_dir / "a1_model_behavior_diverging.png"), scale_factor=3)
     _a1_chart
     return
 
 
 @app.cell
-def _(evals_filtered):
-    evals_filtered
+def _(evals_filtered, mo):
+    _a1d_conditions = sorted(evals_filtered["condition"].unique().tolist())
+
+    a1_detail_condition = mo.ui.dropdown(
+        options=_a1d_conditions, value=_a1d_conditions[0], label="Condition"
+    )
+    a1_detail_condition
+    return (a1_detail_condition,)
+
+
+@app.cell
+def _(
+    CATEGORY_COLORS,
+    CATEGORY_ORDER,
+    a1_detail_condition,
+    alt,
+    evals_filtered,
+    n_values_sorted,
+    pd,
+    threshold_slider,
+):
+    # A1 detail: same as A1 but for a single condition across all models (no save — interactive only)
+    _threshold_d = threshold_slider.value
+    _detail_df = evals_filtered[
+        evals_filtered["condition"] == a1_detail_condition.value
+    ]
+    _avg_d = _detail_df.groupby(["model", "n_turns"])["score"].mean().reset_index()
+
+    _detail_records = []
+    for _model_d in _avg_d["model"].unique():
+        _model_df_d = _avg_d[_avg_d["model"] == _model_d].sort_values(
+            "n_turns", key=lambda s: s.astype(int)
+        )
+        for _, _row_d in _model_df_d.iterrows():
+            _s = _row_d["score"]
+            if _s >= _threshold_d:
+                _cat_d = "IF-dominant"
+            elif (1 - _s) >= _threshold_d:
+                _cat_d = "PF-dominant"
+            else:
+                _cat_d = "Mixed"
+            _detail_records.append({"model": _model_d, "category": _cat_d})
+
+    _n_total_d = len(n_values_sorted)
+    _counts_d = (
+        pd.DataFrame(_detail_records)
+        .groupby(["model", "category"])
+        .size()
+        .reset_index(name="count")
+    )
+    _all_combos_d = pd.MultiIndex.from_product(
+        [_avg_d["model"].unique(), CATEGORY_ORDER], names=["model", "category"]
+    ).to_frame(index=False)
+    _counts_d = _all_combos_d.merge(
+        _counts_d, on=["model", "category"], how="left"
+    ).fillna({"count": 0})
+    _counts_d["count"] = _counts_d["count"].astype(int)
+    _stack_order_d = {cat: i for i, cat in enumerate(CATEGORY_ORDER)}
+    _counts_d["stack_order"] = _counts_d["category"].map(_stack_order_d)
+
+    _if_counts_d = _counts_d[_counts_d["category"] == "IF-dominant"].set_index(
+        "model"
+    )["count"]
+    _model_order_d = _if_counts_d.sort_values(ascending=True).index.tolist()
+
+    (
+        alt.Chart(_counts_d)
+        .mark_bar(cornerRadius=4)
+        .encode(
+            y=alt.Y("model:N", sort=_model_order_d, title=None),
+            x=alt.X(
+                "count:Q",
+                stack=True,
+                title=f"Fraction of turns",
+            ),
+            color=alt.Color(
+                "category:N",
+                scale=alt.Scale(domain=CATEGORY_ORDER, range=CATEGORY_COLORS),
+                sort=CATEGORY_ORDER,
+                title="Category",
+            ),
+            order=alt.Order("stack_order:Q"),
+            tooltip=["model:N", "category:N", "count:Q"],
+        )
+        .properties(
+            title=f"Results for {a1_detail_condition.value} condition (threshold={_threshold_d})",
+            width=500,
+            height=350,
+        )
+    )
     return
 
 
@@ -383,7 +461,7 @@ def _(
     _a2_chart = make_scatter_chart(
         _a2_df, "avg_if_rate", "Avg IF Rate", "Avg IF Rate vs Model Capability"
     )
-    _a2_chart.save(str(plots_dir / "a2_if_rate_vs_capability.png"), scale_factor=3)
+    _a2_chart.save(str(plots_dir / "a2_if_rate_vs_capability.png"), scale_factor=2)
     _a2_chart
     return
 
@@ -443,9 +521,9 @@ def _(COLOR_SCHEME, alt, evals_all_filtered, instruction_dropdown, plots_dir):
         (_bars + _error)
         .facet(facet=alt.Facet("condition:N", title="Condition"), columns=2)
         .resolve_scale(y="independent")
-        .properties(title=f"IF Rate by Model and Condition ({_sel})")
+        .properties(title=f"IF Rate by Model and Condition")
     )
-    _a3_chart.save(str(plots_dir / "a3_if_rate_by_condition.png"), scale_factor=3)
+    _a3_chart.save(str(plots_dir / "a3_if_rate_by_condition.png"), scale_factor=2)
     _a3_chart
     return
 
@@ -519,71 +597,11 @@ def _(alt, evals_all_filtered, instruction_dropdown, pd, plots_dir):
     )
     _a6_chart = (_a6_bars + _a6_err).properties(
         width=500,
-        height=max(300, len(_a6_records) * 28),
-        title=f"IF Rate per Condition — avg over models & N",
+        height=alt.Step(30),
+        title=f"IF Rate per Condition — average over models & N",
     )
-    _a6_chart.save(str(plots_dir / "a6_per_condition_if_rate.png"), scale_factor=3)
+    _a6_chart.save(str(plots_dir / "a6_per_condition_if_rate.png"), scale_factor=2)
     _a6_chart
-    return
-
-
-@app.cell
-def _(Plot, evals_filtered, js, mo):
-    # Plot A4: Stacked unit chart — colored stripes of IF rate by N
-    _a4_agg = (
-        evals_filtered.groupby(["model", "n_turns", "n_turns_int"])["score"]
-        .mean()
-        .reset_index(name="behavioral_score")
-        .sort_values(["model", "n_turns_int"])
-    )
-    _a4_records = _a4_agg.to_dict("records")
-
-    mo.ui.anywidget(
-        Plot.plot(
-            {
-                "x": {"axis": None},
-                "y": {"label": "Model"},
-                "color": {
-                    "type": "linear",
-                    "scheme": "RdYlGn",
-                    "domain": [0, 1],
-                    "label": "IF Rate",
-                    "legend": True,
-                },
-                "marks": [
-                    Plot.barX(
-                        _a4_records,
-                        {
-                            "x": 1,
-                            "y": "model",
-                            "fill": "behavioral_score",
-                            "sort": {"y": "-x", "reduce": "sum"},
-                            "order": "n_turns_int",
-                            "title": js(
-                                "d => `N=${d.n_turns}, IF=${d.behavioral_score.toFixed(2)}`"
-                            ),
-                        },
-                    ),
-                    Plot.text(
-                        _a4_records,
-                        Plot.stackX(
-                            {
-                                "x": 1,
-                                "y": "model",
-                                "order": "n_turns_int",
-                                "text": "n_turns",
-                                "fill": "white",
-                                "fontSize": 8,
-                            }
-                        ),
-                    ),
-                ],
-                "width": 800,
-                "height": 550,
-                "marginLeft": 160,
-            }
-        )
-    )
     return
 
 
@@ -643,7 +661,7 @@ def _(alt, evals_filtered, plots_dir):
         height=max(200, _hm["model"].nunique() * 28),
         title="IF Rate Heatmap: Model × N turns (Altair)",
     )
-    _hm_chart.save(str(plots_dir / "a4_if_rate_heatmap.png"), scale_factor=3)
+    _hm_chart.save(str(plots_dir / "a4_if_rate_heatmap.png"), scale_factor=2)
     _hm_chart
     return
 
@@ -798,7 +816,9 @@ def _(
         f"First IF Drop (threshold={_threshold_a5}) vs Model Capability",
         log_y=True,
     )
-    _a5_chart.save(str(plots_dir / "a5_first_if_drop_vs_capability.png"), scale_factor=3)
+    _a5_chart.save(
+        str(plots_dir / "a5_first_if_drop_vs_capability.png"), scale_factor=2
+    )
     _a5_chart
     return
 
@@ -932,7 +952,9 @@ def _(
         "Mean |Calibration Error| (%)",
         "Absolute Calibration Error vs Model Capability",
     )
-    _b2_chart.save(str(plots_dir / "b2_calibration_error_vs_capability.png"), scale_factor=3)
+    _b2_chart.save(
+        str(plots_dir / "b2_calibration_error_vs_capability.png"), scale_factor=2
+    )
     _b2_chart
     return
 
@@ -1040,7 +1062,9 @@ def _(COLOR_SCHEME, alt, combined_errors_filtered, pd, plots_dir):
     _b4_chart = (_box_b4 + _rule_b4).properties(
         width=500, height=400, title="Distribution of Calibration Error by Model"
     )
-    _b4_chart.save(str(plots_dir / "b4_calibration_error_distribution.png"), scale_factor=3)
+    _b4_chart.save(
+        str(plots_dir / "b4_calibration_error_distribution.png"), scale_factor=2
+    )
     _b4_chart
     return
 
@@ -1082,7 +1106,9 @@ def _(
         "Prediction of IF Rate vs Model Capability",
         y_domain=[0, 0.55],
     )
-    _c1_chart.save(str(plots_dir / "c1_prediction_rate_vs_capability.png"), scale_factor=3)
+    _c1_chart.save(
+        str(plots_dir / "c1_prediction_rate_vs_capability.png"), scale_factor=2
+    )
     _c1_chart
     return
 
@@ -1114,7 +1140,9 @@ def _(
         "Prediction Accuracy vs Model Capability",
         y_domain=[0, 1],
     )
-    _c2_chart.save(str(plots_dir / "c2_prediction_accuracy_vs_capability.png"), scale_factor=3)
+    _c2_chart.save(
+        str(plots_dir / "c2_prediction_accuracy_vs_capability.png"), scale_factor=2
+    )
     _c2_chart
     return
 
@@ -1233,7 +1261,9 @@ def _(alt, evals_filtered, plots_dir):
         height=500,
         title="Avg IF Rate: Aligned vs Misaligned Instructions (sorted by gap)",
     )
-    _d4_chart.save(str(plots_dir / "d4_aligned_misaligned_if_rate.png"), scale_factor=3)
+    _d4_chart.save(
+        str(plots_dir / "d4_aligned_misaligned_if_rate.png"), scale_factor=2
+    )
     _d4_chart
     return
 
@@ -1333,7 +1363,9 @@ def _(
         height=450,
         title=f"Aligned vs Misaligned IF Rate (color = {_bm_label})",
     )
-    _d6_chart.save(str(plots_dir / "d6_aligned_vs_misaligned_quadrant.png"), scale_factor=3)
+    _d6_chart.save(
+        str(plots_dir / "d6_aligned_vs_misaligned_quadrant.png"), scale_factor=2
+    )
     _d6_chart
     return
 
@@ -1588,7 +1620,7 @@ def _(mo):
 
 
 @app.cell
-def _(COLOR_SCHEME, alt, combined_errors_filtered, pd):
+def _(COLOR_SCHEME, alt, combined_errors_filtered, pd, plots_dir):
     # Plot E1: Calibration bucket plot — predicted vs actual T rate by behavioral regime
     _e1_data = combined_errors_filtered.dropna(
         subset=["behavioral_score", "prediction_predicted_score"]
@@ -1597,9 +1629,9 @@ def _(COLOR_SCHEME, alt, combined_errors_filtered, pd):
 
     def _classify_regime(s):
         if s >= 0.7:
-            return "IF-dominant"
+            return "Instruction-dominant"
         elif s <= 0.3:
-            return "Induction-dominant"
+            return "Pattern-dominant"
         else:
             return "Mixed"
 
@@ -1624,7 +1656,7 @@ def _(COLOR_SCHEME, alt, combined_errors_filtered, pd):
     )
     _e1_scatter = (
         alt.Chart(_e1_agg)
-        .mark_point(size=100, filled=True, opacity=0.85)
+        .mark_point(size=200, filled=True, opacity=0.85)
         .encode(
             x=alt.X(
                 "actual_t_rate:Q",
@@ -1640,7 +1672,7 @@ def _(COLOR_SCHEME, alt, combined_errors_filtered, pd):
             shape=alt.Shape(
                 "regime:N",
                 scale=alt.Scale(
-                    domain=["IF-dominant", "Mixed", "Induction-dominant"],
+                    domain=["Instruction-dominant", "Mixed", "Pattern-dominant"],
                     range=["circle", "square", "cross"],
                 ),
                 title="Behavioral Regime",
@@ -1660,7 +1692,7 @@ def _(COLOR_SCHEME, alt, combined_errors_filtered, pd):
         alt.Chart(
             pd.DataFrame({"x": [0.2], "y": [0.72], "text": ["▲ over-predicts IF"]})
         )
-        .mark_text(color="gray", fontSize=10, align="left")
+        .mark_text(color="gray", fontSize=12, align="left")
         .encode(x="x:Q", y="y:Q", text="text:N")
     )
     _under_annot = (
@@ -1669,19 +1701,21 @@ def _(COLOR_SCHEME, alt, combined_errors_filtered, pd):
                 {"x": [0.6], "y": [0.22], "text": ["▼ under-predicts IF"]}
             )
         )
-        .mark_text(color="gray", fontSize=10, align="left")
+        .mark_text(color="gray", fontSize=12, align="left")
         .encode(x="x:Q", y="y:Q", text="text:N")
     )
-    (_diag_line + _e1_scatter + _over_annot + _under_annot).properties(
+    _e1_chart = (_diag_line + _e1_scatter + _over_annot + _under_annot).properties(
         width=500,
         height=450,
         title="Self-Prediction Calibration by Behavioral Regime (diagonal = perfect calibration)",
     )
+    _e1_chart.save(str(plots_dir / "e1_calibration_bucket.png"), scale_factor=2)
+    _e1_chart
     return
 
 
 @app.cell
-def _(alt, combined_errors_filtered, pd):
+def _(alt, combined_errors_filtered, pd, plots_dir):
     # Plot E2: Paired difference plot — Protocol 2 vs Protocol 1 IF rate at transition N values
     _e2_data = combined_errors_filtered.dropna(
         subset=["behavioral_score", "prediction_actual_score"]
@@ -1743,11 +1777,15 @@ def _(alt, combined_errors_filtered, pd):
         .mark_rule(strokeDash=[4, 2], color="gray")
         .encode(x="x:Q")
     )
-    (_e2_bars + _e2_error + _e2_rule).properties(
+    _e2_chart = (_e2_bars + _e2_error + _e2_rule).properties(
         width=500,
         height=400,
         title="Effect of Self-Prediction on IF Rate at Transition N Values (95% CI)",
     )
+    _e2_chart.save(
+        str(plots_dir / "e2_prediction_changes_behavior.png"), scale_factor=2
+    )
+    _e2_chart
     return
 
 
