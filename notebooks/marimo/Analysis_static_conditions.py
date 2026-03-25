@@ -641,7 +641,7 @@ def _(alt, evals_filtered, plots_dir):
     )
     _texts = (
         alt.Chart(_hm)
-        .mark_text(fontSize=7)
+        .mark_text(fontSize=10)
         .encode(
             x=alt.X("n_turns:O", sort=_n_order),
             y=alt.Y(
@@ -659,7 +659,7 @@ def _(alt, evals_filtered, plots_dir):
     _hm_chart = (_rects + _texts).properties(
         width=max(500, len(_n_order) * 28),
         height=max(200, _hm["model"].nunique() * 28),
-        title="IF Rate Heatmap: Model × N turns (Altair)",
+        title="Instruction-following rate by model for fixed-output conditions",
     )
     _hm_chart.save(str(plots_dir / "a4_if_rate_heatmap.png"), scale_factor=2)
     _hm_chart
@@ -1219,7 +1219,15 @@ def _(alt, evals_filtered, plots_dir):
             domain=["aligned", "misaligned"],
             range=["#8dd3c7", "#fb8072"],
         ),
-        legend=alt.Legend(title="Instruction alignment"),
+        legend=alt.Legend(
+            title="Instruction alignment",
+            orient="none",
+            legendX=320,
+            legendY=410,
+            fillColor="white",
+            strokeColor="#ccc",
+            padding=6,
+        ),
     )
     _d4_y = alt.Y("model:N", sort=_model_order, title=None)
     _d4_yoff = alt.YOffset(
@@ -1656,7 +1664,7 @@ def _(COLOR_SCHEME, alt, combined_errors_filtered, pd, plots_dir):
     )
     _e1_scatter = (
         alt.Chart(_e1_agg)
-        .mark_point(size=200, filled=True, opacity=0.85)
+        .mark_point(size=250, filled=True, opacity=0.85)
         .encode(
             x=alt.X(
                 "actual_t_rate:Q",
@@ -1692,7 +1700,7 @@ def _(COLOR_SCHEME, alt, combined_errors_filtered, pd, plots_dir):
         alt.Chart(
             pd.DataFrame({"x": [0.2], "y": [0.72], "text": ["▲ over-predicts IF"]})
         )
-        .mark_text(color="gray", fontSize=12, align="left")
+        .mark_text(color="gray", fontSize=14, align="left")
         .encode(x="x:Q", y="y:Q", text="text:N")
     )
     _under_annot = (
@@ -1701,13 +1709,13 @@ def _(COLOR_SCHEME, alt, combined_errors_filtered, pd, plots_dir):
                 {"x": [0.6], "y": [0.22], "text": ["▼ under-predicts IF"]}
             )
         )
-        .mark_text(color="gray", fontSize=12, align="left")
+        .mark_text(color="gray", fontSize=14, align="left")
         .encode(x="x:Q", y="y:Q", text="text:N")
     )
     _e1_chart = (_diag_line + _e1_scatter + _over_annot + _under_annot).properties(
         width=500,
         height=450,
-        title="Self-Prediction Calibration by Behavioral Regime (diagonal = perfect calibration)",
+        title="Self-Prediction Calibration by Behavioral Regime",
     )
     _e1_chart.save(str(plots_dir / "e1_calibration_bucket.png"), scale_factor=2)
     _e1_chart

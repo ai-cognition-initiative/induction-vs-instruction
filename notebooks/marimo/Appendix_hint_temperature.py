@@ -74,10 +74,20 @@ def _(mo):
 
 @app.cell
 def _(MODEL_ALIASES_T1, STATIC_PATH, T1_PATH, TOKEN_CONDITIONS, pl):
+    # For T=0, use gpt-5.2-medium (reasoning) instead of gpt-5.2 (no reasoning).
+    # The no-reasoning gpt-5.2 at T=0 is an outlier (0.10 avg IF) not representative
+    # of the model's capability; medium reasoning is the main-results variant.
+    T0_MODEL_SUBSTITUTIONS = {"gpt-5.2-medium": "gpt-5.2"}
+
     def _load_t0():
-        return pl.read_parquet(STATIC_PATH / "evals.parquet").filter(
-            pl.col("instruction") == "instruction_no_hint",
-            ~pl.col("condition").is_in(TOKEN_CONDITIONS),
+        return (
+            pl.read_parquet(STATIC_PATH / "evals.parquet")
+            .filter(
+                pl.col("instruction") == "instruction_no_hint",
+                ~pl.col("condition").is_in(TOKEN_CONDITIONS),
+                pl.col("model") != "gpt-5.2",  # exclude no-reasoning variant
+            )
+            .with_columns(pl.col("model").replace(T0_MODEL_SUBSTITUTIONS))
         )
 
     def _load_t1():
@@ -114,7 +124,9 @@ def _(pl):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md("## §D — Effect of the hardcoding hint (neutral condition)")
+    mo.md("""
+    ## §D — Effect of the hardcoding hint (neutral condition)
+    """)
     return
 
 
@@ -184,7 +196,18 @@ def _(COMMON_MODELS, DISPLAY_NAMES, mo, np, pl, scipy_stats, t1_df):
 
 
 @app.cell
-def _(COMMON_MODELS, N_ORDER, PALETTE_HINT, PALETTE_NOHINT, OUT_DIR, aggregate_by_n, mo, pl, plt, t1_df):
+def _(
+    COMMON_MODELS,
+    N_ORDER,
+    OUT_DIR,
+    PALETTE_HINT,
+    PALETTE_NOHINT,
+    aggregate_by_n,
+    mo,
+    pl,
+    plt,
+    t1_df,
+):
     _hint_models = set(
         t1_df.filter(pl.col("instruction") == "instruction_hint")["model"].unique().to_list()
     )
@@ -226,10 +249,21 @@ def _(COMMON_MODELS, N_ORDER, PALETTE_HINT, PALETTE_NOHINT, OUT_DIR, aggregate_b
     _fig_d1.savefig(OUT_DIR / "d1_hint_vs_nohint_curves.png", dpi=150)
     mo.md("**D1 saved** → `outputs/plots/appendix/d1_hint_vs_nohint_curves.png`")
     _fig_d1
+    return
 
 
 @app.cell
-def _(COMMON_MODELS, DISPLAY_NAMES, PALETTE_HINT, PALETTE_NOHINT, OUT_DIR, mo, pl, plt, t1_df):
+def _(
+    COMMON_MODELS,
+    DISPLAY_NAMES,
+    OUT_DIR,
+    PALETTE_HINT,
+    PALETTE_NOHINT,
+    mo,
+    pl,
+    plt,
+    t1_df,
+):
     _hint_models = set(
         t1_df.filter(pl.col("instruction") == "instruction_hint")["model"].unique().to_list()
     )
@@ -267,11 +301,14 @@ def _(COMMON_MODELS, DISPLAY_NAMES, PALETTE_HINT, PALETTE_NOHINT, OUT_DIR, mo, p
     _fig_d2.savefig(OUT_DIR / "d2_hint_effect_by_model.png", dpi=150)
     mo.md("**D2 saved** → `outputs/plots/appendix/d2_hint_effect_by_model.png`")
     _fig_d2
+    return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md("## §E — Temperature comparison (T=0 vs T=1)")
+    mo.md("""
+    ## §E — Temperature comparison (T=0 vs T=1)
+    """)
     return
 
 
@@ -349,7 +386,19 @@ def _(COMMON_MODELS, DISPLAY_NAMES, mo, np, pl, scipy_stats, t0_df, t1_df):
 
 
 @app.cell
-def _(COMMON_MODELS, DISPLAY_NAMES, PALETTE_T0, PALETTE_T1, OUT_DIR, mlines, mo, pl, plt, t0_df, t1_df):
+def _(
+    COMMON_MODELS,
+    DISPLAY_NAMES,
+    OUT_DIR,
+    PALETTE_T0,
+    PALETTE_T1,
+    mlines,
+    mo,
+    pl,
+    plt,
+    t0_df,
+    t1_df,
+):
     _t1_nh = t1_df.filter(
         pl.col("instruction") == "instruction_no_hint",
         pl.col("model").is_in(COMMON_MODELS),
@@ -408,10 +457,22 @@ def _(COMMON_MODELS, DISPLAY_NAMES, PALETTE_T0, PALETTE_T1, OUT_DIR, mlines, mo,
     _fig_e1.savefig(OUT_DIR / "e1_t0_vs_t1_curves.png", dpi=150, bbox_inches="tight")
     mo.md("**E1 saved** → `outputs/plots/appendix/e1_t0_vs_t1_curves.png`")
     _fig_e1
+    return
 
 
 @app.cell
-def _(COMMON_MODELS, DISPLAY_NAMES, PALETTE_T0, OUT_DIR, mo, pl, plt, scipy_stats, t0_df, t1_df):
+def _(
+    COMMON_MODELS,
+    DISPLAY_NAMES,
+    OUT_DIR,
+    PALETTE_T0,
+    mo,
+    pl,
+    plt,
+    scipy_stats,
+    t0_df,
+    t1_df,
+):
     _t1_nh = t1_df.filter(
         pl.col("instruction") == "instruction_no_hint",
         pl.col("model").is_in(COMMON_MODELS),
@@ -443,6 +504,7 @@ def _(COMMON_MODELS, DISPLAY_NAMES, PALETTE_T0, OUT_DIR, mo, pl, plt, scipy_stat
     _fig_e2.savefig(OUT_DIR / "e2_t0_vs_t1_scatter.png", dpi=150)
     mo.md("**E2 saved** → `outputs/plots/appendix/e2_t0_vs_t1_scatter.png`")
     _fig_e2
+    return
 
 
 @app.cell

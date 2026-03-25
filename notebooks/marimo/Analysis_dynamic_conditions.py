@@ -238,11 +238,15 @@ def _(
     _all_combos = pd.MultiIndex.from_product(
         [_counts["model"].unique(), CATEGORY_ORDER], names=["model", "category"]
     ).to_frame(index=False)
-    _counts = _all_combos.merge(_counts, on=["model", "category"], how="left").fillna({"count": 0})
+    _counts = _all_combos.merge(
+        _counts, on=["model", "category"], how="left"
+    ).fillna({"count": 0})
     _counts["count"] = _counts["count"].astype(int)
 
     # Sort models by IF-dominant count ascending (most IF-dominant on top)
-    _if_counts = _counts[_counts["category"] == "IF-dominant"].set_index("model")["count"]
+    _if_counts = _counts[_counts["category"] == "IF-dominant"].set_index("model")[
+        "count"
+    ]
     _model_order = _if_counts.sort_values(ascending=True).index.tolist()
 
     # Stack order: PF-dominant left, Mixed middle, IF-dominant right
@@ -270,7 +274,9 @@ def _(
             height=350,
         )
     )
-    _a1_chart.save(str(plots_dir / "a1_model_behavior_stacked.png"), scale_factor=2)
+    _a1_chart.save(
+        str(plots_dir / "a1_model_behavior_stacked.png"), scale_factor=2
+    )
     _a1_chart
     return
 
@@ -335,7 +341,9 @@ def _(
     _stack_order_d = {cat: i for i, cat in enumerate(CATEGORY_ORDER)}
     _counts_d["stack_order"] = _counts_d["category"].map(_stack_order_d)
 
-    _if_counts_d = _counts_d[_counts_d["category"] == "IF-dominant"].set_index("model")["count"]
+    _if_counts_d = _counts_d[_counts_d["category"] == "IF-dominant"].set_index(
+        "model"
+    )["count"]
     _model_order_d = _if_counts_d.sort_values(ascending=True).index.tolist()
 
     (
@@ -520,11 +528,15 @@ def _(alt, evals_all_filtered, instruction_dropdown, pd, plots_dir):
             y=alt.Y("condition:N", sort="-x"),
         )
     )
-    _cond_chart = (_cond_bars + _cond_err).properties(
-        width=500,
-        height=alt.Step(20),
-        title=f"IF Rate per Condition — average over models & N",
-    ).configure_axisY(labelLimit=300)
+    _cond_chart = (
+        (_cond_bars + _cond_err)
+        .properties(
+            width=500,
+            height=alt.Step(20),
+            title=f"IF Rate per Condition — average over models & N",
+        )
+        .configure_axisY(labelLimit=300)
+    )
     _cond_chart.save(
         str(plots_dir / "a6_per_condition_if_rate.png"), scale_factor=2
     )
@@ -628,7 +640,7 @@ def _(alt, evals_filtered, plots_dir):
     )
     _texts = (
         alt.Chart(_hm)
-        .mark_text(fontSize=7)
+        .mark_text(fontSize=10)
         .encode(
             x=alt.X("n_turns:O", sort=_n_order),
             y=alt.Y(
@@ -646,7 +658,7 @@ def _(alt, evals_filtered, plots_dir):
     _hm_chart = (_rects + _texts).properties(
         width=max(500, len(_n_order) * 28),
         height=max(200, _hm["model"].nunique() * 28),
-        title="IF Rate Heatmap: Model × N turns (Altair)",
+        title="Instruction-following rate by model for task-based conditions",
     )
     _hm_chart.save(str(plots_dir / "a4_if_rate_heatmap.png"), scale_factor=2)
     _hm_chart

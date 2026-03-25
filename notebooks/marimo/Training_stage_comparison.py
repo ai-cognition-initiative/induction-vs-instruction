@@ -216,7 +216,7 @@ def _(mo):
 def _(make_transition_panel, olmo_static, plots_dir):
     _olmo_static_chart = make_transition_panel(
         olmo_static,
-        "OLMo 3.1 32B — training stages (static)",
+        "OLMo 3.1 32B — Training stages (fixed-output conditions)",
         ["SFT", "SFT + DPO", "SFT + DPO + RLVR"],
         ["#8dd3c7", "#bebada", "#80b1d3"],
     )
@@ -229,7 +229,7 @@ def _(make_transition_panel, olmo_static, plots_dir):
 def _(llama_static, make_transition_panel, plots_dir):
     _llama_static_chart = make_transition_panel(
         llama_static,
-        "Llama 70B — version comparison (static)",
+        "Llama 70B — Version comparison (fixed-output conditions)",
         ["Llama 3.1 70B", "Llama 3.3 70B"],
         ["#fb8072", "#fdb462"],
     )
@@ -254,7 +254,7 @@ def _(mo):
 def _(make_transition_panel, olmo_dynamic, plots_dir):
     _olmo_dyn_chart = make_transition_panel(
         olmo_dynamic,
-        "OLMo 3.1 32B — training stages (dynamic)",
+        "OLMo 3.1 32B — Training stages (task-based conditions)",
         ["SFT", "SFT + DPO", "SFT + DPO + RLVR"],
         ["#8dd3c7", "#bebada", "#80b1d3"],
     )
@@ -267,7 +267,7 @@ def _(make_transition_panel, olmo_dynamic, plots_dir):
 def _(llama_dynamic, make_transition_panel, plots_dir):
     _llama_dyn_chart = make_transition_panel(
         llama_dynamic,
-        "Llama 70B — version comparison (dynamic)",
+        "Llama 70B — Version comparison (task-based conditions)",
         ["Llama 3.1 70B", "Llama 3.3 70B"],
         ["#fb8072", "#fdb462"],
     )
@@ -355,7 +355,7 @@ def _(alt, olmo_pred, pd, plots_dir):
         (_band + _line + _dots + _rule)
         .facet(facet=alt.Facet("metric:N", title=None), columns=3)
         .resolve_scale(y="shared")
-        .properties(title="OLMo 3.1 32B — self-prediction by training stage")
+        .properties(title="OLMo 3.1 32B — Self-prediction by training stage")
     )
     _olmo_pred_chart.save(str(plots_dir / "olmo_prediction.png"), scale_factor=2)
     _olmo_pred_chart
@@ -428,7 +428,7 @@ def _(alt, llama_pred, pd, plots_dir):
         (_band + _line + _dots + _rule)
         .facet(facet=alt.Facet("metric:N", title=None), columns=3)
         .resolve_scale(y="shared")
-        .properties(title="Llama 70B — self-prediction by version")
+        .properties(title="Llama 70B — Self-prediction by version")
     )
     _llama_pred_chart.save(str(plots_dir / "llama_prediction.png"), scale_factor=2)
     _llama_pred_chart
