@@ -196,6 +196,12 @@ def _(alt):
         )
         return (_band + _line + _dots + _rule).properties(
             width=500, height=270, title=title,
+        ).configure_axis(
+            labelFontSize=14, titleFontSize=15,
+        ).configure_legend(
+            labelFontSize=13, titleFontSize=14,
+        ).configure_title(
+            fontSize=16,
         )
 
     return (make_transition_panel,)
@@ -353,9 +359,12 @@ def _(alt, olmo_pred, pd, plots_dir):
     )
     _olmo_pred_chart = (
         (_band + _line + _dots + _rule)
-        .facet(facet=alt.Facet("metric:N", title=None), columns=3)
+        .facet(facet=alt.Facet("metric:N", title=None, header=alt.Header(labelFontSize=14)), columns=3)
         .resolve_scale(y="shared")
         .properties(title="OLMo 3.1 32B — Self-prediction by training stage")
+        .configure_axis(labelFontSize=14, titleFontSize=15)
+        .configure_legend(labelFontSize=13, titleFontSize=14)
+        .configure_title(fontSize=16)
     )
     _olmo_pred_chart.save(str(plots_dir / "olmo_prediction.png"), scale_factor=2)
     _olmo_pred_chart
@@ -426,9 +435,12 @@ def _(alt, llama_pred, pd, plots_dir):
     )
     _llama_pred_chart = (
         (_band + _line + _dots + _rule)
-        .facet(facet=alt.Facet("metric:N", title=None), columns=3)
+        .facet(facet=alt.Facet("metric:N", title=None, header=alt.Header(labelFontSize=14)), columns=3)
         .resolve_scale(y="shared")
         .properties(title="Llama 70B — Self-prediction by version")
+        .configure_axis(labelFontSize=14, titleFontSize=15)
+        .configure_legend(labelFontSize=13, titleFontSize=14)
+        .configure_title(fontSize=16)
     )
     _llama_pred_chart.save(str(plots_dir / "llama_prediction.png"), scale_factor=2)
     _llama_pred_chart

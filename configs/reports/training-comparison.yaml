@@ -17,6 +17,7 @@ behavioral:
     - logs/protocol1/T0/dynamic/llama3
 
 prediction: 
+  log_folders:
     - logs/protocol2/T0/static/olmo-3-1
     - logs/protocol2/T0/static/olmo-3-1-dpo
     - logs/protocol2/T0/static/olmo-3-1-sft
