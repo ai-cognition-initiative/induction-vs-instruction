@@ -12,8 +12,6 @@ conditions:
   - value_misaligned_helpful
   - factual_aligned_earth
   - factual_misaligned_earth
-  - token_countries_states
-  - token_states_countries
 
 n_turns:                       # log-spaced: exp(k * ln(50)/11), k=0..11
   - 1

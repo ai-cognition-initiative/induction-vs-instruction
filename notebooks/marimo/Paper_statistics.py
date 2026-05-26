@@ -79,7 +79,7 @@ def _(mo):
     | §3.4 | GPT-5.2 0.17 vs GPT-5.2-medium 0.65 (fixed-output) | fixed-output/task-based raw |
     | §3.4b | T0 vs T1 temperature effect | static + static-T1 |
     | §3.4c | Hint substantially increases robustness | static-T1 |
-    | §3.5a | Grand mean accuracy=76.4%; predicted IF=18.2%, actual IF=33.2% | prediction parquet |
+    | §3.5a | Grand mean accuracy=83.5%; predicted IF=14.3%, actual IF=26.8% | prediction parquet (5 fixed-output, 13 core models) |
     | §3.5b | Mean delta=-0.026, t=-2.91, p=0.004 | combined_filtered |
     """)
     return
@@ -1217,6 +1217,63 @@ def _(DISPLAY_NAMES, combined_df, mo, np, pl, stats):
     t({_df}) = **{_t:.2f}**, p = **{_p:.4f}**
         """),
             _per_model_delta,
+        ]
+    )
+    return
+
+
+@app.cell
+def _(DISPLAY_NAMES, combined_df, mo, pl, pred_df):
+    mo.md("### Appendix — Expanded self-prediction tables")
+
+    # Table 1: Per-model prediction metrics (matches tab_results.tex Self-prediction columns)
+    _metrics = [
+        ("score_prediction_accuracy", "accuracy"),
+        ("score_prediction_instruction", "predicted_if"),
+        ("score_instruction_following", "actual_if"),
+    ]
+    _agg_exprs = []
+    for _src, _alias in _metrics:
+        _agg_exprs.append(pl.col(_src).mean().alias(_alias))
+    _pred_table = (
+        pred_df.group_by("model")
+        .agg(_agg_exprs)
+        .with_columns(pl.col("model").replace(DISPLAY_NAMES).alias("display_name"))
+        .sort("accuracy", descending=True)
+        .select(["display_name", "accuracy", "predicted_if", "actual_if"])
+        .with_columns(
+            pl.col("accuracy").round(3),
+            pl.col("predicted_if").round(3),
+            pl.col("actual_if").round(3),
+        )
+    )
+
+    # Table 2: Effect of prediction on behavior
+    _effect = (
+        combined_df.group_by("model")
+        .agg(
+            pl.col("behavioral_score").mean().alias("behavioral"),
+            pl.col("prediction_actual_score").mean().alias("prediction_actual"),
+        )
+        .with_columns(
+            (pl.col("prediction_actual") - pl.col("behavioral")).alias("delta"),
+            pl.col("model").replace(DISPLAY_NAMES).alias("display_name"),
+        )
+        .sort("delta")
+        .select(["display_name", "behavioral", "prediction_actual", "delta"])
+        .with_columns(
+            pl.col("behavioral").round(3),
+            pl.col("prediction_actual").round(3),
+            pl.col("delta").round(3),
+        )
+    )
+
+    mo.vstack(
+        [
+            mo.md("**Table: Per-model prediction metrics** (for appendix Table app-pred-metrics)"),
+            _pred_table,
+            mo.md("**Table: Effect of self-prediction on behavior** (for appendix Table app-pred-effect)"),
+            _effect,
         ]
     )
     return
