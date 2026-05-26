@@ -45,9 +45,27 @@ def _extract_answer(text: str) -> str:
 
     Reasoning models emit thinking traces before the final answer.
     Using the last non-empty line isolates the actual response.
+
+    Only safe for condition types whose canonical answer is a single line
+    (see SINGLE_LINE_ANSWER_TYPES). For multi-line answers (code blocks,
+    prose judged by length/case/style) the whole output is the answer, so
+    callers must NOT collapse it to the last line.
     """
     lines = [line for line in text.splitlines() if line.strip()]
     return lines[-1].strip() if len(lines) > 1 else text.strip()
+
+
+# Condition types whose canonical answer is a single line. Only these get
+# last-line extraction to strip inline reasoning traces (e.g. Hermes, which
+# emits a paragraph of English reasoning then the answer on the final line).
+# Multi-line answer types (code, style, persona/preference/variety) keep the
+# full output — collapsing them to one line destroys the answer.
+SINGLE_LINE_ANSWER_TYPES: set[str] = {
+    "static",
+    "token_pattern",
+    "classify_question",
+    "language",
+}
 
 
 def _exact_match(text: str, pattern: str) -> bool:
@@ -577,9 +595,10 @@ async def classify_actual(text: str, metadata: dict) -> str:
     Returns only the classification string. For LLM-judge condition types this uses a single
     judge — call `classify_actual_multi` if you also need agreement statistics.
     """
-    text = _extract_answer(text)
     condition_type = metadata.get("condition_type", "static")
     condition_name = metadata.get("condition", "")
+    if condition_type in SINGLE_LINE_ANSWER_TYPES:
+        text = _extract_answer(text)
 
     if condition_type == "static":
         return classify_static(text, metadata["pattern"], metadata["target"])
@@ -626,9 +645,10 @@ async def classify_actual_multi(text: str, metadata: dict) -> dict:
     returned dict is synthesised with unanimous=True / agreement_rate=1.0 so callers can
     treat all condition types uniformly.
     """
-    text = _extract_answer(text)
     condition_type = metadata.get("condition_type", "static")
     condition_name = metadata.get("condition", "")
+    if condition_type in SINGLE_LINE_ANSWER_TYPES:
+        text = _extract_answer(text)
 
     if condition_type == "static":
         return _deterministic_judge_dict(
