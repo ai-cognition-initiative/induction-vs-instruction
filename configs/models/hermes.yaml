@@ -1,5 +1,5 @@
 provider: openrouter
-reasoning_enabled: true
+reasoning_enabled: false
 
 models:
   - NousResearch/Hermes-4-70B

@@ -1,7 +1,0 @@
-provider: openrouter
-
-models:
-  - qwen/qwen3.5-plus-02-15
-
-provider_args:
-  only: ['alibaba']
