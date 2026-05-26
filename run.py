@@ -44,6 +44,9 @@ from datetime import datetime
 from itertools import product
 
 import yaml
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from src.config import CONDITIONS, DEFAULT_N_TRIALS
 from src.tasks.behavioral import behavioral_baseline
