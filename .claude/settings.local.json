@@ -63,7 +63,14 @@
       "Bash(uvx marimo:*)",
       "Bash(uv run python -c \":*)",
       "Bash(pdflatex -interaction=nonstopmode main.tex)",
-      "Bash(PYTHONUTF8=1 uv run python -c \":*)"
+      "Bash(PYTHONUTF8=1 uv run python -c \":*)",
+      "Bash(pdflatex -interaction=nonstopmode arxiv.tex)",
+      "Bash(bibtex main:*)",
+      "Bash(pdflatex -interaction=nonstopmode -halt-on-error arxiv.tex)",
+      "Bash(python3 *)",
+      "Bash(latexmk -pdf -g arxiv.tex)",
+      "Bash(pdflatex arxiv.tex)",
+      "Bash(git reset *)"
     ],
     "deny": [],
     "ask": []
