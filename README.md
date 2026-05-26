@@ -2,8 +2,6 @@
 
 Research project (FIG Fellowship, Winter 25) investigating whether language models follow global instructions versus local autoregressive (induction) patterns.
 
-Project description and scope: https://docs.google.com/document/d/1Gdqj-Q1qoFxwq2OwrYL_DQBZlU7M4oUoT9KpSG9u2YY/edit?usp=sharing
-
 ## Setup
 
 ```bash
@@ -84,7 +82,7 @@ summary = tracker.log_summary()
 Set `--log-level info` to see OpenRouter pricing and usage in the console:
 
 ```bash
-uv run inspect eval src/tasks/behavioral.py --model openrouter/google/gemini-2.0-flash-001 --log-level info
+uv run inspect eval src/tasks/behavioral_static_conditions.py --model configs/models/gemma.yaml --temperature 0 --log-dir logs/protocol1/T0-hint/static/gemma
 ```
 
 ## Running evaluations
