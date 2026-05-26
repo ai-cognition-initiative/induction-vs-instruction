@@ -8,28 +8,41 @@ from inspect_ai.scorer import (
     Scorer,
     Target,
     accuracy,
+    multi_scorer,
     scorer,
     stderr,
 )
 from inspect_ai.solver import TaskState
 
-from src.scorers.classify import GRADER_MODEL, PERSONA_RUBRIC, PREFERENCE_RUBRIC, TOPIC_RUBRIC, _extract_answer
+from src.scorers.classify import (
+    JUDGE_MODELS,
+    PERSONA_RUBRIC,
+    PREFERENCE_RUBRIC,
+    TOPIC_RUBRIC,
+    _extract_answer,
+    majority_vote_with_agreement,
+)
 
 
-@scorer(metrics=[accuracy(), stderr()])
-def style_scorer(
+def _judge_scorer(
     target_description: str,
     pattern_description: str,
-    condition_type: str = "persona",
+    condition_type: str,
+    judge_model: str,
 ) -> Scorer:
-    """LLM judge scorer for persona drift and preference weaving conditions."""
+    """One judge's view on a style/persona/preference/variety condition.
 
+    Tags its Score with `judge_id` in metadata so the reducer can preserve
+    per-judge votes.
+    """
     if condition_type == "preference":
         rubric = PREFERENCE_RUBRIC
     elif condition_type == "variety":
         rubric = TOPIC_RUBRIC
     else:
         rubric = PERSONA_RUBRIC
+
+    judge_id = judge_model.rsplit("/", 1)[-1]
 
     async def score(state: TaskState, target: Target) -> Score:
         output = _extract_answer(state.output.completion)
@@ -40,7 +53,7 @@ def style_scorer(
             output=output,
         )
 
-        grader = get_model(GRADER_MODEL)
+        grader = get_model(judge_model)
         result = await grader.generate(
             [
                 ChatMessageSystem(
@@ -51,27 +64,51 @@ def style_scorer(
         )
 
         judgment = result.completion.strip().upper()
-
         if "TARGET" in judgment:
-            return Score(
-                value=CORRECT,
-                answer=state.output.completion,
-                explanation=f"Judge classified as TARGET ({target_description}). Scored on: '{output}'",
-                metadata={"judge_response": judgment, "classification": "target"},
-            )
+            value = CORRECT
+            classification = "target"
         elif "PATTERN" in judgment:
-            return Score(
-                value=INCORRECT,
-                answer=state.output.completion,
-                explanation=f"Judge classified as PATTERN ({pattern_description}). Scored on: '{output}'",
-                metadata={"judge_response": judgment, "classification": "pattern"},
-            )
+            value = INCORRECT
+            classification = "pattern"
         else:
-            return Score(
-                value=INCORRECT,
-                answer=state.output.completion,
-                explanation=f"Judge classified as NEITHER (judge said: {judgment}). Scored on: '{output}'",
-                metadata={"judge_response": judgment, "classification": "unknown"},
-            )
+            value = INCORRECT
+            classification = "unknown"
+
+        return Score(
+            value=value,
+            answer=state.output.completion,
+            explanation=(
+                f"Judge {judge_id} classified as {classification.upper()}. "
+                f"Scored on: '{output}'"
+            ),
+            metadata={
+                "judge_id": judge_id,
+                "judge_model": judge_model,
+                "classification": classification,
+                "judge_response": judgment,
+            },
+        )
 
     return score
+
+
+@scorer(metrics=[accuracy(), stderr()])
+def style_scorer(
+    target_description: str,
+    pattern_description: str,
+    condition_type: str = "persona",
+) -> Scorer:
+    """LLM-judge scorer for persona/preference/variety conditions.
+
+    Runs every model in JUDGE_MODELS in parallel and reduces to a majority
+    vote with agreement statistics in Score.metadata. With a single judge
+    configured the behavior is identical to the original single-grader scorer
+    (just with agreement_rate=1.0 in metadata).
+    """
+    return multi_scorer(
+        scorers=[
+            _judge_scorer(target_description, pattern_description, condition_type, m)
+            for m in JUDGE_MODELS
+        ],
+        reducer=majority_vote_with_agreement,
+    )

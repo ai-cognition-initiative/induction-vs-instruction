@@ -7,6 +7,11 @@ from pathlib import Path
 # loads the file outside the normal package context, so `src.*` imports fail.
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+# Importing the package registers every @scorer-decorated factory so
+# inspect-ai's registry can reconstruct the original scorers when reading the
+# log during `inspect score`.
+import src.scorers  # noqa: F401, E402
+
 from inspect_ai.scorer import (
     CORRECT,
     INCORRECT,
@@ -19,7 +24,7 @@ from inspect_ai.scorer import (
 )
 from inspect_ai.solver import TaskState
 
-from src.scorers.classify import classify_actual, classify_prediction
+from src.scorers.classify import classify_actual_multi, classify_prediction_multi
 
 
 @scorer(
@@ -35,12 +40,9 @@ def prediction_scorer() -> Scorer:
     """Score Protocol 2 (Self-Prediction) with multiple metrics.
 
     Uses the same classification logic as the behavioral scorers for each
-    condition type, so instruction_following is consistent with Protocol 1.
-
-    Returns a dict with three metrics:
-    - prediction_accuracy: Did prediction match actual behavior?
-    - instruction_following: Did actual output follow instruction (T)?
-    - prediction_instruction: Did prediction say it would follow instruction (T)?
+    condition type. For LLM-judge condition types this runs every model in
+    JUDGE_MODELS and majority-votes; per-judge votes and agreement statistics
+    are preserved in Score.metadata.
     """
 
     async def score(state: TaskState, target: Target) -> Score:
@@ -48,13 +50,11 @@ def prediction_scorer() -> Scorer:
         prediction = state.store.get("prediction", "").strip()
         metadata = state.metadata
 
-        # classify_actual uses the authoritative scorer for each condition type
-        # (LLM judge for persona/preference, deterministic otherwise)
-        actual_choice = await classify_actual(output, metadata)
+        actual_result = await classify_actual_multi(output, metadata)
+        prediction_result = await classify_prediction_multi(prediction, metadata)
 
-        # classify_prediction uses an LLM judge — the prediction prompt names both
-        # options explicitly so keyword matching on presence is unreliable
-        prediction_choice = await classify_prediction(prediction, metadata)
+        actual_choice = actual_result["classification"]
+        prediction_choice = prediction_result["classification"]
 
         actual_followed_instruction = actual_choice == "target"
         prediction_followed_instruction = prediction_choice == "target"
@@ -79,6 +79,32 @@ def prediction_scorer() -> Scorer:
                 "actual_choice": actual_choice,
                 "condition": metadata.get("condition", ""),
                 "condition_type": metadata.get("condition_type", ""),
+                "actual_judges": {
+                    k: actual_result[k]
+                    for k in (
+                        "judge_votes",
+                        "n_judges",
+                        "n_target",
+                        "n_pattern",
+                        "n_unknown",
+                        "agreement_rate",
+                        "unanimous",
+                    )
+                    if k in actual_result
+                },
+                "prediction_judges": {
+                    k: prediction_result[k]
+                    for k in (
+                        "judge_votes",
+                        "n_judges",
+                        "n_target",
+                        "n_pattern",
+                        "n_unknown",
+                        "agreement_rate",
+                        "unanimous",
+                    )
+                    if k in prediction_result
+                },
             },
         )
 

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+from collections import Counter
+
 from inspect_ai.model import ChatMessageSystem, ChatMessageUser, get_model
 from inspect_ai.scorer import (
     CORRECT,
@@ -13,7 +16,7 @@ from inspect_ai.scorer import (
 )
 from inspect_ai.solver import TaskState
 
-from src.scorers.classify import GRADER_MODEL
+from src.scorers.classify import JUDGE_MODELS
 
 
 def _check_uppercase(text: str) -> bool:
@@ -50,9 +53,9 @@ Answer with exactly one of:
 Respond with just one word: PYTHON, JAVASCRIPT, or NEITHER."""
 
 
-async def _classify_code_language(text: str) -> str:
-    """Classify code language via LLM judge. Returns 'python', 'javascript', or 'unknown'."""
-    grader = get_model(GRADER_MODEL)
+async def _classify_code_language_single(text: str, model: str) -> str:
+    """One judge's code language classification."""
+    grader = get_model(model)
     result = await grader.generate(
         [
             ChatMessageSystem(
@@ -69,45 +72,76 @@ async def _classify_code_language(text: str) -> str:
     return "unknown"
 
 
+async def _classify_code_language_multi(text: str) -> dict:
+    """Run all JUDGE_MODELS and aggregate.
+
+    Returns {languages: {judge_id: lang}, votes: [...], counts: Counter, majority: lang}.
+    """
+    languages = await asyncio.gather(
+        *[_classify_code_language_single(text, m) for m in JUDGE_MODELS]
+    )
+    judge_ids = [m.rsplit("/", 1)[-1] for m in JUDGE_MODELS]
+    counts = Counter(languages)
+    majority = counts.most_common(1)[0][0]
+    return {
+        "languages": dict(zip(judge_ids, languages)),
+        "votes": languages,
+        "counts": counts,
+        "majority": majority,
+    }
+
+
 @scorer(metrics=[accuracy(), stderr()])
 def format_scorer(condition_name: str) -> Scorer:
     """Score based on whether output matches the expected format.
 
-    Dispatches on the condition name to determine which format check to apply.
-    The target format is what the instruction asks for; the pattern format is
-    what the hardcoded turns demonstrated.
+    Case (uppercase/lowercase) and length (short/long) conditions are
+    deterministic. Code conditions (python/javascript) use multi-judge LLM
+    classification with majority vote; per-judge votes and agreement
+    statistics are recorded in Score.metadata.
     """
 
     async def score(state: TaskState, target: Target) -> Score:
         output = state.output.completion
 
         if "uppercase" in condition_name and "lowercase" in condition_name:
-            # Naming convention: {instruction}_{pattern}, so instruction is first word
             if condition_name == "style_uppercase_lowercase":
-                # instruction=uppercase → target=UPPERCASE, pattern=lowercase
                 target_match = _check_uppercase(output)
                 pattern_match = _check_lowercase(output)
             else:
-                # style_lowercase_uppercase: instruction=lowercase → target=lowercase, pattern=UPPERCASE
                 target_match = _check_lowercase(output)
                 pattern_match = _check_uppercase(output)
+            extra_meta: dict = {}
         elif "short" in condition_name and "long" in condition_name:
             if condition_name == "style_short_long":
-                # Target is long, pattern is short
                 target_match = _check_long(output)
                 pattern_match = _check_short(output)
             else:
-                # Target is short, pattern is long
                 target_match = _check_short(output)
                 pattern_match = _check_long(output)
+            extra_meta = {}
         elif "python" in condition_name and "javascript" in condition_name:
-            language = await _classify_code_language(output)
+            judge_result = await _classify_code_language_multi(output)
+            majority = judge_result["majority"]
             if condition_name == "style_python_javascript":
-                target_match = language == "python"
-                pattern_match = language == "javascript"
+                target_match = majority == "python"
+                pattern_match = majority == "javascript"
             else:
-                target_match = language == "javascript"
-                pattern_match = language == "python"
+                target_match = majority == "javascript"
+                pattern_match = majority == "python"
+
+            languages = judge_result["languages"]
+            votes = judge_result["votes"]
+            counts: Counter = judge_result["counts"]
+            n = len(votes)
+            majority_count = counts.most_common(1)[0][1]
+            extra_meta = {
+                "judge_votes": languages,
+                "judge_languages": languages,
+                "n_judges": n,
+                "agreement_rate": majority_count / n,
+                "unanimous": majority_count == n,
+            }
         else:
             return Score(
                 value=INCORRECT,
@@ -121,21 +155,21 @@ def format_scorer(condition_name: str) -> Scorer:
                 value=CORRECT,
                 answer=output,
                 explanation=f"Output matches target format for {condition_name}",
-                metadata={"classification": "target"},
+                metadata={"classification": "target", **extra_meta},
             )
         elif pattern_match:
             return Score(
                 value=INCORRECT,
                 answer=output,
                 explanation=f"Output matches pattern format for {condition_name}",
-                metadata={"classification": "pattern"},
+                metadata={"classification": "pattern", **extra_meta},
             )
         else:
             return Score(
                 value=INCORRECT,
                 answer=output,
                 explanation=f"Output matches neither format for {condition_name}",
-                metadata={"classification": "unknown"},
+                metadata={"classification": "unknown", **extra_meta},
             )
 
     return score
