@@ -641,7 +641,7 @@ def _(alt, evals_filtered, plots_dir):
     )
     _texts = (
         alt.Chart(_hm)
-        .mark_text(fontSize=10)
+        .mark_text(fontSize=13)
         .encode(
             x=alt.X("n_turns:O", sort=_n_order),
             y=alt.Y(
@@ -658,7 +658,7 @@ def _(alt, evals_filtered, plots_dir):
     )
     _hm_chart = (_rects + _texts).properties(
         width=max(500, len(_n_order) * 28),
-        height=max(200, _hm["model"].nunique() * 28),
+        height=max(200, _hm["model"].nunique() * 30),
         title="Instruction-following rate by model for fixed-output conditions",
     )
     _hm_chart.save(str(plots_dir / "a4_if_rate_heatmap.png"), scale_factor=2)

@@ -222,7 +222,7 @@ def make_scatter_chart(
     )
     text = (
         alt.Chart(df)
-        .mark_text(align="left", dx=3, fontSize=14)
+        .mark_text(align="left", dx=3, fontSize=10)
         .encode(x="label_x:Q", y="label_y:Q", text="model:N")
     )
     layers = points + trendline + leaders + text
@@ -237,6 +237,10 @@ def make_scatter_chart(
         layers.facet(facet=alt.Facet("benchmark:N", title=None), columns=2)
         .resolve_scale(x="independent")
         .properties(title=title)
+        .configure_title(fontSize=14)
+        .configure_axis(labelFontSize=11, titleFontSize=12)
+        .configure_header(labelFontSize=11, titleFontSize=12)
+        .configure_legend(labelFontSize=11, titleFontSize=12)
     )
 
 
