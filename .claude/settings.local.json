@@ -70,7 +70,8 @@
       "Bash(python3 *)",
       "Bash(latexmk -pdf -g arxiv.tex)",
       "Bash(pdflatex arxiv.tex)",
-      "Bash(git reset *)"
+      "Bash(git reset *)",
+      "Bash(PYTHONPATH=. uv run *)"
     ],
     "deny": [],
     "ask": []

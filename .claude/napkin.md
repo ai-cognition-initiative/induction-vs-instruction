@@ -168,6 +168,13 @@
 - `style_lowercase_uppercase` and `style_uppercase_lowercase` conditions need `pattern_data_key` set to `style_uppercase`/`style_lowercase` respectively
 - Preference conditions use `questions_subjective.json` question bank (set via `question_bank` field on Condition)
 
+### Inspect Score Flags (Two `overwrite`s)
+- `--action overwrite` vs `--action append`: controls whether the new SCORES replace or are added alongside existing ones in the log.
+- `--overwrite` (separate flag): controls whether the LOG FILE is written in place. Without it, inspect prompts interactively "overwrite/create" and defaults to "create" — under xargs (empty stdin) every file aborts. For batch rescoring you almost always want BOTH: `--action overwrite --overwrite`.
+
+### Log Directory Layout
+- `.eval` files live at `logs/<protocol>/T<temp>/<...subfolders>/<model_name>/*.eval` — NOT flat under `logs/protocol1/`. Any batch operation (rescore, samples_df iteration) must recurse: `**/*.eval` globstar in bash, `Get-ChildItem -Recurse` in PowerShell, or `find` with `-name '*.eval'`.
+
 ### Git Worktrees
 - Never place worktrees inside the main repo directory — git sees them as untracked files. Use sibling directories (e.g. `../response-variety`).
 - `configs/` is gitignored — use `git add -f configs/file.yaml` to track config files in worktrees.
