@@ -2,8 +2,8 @@
 Deploy OLMo 3.1 32B on Modal with an OpenAI-compatible API via vLLM.
 
 Usage:
-    # Set variant first (sft or dpo)
-    export MODEL_VARIANT=sft
+    # Set variant first (instruct, sft, or dpo)
+    export MODEL_VARIANT=instruct
 
     # 1. Pre-download weights (only needed once per variant)
     modal run scripts/deploy_olmo_modal.py
@@ -27,10 +27,11 @@ import modal
 # Configuration
 # ---------------------------------------------------------------------------
 VARIANT_MAP = {
+    "instruct": "allenai/OLMo-3.1-32B-Instruct",
     "sft": "allenai/OLMo-3.1-32B-Instruct-SFT",
     "dpo": "allenai/OLMo-3.1-32B-Instruct-DPO",
 }
-VARIANT = os.environ.get("MODEL_VARIANT", "sft").lower()
+VARIANT = os.environ.get("MODEL_VARIANT", "instruct").lower()
 MODEL_ID = VARIANT_MAP[VARIANT]
 N_GPU = 2
 VLLM_PORT = 8000
