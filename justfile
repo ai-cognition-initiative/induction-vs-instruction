@@ -19,6 +19,7 @@ report folder:
 
     behavioral_ok=false
     prediction_ok=false
+    judges_ok=false
 
     if uv run python scripts/prepare_viz_data.py \
         --log-dir logs/{{folder}} \
@@ -36,6 +37,15 @@ report folder:
         prediction_ok=true
     else
         echo "Skipping prediction report (no prediction logs in logs/{{folder}})"
+    fi
+
+    if uv run python scripts/prepare_viz_data.py \
+        --log-dir logs/{{folder}} \
+        --output-dir outputs/viz/{{folder}} \
+        --protocol judges; then
+        judges_ok=true
+    else
+        echo "Skipping judges report (no LLM-judge conditions in logs/{{folder}})"
     fi
 
     if [ "$behavioral_ok" = "true" ]; then

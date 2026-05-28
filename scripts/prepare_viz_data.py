@@ -11,6 +11,7 @@ from inspect_ai.analysis import (
     EvalModel,
     EvalScores,
     EvalTask,
+    SampleScores,
     SampleSummary,
     evals_df,
     samples_df,
@@ -785,13 +786,154 @@ def prepare_combined_multi(
     print(f"  N values: {sorted(df_combined['n_turns'].unique(), key=int)}")
 
 
+# --- LLM-judge inter-rater data extraction ---
+
+# Conditions whose scorers run multi-judge LLM scoring. Used to identify which
+# samples carry per-judge metadata for IRR analysis.
+_CODE_CONDITIONS = {"style_python_javascript", "style_javascript_python"}
+
+
+def _code_language_to_classification(language: str, condition_name: str) -> str:
+    """Map a code-language judgment to target/pattern/unknown.
+
+    Mirrors the direction logic in src/scorers/format_check.py.
+    """
+    if condition_name == "style_python_javascript":
+        target_lang, pattern_lang = "python", "javascript"
+    else:
+        target_lang, pattern_lang = "javascript", "python"
+    if language == target_lang:
+        return "target"
+    if language == pattern_lang:
+        return "pattern"
+    return "unknown"
+
+
+def _explode_judges(meta: dict, condition: str) -> list[tuple[str, str]]:
+    """Return list of (judge_id, classification) from one sample's scorer metadata.
+
+    Handles both metadata shapes:
+      - persona/preference/variety/language: has `judge_classifications`
+      - style_python_javascript/style_javascript_python: has `judge_votes` keyed by
+        judge_id with language values (python/javascript/unknown) — needs remap.
+    """
+    if not isinstance(meta, dict):
+        return []
+
+    classifications = meta.get("judge_classifications")
+    if isinstance(classifications, dict) and classifications:
+        return [(jid, cls) for jid, cls in classifications.items()]
+
+    if condition in _CODE_CONDITIONS:
+        votes = meta.get("judge_votes")
+        if isinstance(votes, dict) and votes:
+            return [
+                (jid, _code_language_to_classification(lang, condition))
+                for jid, lang in votes.items()
+            ]
+
+    return []
+
+
+def prepare_judges(log_dir: str, output_dir: str) -> None:
+    """Extract per-sample per-judge classifications to judges.parquet.
+
+    One row per (sample, judge). Used by the inter-rater agreement notebook.
+    """
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    samples = samples_df(
+        logs=log_dir,
+        columns=EvalModel + EvalTask + SampleSummary + SampleScores,
+    )
+
+    if "task_arg_condition" not in samples.columns:
+        print("No condition info in samples — skipping judges.")
+        sys.exit(1)
+
+    samples = samples.rename(
+        columns={
+            "task_arg_condition": "condition",
+            "task_arg_n_turns": "n_turns",
+            "task_arg_instruction_template": "instruction",
+        }
+    )
+
+    # Match model-name normalization used by _common_prep
+    samples["model"] = samples["model"].astype(str).str.split("/").str[-1]
+    samples["model"] = samples["model"].str.replace(
+        r"^(openai-|anthropic-)", "", regex=True
+    )
+    samples["model"] = samples["model"].str.lower()
+
+    samples = add_pairing_columns(samples)
+    samples["n_turns"] = (
+        pd.to_numeric(samples["n_turns"], errors="coerce").astype(int).astype(str)
+    )
+
+    # Locate the metadata column for the LLM-judge scorer in this sample set.
+    # SampleScores expands to score_<scorer>_metadata; LLM-judge scorers in this
+    # project are style_scorer / language_scorer / format_scorer.
+    meta_cols = [c for c in samples.columns if c.endswith("_metadata")]
+    if not meta_cols:
+        print("No score metadata columns — skipping judges.")
+        sys.exit(1)
+
+    records: list[dict] = []
+    for _, row in samples.iterrows():
+        condition = row.get("condition")
+        if not isinstance(condition, str):
+            continue
+        for col in meta_cols:
+            meta = row[col]
+            judges = _explode_judges(meta, condition)
+            if not judges:
+                continue
+            agreement_rate = meta.get("agreement_rate") if isinstance(meta, dict) else None
+            unanimous = meta.get("unanimous") if isinstance(meta, dict) else None
+            for judge_id, classification in judges:
+                records.append(
+                    {
+                        "eval_id": row.get("eval_id"),
+                        "sample_id": row.get("sample_id"),
+                        "epoch": row.get("epoch"),
+                        "model": row["model"],
+                        "condition": condition,
+                        "condition_pair": row.get("condition_pair"),
+                        "instruction_aligned": row.get("instruction_aligned"),
+                        "instruction": row.get("instruction"),
+                        "n_turns": row["n_turns"],
+                        "judge_id": judge_id,
+                        "classification": classification,
+                        "agreement_rate": agreement_rate,
+                        "unanimous": unanimous,
+                    }
+                )
+            break  # one scorer per sample
+
+    if not records:
+        print("No LLM-judge samples found — skipping.")
+        sys.exit(1)
+
+    df = pd.DataFrame.from_records(records)
+    path = out / "judges.parquet"
+    df.to_parquet(path, index=False)
+    print(f"Saved {len(df)} judge-rows to {path}")
+    print(f"  Samples: {df['sample_id'].nunique()}")
+    print(f"  Judges: {sorted(df['judge_id'].unique())}")
+    print(f"  Models: {df['model'].nunique()}")
+    print(f"  Conditions: {sorted(df['condition'].unique())}")
+    print(f"  N values: {sorted(df['n_turns'].unique(), key=int)}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare eval data for visualization")
     parser.add_argument("--log-dir", type=str, required=True)
     parser.add_argument("--output-dir", type=str, required=True)
     parser.add_argument(
         "--protocol",
-        choices=["behavioral", "prediction", "combined"],
+        choices=["behavioral", "prediction", "combined", "judges"],
         default="behavioral",
         help="Which protocol's logs to prepare (default: behavioral)",
     )
@@ -806,6 +948,8 @@ if __name__ == "__main__":
         prepare_behavioral(args.log_dir, args.output_dir)
     elif args.protocol == "prediction":
         prepare_prediction(args.log_dir, args.output_dir)
+    elif args.protocol == "judges":
+        prepare_judges(args.log_dir, args.output_dir)
     else:
         if not args.log_dir_2:
             parser.error("--log-dir-2 is required for 'combined' protocol")
