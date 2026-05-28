@@ -1,8 +1,7 @@
-provider: nebius
-url: https://api.tokenfactory.nebius.com/v1/
+provider: openrouter
 
 models:
-  - moonshotai/Kimi-K2-Instruct
+  - moonshotai/kimi-k2-0905
 
 
 
