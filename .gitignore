@@ -1,4 +1,4 @@
-.claude/skills/*
+.claude/
 .env
 **/__pycache__/
 **/__marimo__/
