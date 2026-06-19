@@ -21,6 +21,7 @@
 | 2026-05-26 | self | `_extract_answer` (last-non-empty-line) was applied to ALL condition types in classify_actual/_multi, destroying multi-line answers — code blocks reduced to closing ``` fence → judges saw only "```" → "unknown" | `_extract_answer` exists to strip INLINE reasoning (Hermes emits English reasoning then answer on last line). Only safe for single-line-answer types. Now gated by `SINGLE_LINE_ANSWER_TYPES = {static, token_pattern, classify_question, language}`; code/style/persona/preference/variety keep full multi-line output. Empirically Hermes only emits inline reasoning on single-line conditions, so scoping is sufficient. |
 | 2026-03-08 | user | Reasoning effort suffix format was `"modelname (effort)"` | Should be `"modelname-effort"` (hyphen-separated). Similarly `reasoning_enabled=true` → `"modelname-reasoning"`. |
 | 2026-03-08 | self | `evals_df()` shows `model_args: <NA>` even when model_args has `reasoning_enabled=True` | evals_df doesn't serialize model_args properly. Must use `read_eval_log(f, header_only=True)` to read `log.eval.model_args` directly. Added `_load_model_args_map(log_dirs)` helper in prepare_viz_data.py. |
+| 2026-06-17 | user | When asked to "move self-prediction to the appendix" / "promote output diversity", I did half-measures (condensed the §3.6 subsection but left it in main; added a summary table but left the detailed conditions + figure in the appendix) | "Move X to appendix" means REMOVE X from the main body entirely (abstract, intro, methods, results, discussion, conclusion) and keep only a self-contained appendix section. "Promote to main" means bring the actual figure/result up, not just a pointer. Verify by grepping the main-body sections for the removed topic — must be empty. |
 | 2026-05-26 | self | Assumed `inspect_ai.score()` (the top-level rescoring function) was async | It's SYNCHRONOUS (`def score(...)`, not `async def`). Don't use `await` or `asyncio.run()`. Distinct from `inspect_ai.scorer.score(state: TaskState)` which is the inline solver-time helper. Signature: `score(log: EvalLog, scorers, *, action="append"|"overwrite", copy=True) -> EvalLog`. Takes EvalLog object (not path) — use `read_eval_log` → `score` → `write_eval_log`. |
 | 2026-05-26 | self | Said built-in reducers "discard" non-first scores' metadata | More precisely: `_reduced_score` (used by mode/mean/median/max/at_least/pass_at) keeps `scores[0].metadata` and drops the rest. The intermediate Score list in `multi_scorer` is never logged — it's a local variable consumed by the reducer. To preserve per-judge data, a CUSTOM reducer must capture it into the returned Score before this happens. Better still: precompute agreement stats (rate, unanimous, n_target) inside the reducer instead of storing raw votes — saves notebook extraction code. |
 
@@ -162,6 +163,20 @@
 - `overview_heatmap()` has `color_scheme` (default "rdylgn") and `show_text` (default True) params
 - ALIGNMENT_AXIS_PAIRS = {"value", "factual", "preference"} in prepare_viz_data.py — only these condition pairs have a true aligned/misaligned axis. Other pairs (token, language, persona, style) are direction-flipped without alignment semantics. Use this to filter paired bullet graphs.
 
+### Question-content (seed) effect — settled
+- `notebooks/marimo/Question_variation_analysis.py` (loads `logs/protocol1/T0/static`, neutral+no_hint). At T=0 there is 1 epoch/seed, so Checks 1–3 (within-N overdispersion/chi-sq) are degenerate; only Check 4 (cross-N seed-residual ICC, `icc_oneway`) is valid. Result across 13 core models: 9 saturate (≤1 transition-zone N → question-invariant by construction); of the 4 with a real TZ, ICC is negligible (gpt-5.2 +0.003, kimi −0.014, hermes +0.046; only gemma-3-12b 0.28 but on 2 Ns → underpowered). Per-cell SE ≤0.085 (90th pct 0.074). Conclusion: question identity does NOT shift the transition; 35 seeds suffice. This is the justification for fewer cells in follow-up/temperature appendices. The paper's `app:seeds` section is a commented STUB (no data) — un-stub for camera-ready.
+
+### Paper build (IMPORTANT — non-obvious; restructured 2026-06-17)
+- `paper/` is **gitignored** (`.gitignore:17`) — no version-control safety net; edit carefully.
+- **Single source, two wrappers** (this is the canonical structure):
+  - `paper/main.tex` — COLM camera-ready wrapper (`colm2026_conference.sty`). Related work is `\input` **after `\appendix`** (deferred to appendix per the page limit).
+  - `paper/arxiv.tex` — arXiv wrapper (`arxiv.sty`). Related work is `\input` **in the body** before the conclusion.
+  - Both `\input{sections/...}` from the **shared** `paper/sections/` and `paper/figures/`. Edit shared content ONCE there; it flows to both.
+  - The **abstract and conclusion are inline-duplicated** in each wrapper (NOT in sections/), so abstract/conclusion edits must be applied to BOTH `main.tex` and `arxiv.tex`.
+- Bibliography: both wrappers use `\bibliographystyle{colm2026_conference}` + `\bibliography{articles,colm2026_conference}` (bibtex). Add citations as normal `@`-entries in `paper/articles.bib` — NO hand-editing of `.bbl`.
+- `\plotsroot` = `../outputs/plots/` (figures live in `outputs/plots/`). Build either wrapper with `latexmk -pdf <wrapper>.tex` from `paper/`.
+- `paper/arxiv_submission/` (the DIR) is **OBSOLETE** — it was a hand-maintained duplicate that caused drift. The arXiv upload bundle is now **generated** by `build_arxiv.sh` into `paper/arxiv_build/` → `paper/arxiv_submission.tar.gz` (assembles from the shared source, flattens `\plotsroot` to `plots/`, pre-builds `arxiv.bbl`). Safe to delete the `arxiv_submission/` dir.
+
 ### Scripts & Key Files
 - `prepare_viz_data.py`: distinguishes behavioral vs prediction logs via `task_name` column ("behavioral_baseline" vs "self_prediction") — NOT by score column names. Also filters to the relevant task rows so mixed folders work correctly.
 - `format_check.py` and `classify_format()`: naming is `{instruction}_{pattern}` so instruction=first word=target. `style_uppercase_lowercase` = instruction=uppercase = target=UPPERCASE.
@@ -174,6 +189,7 @@
 - `--overwrite` (separate flag): controls whether the LOG FILE is written in place. Without it, inspect prompts interactively "overwrite/create" and defaults to "create" — under xargs (empty stdin) every file aborts. For batch rescoring you almost always want BOTH: `--action overwrite --overwrite`.
 
 ### Log Directory Layout
+- Hint sweep: `logs/protocol1/T0-hint/{static,dynamic}/`. Folders are GROUPED by provider, not per-model: `anthropic`=opus+sonnet, `gemma`=12b+27b, `llama3`=3.1+3.3, `qwen`=235b+30b (others 1 model). Configs `configs/reports/{static-hint,dynamic-hint}.yaml` → `outputs/viz/{static-hint,dynamic-hint}/evals.parquet`. Both collapse to the 13 CORE_MODELS and share the no-hint N grid (1..50), so hint vs no-hint (`static`/`dynamic` parquets) is a clean paired comparison. Hint result: mean IF +0.14 fixed-output (p=0.10, Llamas regress from ceiling), +0.11 task-based (p=0.003); does NOT recover IF to 1.0.
 - `.eval` files live at `logs/<protocol>/T<temp>/<...subfolders>/<model_name>/*.eval` — NOT flat under `logs/protocol1/`. Any batch operation (rescore, samples_df iteration) must recurse: `**/*.eval` globstar in bash, `Get-ChildItem -Recurse` in PowerShell, or `find` with `-name '*.eval'`.
 
 ### Git Worktrees
