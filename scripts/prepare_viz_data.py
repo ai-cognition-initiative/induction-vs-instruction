@@ -75,6 +75,15 @@ MISALIGNED_CONDITIONS = {
 # direction is inherently more "aligned" than the other.
 ALIGNMENT_AXIS_PAIRS = {"value", "factual", "preference"}
 
+# Canonical model names — collapse provider-specific naming variants.
+# Applied after the split("/")[-1] + prefix-strip + lowercase normalization.
+MODEL_CANONICAL = {
+    "claude-4.6-sonnet": "claude-sonnet-4.6",
+    "kimi-k2-0905": "kimi-k2",
+    "kimi-k2-instruct": "kimi-k2",
+}
+
+
 # Behavioral metric column rename map (multi-metric scorer)
 BEHAVIORAL_SCORE_RENAME = {
     "score_instruction_following_accuracy": "score",
@@ -136,7 +145,7 @@ def _get_reasoning_suffix(config_str: object, model_args: dict | None) -> str | 
       1. reasoning_enabled=True in model_args → returns "reasoning"
       2. non-default reasoning_effort in model_generate_config → returns that effort string
     """
-    if model_args and model_args.get("reasoning_enabled") is True:
+    if isinstance(model_args, dict) and model_args.get("reasoning_enabled") is True:
         return "reasoning"
     return _get_reasoning_suffix_from_config(config_str)
 
@@ -238,6 +247,7 @@ def _common_prep(log_dir: str, output_dir: str) -> tuple[pd.DataFrame, Path]:
     df["model"] = df["model"].astype(str).str.split("/").str[-1]
     df["model"] = df["model"].str.replace(r"^(openai-|anthropic-)", "", regex=True)
     df["model"] = df["model"].str.lower()
+    df["model"] = df["model"].replace(MODEL_CANONICAL)
 
     # Append reasoning suffix to model name when non-default (e.g. "modelname-medium", "modelname-reasoning")
     _args_map = _load_model_args_map(log_dir)
@@ -455,6 +465,7 @@ def process_raw_evals(
     df["model"] = df["model"].astype(str).str.split("/").str[-1]
     df["model"] = df["model"].str.replace(r"^(openai-|anthropic-)", "", regex=True)
     df["model"] = df["model"].str.lower()
+    df["model"] = df["model"].replace(MODEL_CANONICAL)
 
     # Append reasoning suffix to model name when non-default (e.g. "modelname-medium", "modelname-reasoning")
     if "model_generate_config" in df.columns or model_args_map:
@@ -788,51 +799,46 @@ def prepare_combined_multi(
 
 # --- LLM-judge inter-rater data extraction ---
 
-# Conditions whose scorers run multi-judge LLM scoring. Used to identify which
-# samples carry per-judge metadata for IRR analysis.
-_CODE_CONDITIONS = {"style_python_javascript", "style_javascript_python"}
+
+def _parse_meta(value: object) -> dict | None:
+    """Coerce a metadata cell (dict or JSON string) into a dict."""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value:
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, dict) else None
+        except (ValueError, TypeError):
+            return None
+    return None
 
 
-def _code_language_to_classification(language: str, condition_name: str) -> str:
-    """Map a code-language judgment to target/pattern/unknown.
+def _explode_judges(meta: dict) -> tuple[list[tuple[str, str]], float | None, bool | None]:
+    """Return (judges, agreement_rate, unanimous) from one sample's scorer metadata.
 
-    Mirrors the direction logic in src/scorers/format_check.py.
+    Targets the `behavioral_scorer` metadata shape (see src/scorers/behavioral.py):
+      meta["judges"]["judge_votes"] = {<judge_model_path>: "target"|"pattern"|"unknown"}
+
+    Deterministic condition types use a single pseudo-judge ("deterministic")
+    which is filtered out — only real LLM judges produce IRR data.
     """
-    if condition_name == "style_python_javascript":
-        target_lang, pattern_lang = "python", "javascript"
-    else:
-        target_lang, pattern_lang = "javascript", "python"
-    if language == target_lang:
-        return "target"
-    if language == pattern_lang:
-        return "pattern"
-    return "unknown"
+    judges_block = meta.get("judges")
+    if not isinstance(judges_block, dict):
+        return [], None, None
 
+    votes = judges_block.get("judge_votes")
+    if not isinstance(votes, dict) or not votes:
+        return [], None, None
 
-def _explode_judges(meta: dict, condition: str) -> list[tuple[str, str]]:
-    """Return list of (judge_id, classification) from one sample's scorer metadata.
+    # Drop deterministic pseudo-judge entries
+    real = [(jid, cls) for jid, cls in votes.items() if jid != "deterministic"]
+    if not real:
+        return [], None, None
 
-    Handles both metadata shapes:
-      - persona/preference/variety/language: has `judge_classifications`
-      - style_python_javascript/style_javascript_python: has `judge_votes` keyed by
-        judge_id with language values (python/javascript/unknown) — needs remap.
-    """
-    if not isinstance(meta, dict):
-        return []
+    # Strip "openrouter/<provider>/" prefix for a clean judge_id
+    real = [(jid.rsplit("/", 1)[-1], cls) for jid, cls in real]
 
-    classifications = meta.get("judge_classifications")
-    if isinstance(classifications, dict) and classifications:
-        return [(jid, cls) for jid, cls in classifications.items()]
-
-    if condition in _CODE_CONDITIONS:
-        votes = meta.get("judge_votes")
-        if isinstance(votes, dict) and votes:
-            return [
-                (jid, _code_language_to_classification(lang, condition))
-                for jid, lang in votes.items()
-            ]
-
-    return []
+    return real, judges_block.get("agreement_rate"), judges_block.get("unanimous")
 
 
 def prepare_judges(log_dir: str, output_dir: str) -> None:
@@ -866,6 +872,7 @@ def prepare_judges(log_dir: str, output_dir: str) -> None:
         r"^(openai-|anthropic-)", "", regex=True
     )
     samples["model"] = samples["model"].str.lower()
+    samples["model"] = samples["model"].replace(MODEL_CANONICAL)
 
     samples = add_pairing_columns(samples)
     samples["n_turns"] = (
@@ -886,12 +893,12 @@ def prepare_judges(log_dir: str, output_dir: str) -> None:
         if not isinstance(condition, str):
             continue
         for col in meta_cols:
-            meta = row[col]
-            judges = _explode_judges(meta, condition)
+            meta = _parse_meta(row[col])
+            if meta is None:
+                continue
+            judges, agreement_rate, unanimous = _explode_judges(meta)
             if not judges:
                 continue
-            agreement_rate = meta.get("agreement_rate") if isinstance(meta, dict) else None
-            unanimous = meta.get("unanimous") if isinstance(meta, dict) else None
             for judge_id, classification in judges:
                 records.append(
                     {
