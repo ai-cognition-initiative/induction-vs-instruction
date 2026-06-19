@@ -1,0 +1,28 @@
+% Reasoning effects: comparison table + trace example
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{l cc cc}
+\toprule
+ & \multicolumn{2}{c}{Fixed-output} & \multicolumn{2}{c}{Task-based} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5}
+\textbf{Model} & \textbf{Avg IF} & \textbf{$N_{50\%}$} & \textbf{Avg IF} & \textbf{$N_{50\%}$} \\
+\midrule
+GPT-5.2 (no reasoning)       & $17${~[12--22]}\% & 2   & $57${~[52--63]}\% & 43  \\
+GPT-5.2 (medium, reasoning)  & $64${~[58--71]}\% & --- & $88${~[85--92]}\% & --- \\
+\addlinespace[3pt]
+Hermes-4 70B (no reasoning)   & $2${~[0--5]}\%   & 1   & $4${~[1--7]}\%    & 1   \\
+Hermes-4 70B (reasoning)      & $68${~[63--74]}\% & 31  & $56${~[49--63]}\% & 11  \\
+\bottomrule
+\end{tabular}
+\caption{Effect of chain-of-thought reasoning on instruction-following. \textbf{Avg IF}: average IF rate across all $N$ values and conditions; 95\% CIs in brackets. \textbf{$N_{50\%}$}: first $N$ at which mean IF $\leq 50\%$; ``---'' = never crossed within $N \leq 50$. Reasoning improves instruction robustness for both models, but does not consistently eliminate susceptibility.}
+\label{tab:reasoning}
+
+% \bigskip
+
+% \input{figures/tab_reasoning_trace}
+
+% \smallskip
+% \noindent{\small The model identifies the discrepancy, explicitly commits to outputting ``USA'', and then outputs ``EU''. The reasoning reaches the correct conclusion; the output follows the induction pattern regardless.}
+\end{table}

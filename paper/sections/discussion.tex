@@ -1,0 +1,30 @@
+\section{Discussion}
+\label{sec:discussion}
+
+% (~2 pages)
+
+\paragraph{Instruction-following as a trainable, content-dependent property.}
+The property we measure is descriptive: a model's susceptibility to in-context pressure, the same mechanism exploited by many-shot jailbreaking \citep{anil_many-shot_2024} and Crescendo-style escalation \citep{russinovich2025great}, and one that is largely decorrelated from capability benchmarks---a dimension that leaderboards do not capture.
+As previously found by \citet{pyatkin_generalizing_2025}, instruction-following robustness is not cleanly correlated with general capability. This also applies to our experimental setting, in which scale and benchmark performance are poor predictors of resistance to induction pressure. 
+The OLMo training-stage comparison suggests where robustness might be installed: DPO (preference training) produces the largest gain, compared to SFT and RLVR and in contrast to the finding from \citet{pyatkin_generalizing_2025}. Advanced instruction tuning, like the one performed on Llama 3.3 vs.\ 3.1 \citep{llama33_2024}, provides further but more modest improvement. 
+Robustness also interacts with instruction content. Our results suggest that instruction-following is not a content-neutral capability. The model's value priors, instilled during post-training, modulate how strongly it adheres to instructions in our conflictual setting. This has direct implications for alignment: models are more reliable when instructions happen to agree with their trained preferences.
+
+
+\paragraph{Output diversity as a source of robustness.}
+In our setting, task-based conditions lead to higher instruction-following rates than fixed-output conditions, despite measuring the same underlying conflict. A targeted followup (Appendix~\ref{app:followup}) shows that the gap is not explained by task difficulty or semantic engagement, but is sensitive to output diversity, which has a positive effect on robustness. Mechanistically, this gap reflects a competition between low-level token-copying circuits \citep{yona2025interpreting} and high-level latent task representations \citep{toddFunctionVectorsLarge2024}. Single-token outputs are highly susceptible to induction head toxicity, where specialized attention heads for verbatim matching dominate the output logits and suppress other computations \citep{yinattention}. Free-text generation and the associated ''Function vectors'' might be fundamentally more robust to contextual pressure and repetition. %This asymmetry has a geometric counterpart: \citet{hosseini_context_2026} show that continual prediction settings such as natural language generation induce representational straightening---a linearization of neural trajectories in deep layers that facilitates stable next-token prediction---whereas this stabilizing structure vanishes in structured prediction settings.
+Another hypothesis is that the varied token distribution of natural language may further reinforce the stability of the assistant persona \citep{luAssistantAxisSituating2026}, allowing the model to remain in ``instruction-following mode'' longer when its outputs resemble those of a helpful assistant. This has a practical implication: robustness measures derived from fixed-output conditions may underestimate a model's resistance to induction in realistic deployments, where responses are naturally varied. That said, existing work shows that models can still be pushed towards misalignment by malicious in-context examples \citep{afonin_emergent_2026}.
+
+\paragraph{Limitations.}
+% Llama 3's behavior, with its surprising robustness that does not degrade even at high Ns remains unexplained. It is not predicted by scale, architecture, or benchmark performance.
+Our work presents several limitations. We recognize that the experimental setting is controlled but artificial. Real-world instruction override occurs through more naturalistic mechanisms; whether the same factors modulate robustness in deployed settings is an open empirical question.
+Greedy decoding at T=0 captures modal behavior but not the full output distribution. The $T{=}1$ comparison (Appendix~\ref{app:temperature}) partially addresses this, but shows large model-specific variance.
+
+
+% \paragraph{Future work.}
+% % Linear probe analysis tracking the instruction/induction axis through
+% % internal representations (cf. Lampinen et al.).
+% % Endorsement protocol: prefilling responses and testing whether models
+% % endorse or disavow them.
+% % Extension to naturalistic settings (multi-turn conversations where
+% % the induction pressure is implicit rather than explicit).
+

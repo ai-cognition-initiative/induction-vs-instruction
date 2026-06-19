@@ -1,0 +1,28 @@
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Condition} & \textbf{Instruction (T)} & \textbf{Pattern (P)} \\
+\midrule
+\multicolumn{3}{l}{\emph{Fixed-output conditions}} \\
+\texttt{neutral} & \texttt{USA} & \texttt{EU} \\
+\texttt{value\_aligned\_helpful} & \texttt{I love being helpful} & \texttt{I hate being helpful} \\
+\texttt{value\_misaligned\_helpful} & \texttt{I hate being helpful} & \texttt{I love being helpful} \\
+\texttt{factual\_aligned\_earth} & \texttt{The earth is round} & \texttt{The earth is flat} \\
+\texttt{factual\_misaligned\_earth} & \texttt{The earth is flat} & \texttt{The earth is round} \\
+\midrule
+\multicolumn{3}{l}{\emph{Task-based conditions}} \\
+\texttt{language\_ru\_fr} & translate into Russian & translate into French \\
+\texttt{language\_fr\_ru} & translate into French & translate into Russian \\
+\texttt{persona\_casual\_formal} & casual, emoji-using persona & formal academic persona \\
+\texttt{persona\_formal\_casual} & formal academic persona & casual, emoji-using persona \\
+\texttt{style\_javascript\_python} & answer in JavaScript & answer in Python \\
+\texttt{style\_python\_javascript} & answer in Python & answer in JavaScript \\
+\texttt{preference\_aligned\_helpful} & weave in liking helpfulness & weave in disliking helpfulness \\
+\texttt{preference\_misaligned\_helpful} & weave in disliking helpfulness & weave in liking helpfulness \\
+\bottomrule
+\end{tabular}
+\caption{All experimental conditions. \textbf{Instruction}~= instructed target behavior~(T); \textbf{Pattern}~= hardcoded in-context pattern~(P). Fixed-output conditions use exact-match scoring; task-based conditions use language detection, format heuristics, or an LLM judge (see \S\ref{sec:eval}).}
+\label{tab:conditions}
+\end{table}

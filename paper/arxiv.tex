@@ -1,0 +1,113 @@
+
+\documentclass{article} % For LaTeX2e
+\usepackage{arxiv}
+
+\usepackage{natbib}
+\usepackage{microtype}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage[most]{tcolorbox}
+\usepackage{enumitem}
+
+\raggedbottom
+
+% Root folder for all generated plots — change this one line to redirect the paper to a different outputs directory
+\newcommand{\plotsroot}{../outputs/plots/}
+
+\definecolor{darkblue}{rgb}{0, 0, 0.5}
+\hypersetup{colorlinks=true, citecolor=darkblue, linkcolor=darkblue, urlcolor=darkblue}
+
+
+\title{Do as I Say, Not as I Do: \\ Instruction-Induction Conflict in LLMs}
+
+\author{Carolina Camassa\thanks{Corresponding author: \texttt{carolina.camassa@gmail.com}. This work was developed during the Future Impact Group fellowship. The conclusions in the paper are the authors' own.} \\
+Future Impact Group\\
+\And
+Derek Shiller \\
+Rethink Priorities \\
+}
+
+\newcommand{\fix}{\marginpar{FIX}}
+\newcommand{\new}{\marginpar{NEW}}
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Language models are trained to follow instructions, but they are also powerful pattern completers. What happens when these two objectives conflict? We construct conversations in which a user instruction to behave in a target way T (e.g., always output a specific token, answer in a particular language, or adopt a persona) is opposed by N hardcoded assistant turns demonstrating a competing pattern P, and measure instruction-following (IF) rates across 13 models and 16 different instructions as N increases. Average instruction-following rates range from 1\% to 99\% across models, largely uncorrelated with standard capability benchmarks. The transition from instruction-following to pattern-following is universal but highly model-dependent. Robustness is modulated both by instruction content, with models resisting induction longer when instructions align with their trained value priors, and by output format, with diverse multi-token responses proving substantially more resistant than single-token outputs. Chain-of-thought reasoning increases resistance but does not eliminate susceptibility, and can produce dissociation between correct deliberation and incorrect output. These results suggest that instruction-following remains sensitive to induction pressure across models of widely varying capability, and that output diversity, rather than semantic engagement with the input, is the primary factor predicting robustness.
+\end{abstract}
+
+
+%% ============================================================
+%% INTRODUCTION
+%% ============================================================
+\input{sections/intro}
+
+
+%% ============================================================
+%% METHODS
+%% ============================================================
+\input{sections/methods}
+
+
+%% ============================================================
+%% RESULTS
+%% ============================================================
+\input{sections/results}
+%% ============================================================
+%% RELATED WORK
+%% ============================================================
+\input{sections/related}
+\input{sections/discussion}
+
+%% ============================================================
+%% CONCLUSION
+%% ============================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We introduced a controlled paradigm for studying instruction-induction conflict in language models, placing explicit instructions in direct opposition to escalating in-context pattern pressure. Our results reveal several key findings. First, every model tested is susceptible to induction override, but the transition point varies dramatically, with robustness largely uncorrelated with standard capability benchmarks. Second, instruction-following is not content-neutral: models resist induction longer when instructions align with their trained value priors, suggesting that post-training instills content-dependent rather than uniform adherence. Third, output diversity is the primary factor distinguishing robust from fragile conditions; follow-up experiments show that response variety, not semantic engagement with the input, accounts for the higher robustness of task-based conditions, likely because single-token outputs present the same surface structure as the hardcoded pattern and are therefore maximally susceptible to induction head copying. Fourth, chain-of-thought reasoning substantially increases resistance but does not eliminate susceptibility, and in some cases produces a dissociation between correct internal deliberation and incorrect final output. These findings suggest that the same porosity to context that enables in-context learning and flexible adaptation remains in tension with instruction-following under sustained in-context pressure, especially under conditions that lead the model away from its post-trained assistant persona. Thus the challenge of inoculating models against context-driven behavioral updating, while preserving their ability to track and adapt to conversational content, remains an open problem.
+
+
+%% ============================================================
+%% ACKNOWLEDGMENTS
+%% ============================================================
+% \section*{Acknowledgments}
+% Redacted for anonymity.
+
+% FIG fellowship, Derek Shiller, etc.
+
+
+%% ============================================================
+%% ETHICS
+%% ============================================================
+\section*{Ethics statement}
+
+This work studies failure modes of instruction-following in LLMs.
+The misaligned conditions (e.g., instructing models to output false
+statements) are used solely as experimental probes and are not
+intended to produce harmful outputs. All model evaluations used
+publicly available APIs or open-weight models. No human subjects
+were involved.
+
+
+%% ============================================================
+%% REFERENCES
+%% ============================================================
+\bibliographystyle{colm2026_conference}
+\bibliography{articles,colm2026_conference}
+
+
+%% ============================================================
+%% APPENDIX
+%% ============================================================
+\appendix
+\input{sections/appendix}
+
+\end{document}

@@ -167,10 +167,11 @@
 - `notebooks/marimo/Question_variation_analysis.py` (loads `logs/protocol1/T0/static`, neutral+no_hint). At T=0 there is 1 epoch/seed, so Checks 1–3 (within-N overdispersion/chi-sq) are degenerate; only Check 4 (cross-N seed-residual ICC, `icc_oneway`) is valid. Result across 13 core models: 9 saturate (≤1 transition-zone N → question-invariant by construction); of the 4 with a real TZ, ICC is negligible (gpt-5.2 +0.003, kimi −0.014, hermes +0.046; only gemma-3-12b 0.28 but on 2 Ns → underpowered). Per-cell SE ≤0.085 (90th pct 0.074). Conclusion: question identity does NOT shift the transition; 35 seeds suffice. This is the justification for fewer cells in follow-up/temperature appendices. The paper's `app:seeds` section is a commented STUB (no data) — un-stub for camera-ready.
 
 ### Paper build (IMPORTANT — non-obvious; restructured 2026-06-17)
-- `paper/` is **gitignored** (`.gitignore:17`) — no version-control safety net; edit carefully.
+- **Branch split (2026-06-19):** `paper/` source and `.claude/` config are tracked on the **`dev`** branch ONLY, not on `main` (where both stay gitignored). Do paper/claude work from `dev`; do not merge those paths to `main`. On `dev`, paper LaTeX build artifacts (`*.pdf/.aux/.log/.bbl/.fls/.fdb_latexmk/...`, `arxiv_build/`, `arxiv_submission/`, `*.tar.gz`) are gitignored — only source is tracked, and new source files track normally (no force-add needed).
 - **Single source, two wrappers** (this is the canonical structure):
-  - `paper/main.tex` — COLM camera-ready wrapper (`colm2026_conference.sty`). Related work is `\input` **after `\appendix`** (deferred to appendix per the page limit).
-  - `paper/arxiv.tex` — arXiv wrapper (`arxiv.sty`). Related work is `\input` **in the body** before the conclusion.
+  - `paper/main.tex` — COLM camera-ready wrapper (`colm2026_conference.sty`).
+  - `paper/arxiv.tex` — arXiv wrapper (`arxiv.sty`).
+  - Both `\input{sections/related}` **in the body, between Results and Discussion** (Related work = §4, a normal section; not deferred to the appendix).
   - Both `\input{sections/...}` from the **shared** `paper/sections/` and `paper/figures/`. Edit shared content ONCE there; it flows to both.
   - The **abstract and conclusion are inline-duplicated** in each wrapper (NOT in sections/), so abstract/conclusion edits must be applied to BOTH `main.tex` and `arxiv.tex`.
 - Bibliography: both wrappers use `\bibliographystyle{colm2026_conference}` + `\bibliography{articles,colm2026_conference}` (bibtex). Add citations as normal `@`-entries in `paper/articles.bib` — NO hand-editing of `.bbl`.

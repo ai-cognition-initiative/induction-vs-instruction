@@ -1,0 +1,18 @@
+\begin{figure}[t]
+\centering
+\begin{subfigure}[t]{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{\plotsroot/static/e1_calibration_bucket.png}
+  \caption{Prediction accuracy by behavioral regime}
+  \label{fig:pred-bucket}
+\end{subfigure}
+\hfill
+\begin{subfigure}[t]{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{\plotsroot/static/e2_prediction_changes_behavior.png}
+  \caption{Effect of self-prediction on IF rate}
+  \label{fig:prediction-effect}
+\end{subfigure}
+\caption{Self-prediction results. \textbf{(a)}~Prediction accuracy broken down by behavioral regime. Models in the instruction-following regime (where they actually output~T) are predicted correctly much more often than models in the transition zone or the pattern-following regime, revealing systematic under-prediction of instruction-following behavior. \textbf{(b)}~Change in instruction-following rate when prediction-before-response is compared to the matched direct-response baseline. The effect is strongly heterogeneous: GPT-5.2 shows a large positive shift (prediction \emph{helps} follow the instruction) while Claude~Sonnet~4.6 shows a large negative shift. The grand mean across all models is near zero ($\Delta$IF $\approx -0.026$, $p{=}0.004$).}
+\label{fig:prediction}
+\end{figure}

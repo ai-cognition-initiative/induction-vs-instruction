@@ -14,7 +14,22 @@ configs/models
 configs/reports
 *pyrightconfig.json
 .vscode/
-paper/
+docs/
 *.tar
 *.zip
-docs/
+# paper: track source (.tex/.bib/.sty/.bst/figures/scripts), ignore LaTeX build output
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.fdb_latexmk
+paper/*.fls
+paper/*.log
+paper/*.out
+paper/*.toc
+paper/*.lof
+paper/*.lot
+paper/*.synctex.gz
+paper/*.pdf
+paper/*.tar.gz
+paper/arxiv_build/
+paper/arxiv_submission/

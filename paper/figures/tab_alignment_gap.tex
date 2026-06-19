@@ -1,0 +1,28 @@
+\begin{table}[t]
+  \centering
+  \small
+  \setlength{\tabcolsep}{6pt}
+  \begin{tabular}{l rr}
+  \toprule
+  \textbf{Model} & \textbf{Fixed} & \textbf{Task} \\
+  \midrule
+  Claude Opus 4.6       & $+81$\% & $-5$\%  \\
+  Claude Sonnet 4.6     & $+28$\% & $+33$\% \\
+  GPT-5.2               & $+22$\% & $+41$\% \\
+  Llama 3.1 70B         & $+11$\% & $-15$\% \\
+  Gemma-3 12B           & $+8$\%  & $+1$\%  \\
+  Kimi K2               & $+4$\%  & $-51$\% \\
+  OLMo 3.1 32B          & $+2$\%  & $+26$\% \\
+  Gemini 2.5 Flash      & $+2$\%  & $+16$\% \\
+  Hermes-4 70B          & $+1$\%  & $+8$\%  \\
+  Llama 3.3 70B         & $+1$\%  & $-7$\%  \\
+  Gemma-3 27B           & $0$\%   & $-4$\%  \\
+  Qwen3 235B A22B       & $0$\%   & $-2$\%  \\
+  Qwen3 30B A3B         & $-3$\%  & $+10$\% \\
+  \midrule
+  \textit{Grand mean}   & \textit{$+12$\%} & \textit{$+4$\%} \\
+  \bottomrule
+  \end{tabular}
+  \caption{Alignment gap per model (aligned$-$misaligned IF rate). \textbf{Fixed} = value$+$factual condition pairs; \textbf{Task} = preference condition pairs. Positive values indicate the model follows aligned instructions more often. The corresponding per-model plot is in Figure~\ref{fig:alignment-gap} (Appendix~\ref{app:percondition}).}
+  \label{tab:alignment-gap}
+\end{table}
