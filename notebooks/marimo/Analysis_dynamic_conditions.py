@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.21.1"
+__generated_with = "0.23.8"
 app = marimo.App(width="medium")
 
 
@@ -400,20 +400,9 @@ def _(
 
 
 @app.cell
-def _(mo):
-    instruction_dropdown = mo.ui.dropdown(
-        options=["instruction_no_hint", "instruction_hint"],
-        value="instruction_no_hint",
-        label="Instruction template",
-    )
-    instruction_dropdown
-    return (instruction_dropdown,)
-
-
-@app.cell
-def _(COLOR_SCHEME, alt, evals_all_filtered, instruction_dropdown, plots_dir):
+def _(COLOR_SCHEME, alt, evals_all_filtered, plots_dir):
     # Plot A3: Horizontal bar + error bars, faceted by condition
-    _sel = instruction_dropdown.value
+    _sel = "instruction_no_hint"
     _a3_data = evals_all_filtered[evals_all_filtered["instruction"] == _sel].copy()
     _a3_agg = (
         _a3_data.groupby(["model", "condition"])
@@ -478,10 +467,10 @@ def _(mo):
 
 
 @app.cell
-def _(alt, evals_all_filtered, instruction_dropdown, pd, plots_dir):
+def _(alt, evals_all_filtered, pd, plots_dir):
     # Per-condition IF rate averaged across models and N turns
     # SE combines between-cell variance and mean within-cell resampling variance
-    _sel_cond = instruction_dropdown.value
+    _sel_cond = "instruction_no_hint"
     _cond_data = evals_all_filtered[
         evals_all_filtered["instruction"] == _sel_cond
     ].copy()
@@ -535,7 +524,7 @@ def _(alt, evals_all_filtered, instruction_dropdown, pd, plots_dir):
             height=alt.Step(20),
             title=f"IF Rate per Condition — average over models & N",
         )
-        .configure_axisY(labelLimit=300)
+        .configure_axisY(labelLimit=500)
     )
     _cond_chart.save(
         str(plots_dir / "a6_per_condition_if_rate.png"), scale_factor=2
@@ -666,10 +655,13 @@ def _(alt, evals_filtered, plots_dir):
 
 
 @app.cell
-def _(all_models, mo):
+def _(DISPLAY_NAMES, all_models, mo):
+    # Downstream uses evals_filtered which has model renamed to display names,
+    # so selector options/values must also be display names for .isin() to match.
+    _options = sorted({DISPLAY_NAMES.get(m, m) for m in all_models})
     archetype_selector = mo.ui.multiselect(
-        options=sorted(all_models),
-        value=sorted(all_models)[:4],
+        options=_options,
+        value=_options[:4],
         label="Archetype models (pick 4–5 to compare transition shapes)",
     )
     archetype_selector
@@ -814,49 +806,6 @@ def _(
         str(plots_dir / "a5_first_if_drop_vs_capability.png"), scale_factor=2
     )
     _a5_chart
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Effect of hint
-    - Plot D1: radar plot with non-hint IF rate overlapped with IF rate for each model: https://observablehq.com/@observablehq/plot-radar-chart
-    """)
-    return
-
-
-@app.cell
-def _(Plot, evals_all_filtered, js, make_radar_chart, mo, pd):
-    # Plot D1: Radar chart — hint vs no-hint IF rate per model
-    _d1_agg = (
-        evals_all_filtered.groupby(["model", "instruction"])["score"]
-        .mean()
-        .reset_index()
-    )
-    _d1_hint = (
-        _d1_agg[_d1_agg["instruction"] == "instruction_hint"]
-        .rename(columns={"score": "value"})
-        .assign(name="with hint")
-    )
-    _d1_nohint = (
-        _d1_agg[_d1_agg["instruction"] == "instruction_no_hint"]
-        .rename(columns={"score": "value"})
-        .assign(name="no hint")
-    )
-
-    _categories = sorted(_d1_agg["model"].unique().tolist())
-    _points = []
-    for _, _row in pd.concat([_d1_nohint, _d1_hint]).iterrows():
-        _points.append(
-            {"key": _row["model"], "value": _row["value"], "name": _row["name"]}
-        )
-
-    mo.ui.anywidget(
-        make_radar_chart(
-            Plot, js, _points, _categories, "Effect of Hint on IF Rate"
-        )
-    )
     return
 
 
@@ -1084,20 +1033,20 @@ def _(
 
 
 @app.cell
-def _(all_models, mo):
+def _(evals_filtered, mo):
+    # Use display-name model values from evals_filtered so the isin filter matches.
+    _alignment_model_options = sorted(
+        evals_filtered.loc[
+            evals_filtered["condition_pair"] == "preference", "model"
+        ].unique().tolist()
+    )
     alignment_curve_selector = mo.ui.multiselect(
-        options=sorted(all_models),
-        value=sorted(all_models)[:4],
+        options=_alignment_model_options,
+        value=_alignment_model_options[:4],
         label="Models for aligned/misaligned transition curves (pick 3–4)",
     )
     alignment_curve_selector
     return (alignment_curve_selector,)
-
-
-@app.cell
-def _(evals_filtered):
-    evals_filtered
-    return
 
 
 @app.cell
@@ -1329,11 +1278,11 @@ def _(mo):
     - **Variety** (2 conditions): diverse 1–3 sentence responses on a fixed topic, ignoring the question. Tests whether response diversity alone confers resistance.
     - **Classification** (1 condition): single-token output (`science` or `humanities`), but requires reading the question. Tests whether question engagement alone confers resistance.
 
-    Compared against baselines from the same 3 models:
+    Compared against baselines from the same models present in the follow-up data:
     - **Fixed-output baseline**: `neutral` (single-token, no engagement)
     - **Task-based baseline**: avg of all task-based conditions (engagement + diversity)
 
-    Data: 3 models (gemma-3-12b-it, gpt-5.2, llama-3.3-70b-instruct), no-hint only.
+    Data: no-hint only.
     """)
     return
 
@@ -1345,8 +1294,6 @@ def _(Path, pd):
     _static_dir = _root / "outputs" / "viz" / "static"
     _dynamic_dir = _root / "outputs" / "viz" / "dynamic"
 
-    _followup_models = {"gemma-3-27b-it", "gpt-5.2", "llama-3.3-70b-instruct"}
-
     # Load followup data
     followup_evals = pd.read_parquet(_followup_dir / "evals.parquet")
     followup_evals = followup_evals[
@@ -1354,7 +1301,10 @@ def _(Path, pd):
     ].copy()
     followup_evals["n_turns_int"] = followup_evals["n_turns"].astype(int)
 
-    # Load fixed-output baseline (neutral only, same 3 models)
+    # Follow-up evals now cover all models — use whichever models are present.
+    _followup_models = set(followup_evals["model"].unique().tolist())
+
+    # Load fixed-output baseline (neutral only, same models as followup)
     _static_all = pd.read_parquet(_static_dir / "evals.parquet")
     _static_baseline = _static_all[
         (_static_all["condition"] == "neutral")
@@ -1363,7 +1313,7 @@ def _(Path, pd):
     ].copy()
     _static_baseline["n_turns_int"] = _static_baseline["n_turns"].astype(int)
 
-    # Load task-based baseline (all task-based conditions, same 3 models)
+    # Load task-based baseline (all task-based conditions, same models as followup)
     _dynamic_all = pd.read_parquet(_dynamic_dir / "evals.parquet")
     _dynamic_baseline = _dynamic_all[
         (_dynamic_all["instruction"] == "instruction_no_hint")
@@ -1516,7 +1466,7 @@ def _(Plot, comparison_df, js, mo):
                 "width": 800,
                 "height": 420,
                 "marginRight": 200,
-                "title": "Follow-up vs baselines: where do variety and classify fall?",
+                "title": "Follow-up vs baselines: where do random-facts and classify fall?",
             }
         )
     )
@@ -1524,10 +1474,11 @@ def _(Plot, comparison_df, js, mo):
 
 
 @app.cell
-def _(Path, Plot, followup_evals, js, mo, pd):
+def _(Path, alt, followup_evals, pd, plots_dir):
     # F2: Per-model faceted view — followup conditions vs fixed-output & task-based baselines
+    # Uses all 12 models present in the followup data; laid out 3 per row.
     _root2 = Path(__file__).resolve().parent.parent.parent
-    _followup_models2 = {"gemma-3-27b-it", "gpt-5.2", "llama-3.3-70b-instruct"}
+    _followup_models2 = set(followup_evals["model"].unique().tolist())
 
     _static2 = pd.read_parquet(
         _root2 / "outputs" / "viz" / "static" / "evals.parquet"
@@ -1548,7 +1499,6 @@ def _(Path, Plot, followup_evals, js, mo, pd):
         & (_dynamic2["model"].isin(_followup_models2))
     ].copy()
     _dynamic2["n_turns_int"] = _dynamic2["n_turns"].astype(int)
-    # Average across task-based conditions per model per N
     _dyn_avg = (
         _dynamic2.groupby(["model", "n_turns_int"])["score"]
         .mean()
@@ -1579,7 +1529,6 @@ def _(Path, Plot, followup_evals, js, mo, pd):
         .reset_index(name="if_rate")
         .sort_values(["model", "condition_group", "n_turns_int"])
     )
-    _f2_records = _f2_agg.to_dict("records")
 
     _grp_order2 = [
         "fixed-output (neutral)",
@@ -1590,54 +1539,47 @@ def _(Path, Plot, followup_evals, js, mo, pd):
     ]
     _grp_colors2 = ["#e41a1c", "#ff7f00", "#984ea3", "#a65628", "#4daf4a"]
 
-    mo.ui.anywidget(
-        Plot.plot(
-            {
-                "x": {"label": "N turns"},
-                "y": {"domain": [0, 1], "label": "IF Rate"},
-                "fx": {"label": None},
-                "color": {
-                    "domain": _grp_order2,
-                    "range": _grp_colors2,
-                    "legend": True,
-                },
-                "marks": [
-                    Plot.lineY(
-                        _f2_records,
-                        {
-                            "x": "n_turns_int",
-                            "y": "if_rate",
-                            "stroke": "condition_group",
-                            "fx": "model",
-                            "strokeWidth": 2,
-                            "opacity": 0.5,
-                            "curve": "monotone-x",
-                        },
-                    ),
-                    Plot.dot(
-                        _f2_records,
-                        {
-                            "x": "n_turns_int",
-                            "y": "if_rate",
-                            "fill": "condition_group",
-                            "fx": "model",
-                            "r": 3,
-                            "title": js(
-                                "d => `${d.condition_group}: N=${d.n_turns_int}, IF=${d.if_rate.toFixed(2)}`"
-                            ),
-                        },
-                    ),
-                    Plot.ruleY(
-                        [0.5], {"stroke": "#ccc", "strokeDasharray": "4 2"}
-                    ),
-                ],
-                "width": 1050,
-                "height": 350,
-                "marginLeft": 50,
-                "title": "Follow-up vs baselines per model",
-            }
+    _color = alt.Color(
+        "condition_group:N",
+        scale=alt.Scale(domain=_grp_order2, range=_grp_colors2),
+        legend=alt.Legend(title="Condition group"),
+    )
+    _lines = (
+        alt.Chart(_f2_agg)
+        .mark_line(strokeWidth=2, opacity=0.7, interpolate="monotone")
+        .encode(
+            x=alt.X("n_turns_int:Q", title="N turns"),
+            y=alt.Y("if_rate:Q", title="IF Rate", scale=alt.Scale(domain=[0, 1])),
+            color=_color,
+            tooltip=[
+                "model",
+                "condition_group",
+                "n_turns_int",
+                alt.Tooltip("if_rate:Q", format=".2f"),
+            ],
         )
     )
+    _dots = (
+        alt.Chart(_f2_agg)
+        .mark_point(size=30, filled=True)
+        .encode(
+            x="n_turns_int:Q",
+            y="if_rate:Q",
+            color=_color,
+        )
+    )
+    _rule = (
+        alt.Chart(pd.DataFrame({"y": [0.5]}))
+        .mark_rule(color="#ccc", strokeDash=[4, 2])
+        .encode(y="y:Q")
+    )
+    _f2_chart = (
+        (_lines + _dots + _rule)
+        .facet(facet=alt.Facet("model:N", title=None), columns=3)
+        .properties(title="Follow-up vs baselines per model")
+    )
+    _f2_chart.save(str(plots_dir / "f2_followup_per_model.png"), scale_factor=2)
+    _f2_chart
     return
 
 

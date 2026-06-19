@@ -202,7 +202,8 @@ def _(
         ~pl.col("condition").is_in(_token_conditions),
     )
     dynamic_df = dynamic_raw.filter(pl.col("model").is_in(_core))
-    followup_df = followup_raw  # only 3 models, no core filter needed
+    # Follow-up now covers all core models; filter to core for consistency with other panels.
+    followup_df = followup_raw.filter(pl.col("model").is_in(_core))
     training_df = training_raw.filter(
         pl.col("model").is_in(_training),
         ~pl.col("condition").is_in(_token_conditions),

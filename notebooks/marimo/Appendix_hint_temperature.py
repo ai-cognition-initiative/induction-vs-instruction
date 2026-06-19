@@ -31,9 +31,11 @@ def _(Path):
 @app.cell
 def _():
     TOKEN_CONDITIONS = {"token_states_countries", "token_countries_states"}
-    MODEL_ALIASES_T1 = {"claude-sonnet-4.6": "claude-4.6-sonnet"}
+    # T0 data now canonicalized to "claude-sonnet-4.6" upstream — alias is a no-op,
+    # kept for safety with un-regenerated legacy parquets.
+    MODEL_ALIASES_T1 = {"claude-4.6-sonnet": "claude-sonnet-4.6"}
     DISPLAY_NAMES = {
-        "claude-4.6-sonnet": "Claude 4.6 Sonnet",
+        "claude-sonnet-4.6": "Claude 4.6 Sonnet",
         "gemini-2.5-flash": "Gemini 2.5 Flash",
         "gemma-3-12b-it": "Gemma-3 12B",
         "gemma-3-27b-it": "Gemma-3 27B",

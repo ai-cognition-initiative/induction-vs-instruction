@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.21.1"
+__generated_with = "0.23.8"
 app = marimo.App(width="medium")
 
 
@@ -667,14 +667,17 @@ def _(alt, evals_filtered, plots_dir):
 
 
 @app.cell
-def _(all_models, mo):
+def _(DISPLAY_NAMES, all_models, mo):
+    # Downstream uses evals_filtered which has model renamed to display names,
+    # so selector options/values must also be display names for .isin() to match.
+    _options = sorted({DISPLAY_NAMES.get(m, m) for m in all_models})
     archetype_selector = mo.ui.multiselect(
-        options=sorted(all_models),
+        options=_options,
         value=[
-            "gpt-5.2",
-            "gemma-3-27b-it",
-            "claude-4.6-sonnet",
-            "kimi-k2-instruct",
+            DISPLAY_NAMES.get("gpt-5.2", "gpt-5.2"),
+            DISPLAY_NAMES.get("gemma-3-27b-it", "gemma-3-27b-it"),
+            DISPLAY_NAMES.get("claude-sonnet-4.6", "claude-sonnet-4.6"),
+            DISPLAY_NAMES.get("kimi-k2", "kimi-k2"),
         ],
         label="Archetype models (pick 4–5 to compare transition shapes)",
     )

@@ -69,7 +69,7 @@ def _(Path, pl):
 @app.cell
 def _(mo, t0_raw, t1_raw):
     MODEL_MATCHES = {
-        "claude-4.6-sonnet": "claude-sonnet-4.6",
+        "claude-sonnet-4.6": "claude-sonnet-4.6",
         "gemma-3-12b-it": "gemma-3-12b-it",
         "gemma-3-27b-it": "gemma-3-27b-it",
         "gpt-5.2": "gpt-5.2",
