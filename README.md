@@ -2,6 +2,10 @@
 
 Research project (FIG Fellowship, Winter 25) investigating whether language models follow global instructions versus local autoregressive (induction) patterns.
 
+> **Paper:** [Do as I Say, Not as I Do: Instruction-Induction Conflict in LLMs](https://arxiv.org/abs/2605.20382) — Carolina Camassa, Derek Shiller ([arXiv:2605.20382](https://arxiv.org/abs/2605.20382))
+
+The core experiment places a user instruction to behave in a target way `T` (e.g., always output a specific token, answer in a particular language, or adopt a persona) in conflict with `N` hardcoded assistant turns demonstrating a competing pattern `P`. As `N` increases, induction pressure can override instruction-following. We measure instruction-following (IF) rates across 13 models and 16 instructions: average IF ranges from 1% to 99% across models, the transition from instruction- to pattern-following is universal but highly model-dependent, and output diversity — not semantic engagement with the input — is the primary factor predicting robustness.
+
 ## Setup
 
 ```bash
@@ -61,30 +65,6 @@ Common provider slugs: `anthropic`, `openai`, `together`, `fireworks`, `deepinfr
 
 See [OpenRouter Provider Routing docs](https://openrouter.ai/docs/guides/routing/provider-selection) for all options.
 
-### Logging OpenRouter usage
-
-The `src/utils/openrouter_logging.py` module provides integration with inspect-ai's logging:
-
-```python
-from src.utils.openrouter_logging import log_openrouter_metadata, OpenRouterUsageTracker
-
-# At task start - logs model info to inspect-ai transcript
-metadata = log_openrouter_metadata(model)
-
-# Track usage across samples
-tracker = OpenRouterUsageTracker(model)
-# ... after each model call ...
-tracker.record(output.usage)
-# ... at end ...
-summary = tracker.log_summary()
-```
-
-Set `--log-level info` to see OpenRouter pricing and usage in the console:
-
-```bash
-uv run inspect eval src/tasks/behavioral_static_conditions.py --model configs/models/gemma.yaml --temperature 0 --log-dir logs/protocol1/T0-hint/static/gemma
-```
-
 ## Running evaluations
 
 Evaluations are configured with YAML files in `configs/` and run through `run.py`, which expands condition x N combinations into inspect-ai tasks.
@@ -92,20 +72,20 @@ Evaluations are configured with YAML files in `configs/` and run through `run.py
 ### Using a config file
 
 ```bash
-uv run python run.py configs/example.yaml --models-yaml models.yaml
+uv run python run.py configs/example.yaml --models-yaml configs/models/models.yaml
 ```
 
 Custom log directory (defaults to `logs/<timestamp>`):
 
 ```bash
 uv run python run.py configs/example.yaml \
-  --models-yaml models.yaml \
+  --models-yaml configs/models/models.yaml \
   --log-dir logs/my-experiment
 ```
 
 ### Models configuration (models.yaml)
 
-Models are defined in `models.yaml` with a top-level provider and a list of model identifiers:
+Models are defined in a YAML file (the default lives at `configs/models/models.yaml`; per-provider variants like `configs/models/anthropic.yaml`, `configs/models/gemma.yaml`, and `configs/models/reasoning.yaml` are also provided) with a top-level provider and a list of model identifiers:
 
 ```yaml
 provider: openrouter
@@ -150,14 +130,15 @@ conditions:                   # list of condition names from src/config.py
   - value_aligned_cats
   - value_misaligned_cats
 
-n_turns: [1, 3, 5, 10]       # list of N values (induction pressure)
+n_turns: [1, 3, 5, 10]        # list of N values (induction pressure)
 
-hint: true                    # reveal the hardcoding manipulation to the model
-epochs: 50                    # repetitions per condition x N combination
-question_seed: null           # null for random, integer for reproducibility
+instruction_templates:        # list of templates from data/prompts/<name>.txt
+  - instruction_hint          # instruction_hint reveals the hardcoding manipulation;
+                              # instruction_no_hint does not
+n_trials: 50                  # repetitions per condition x N x template (each with a different question)
 ```
 
-See `configs/example.yaml` for a working example.
+The grid expands over `conditions x n_turns x instruction_templates`, with `n_trials` samples per combination. See `configs/example.yaml` for a working example.
 
 ### Running a single task directly
 
@@ -165,7 +146,8 @@ You can also invoke tasks directly via inspect CLI, passing parameters with `-T`
 
 ```bash
 uv run inspect eval src/tasks/behavioral.py \
-  -T condition=neutral -T n_turns=5 -T epochs=10 \
+  -T condition=neutral -T n_turns=5 -T n_trials=10 \
+  -T instruction_template=instruction_hint \
   --model openrouter/google/gemini-2.0-flash-001 \
   --temperature 0.7
 ```
@@ -176,11 +158,11 @@ uv run inspect eval src/tasks/behavioral.py \
 
 ```bash
 # Initial run with N=1,3,5
-uv run python run.py configs/example.yaml --model openrouter/google/gemini-2.0-flash-001 \
+uv run python run.py configs/example.yaml --models-yaml configs/models/models.yaml \
   --log-dir logs/my-experiment
 
 # Later: add N=10,20 to the config, re-run — only N=10,20 are evaluated
-uv run python run.py configs/example.yaml --model openrouter/google/gemini-2.0-flash-001 \
+uv run python run.py configs/example.yaml --models-yaml configs/models/models.yaml \
   --log-dir logs/my-experiment
 ```
 
@@ -210,24 +192,27 @@ Naming convention: instruction is always the primary reference point. For condit
 | `neutral` | static | USA | EU |
 | `value_aligned_cats` | static | I love cats | I hate cats |
 | `value_misaligned_cats` | static | I hate cats | I love cats |
+| `value_aligned_helpful` | static | I love being helpful | I hate being helpful |
+| `value_misaligned_helpful` | static | I hate being helpful | I love being helpful |
 | `factual_aligned_earth` | static | The earth is round | The earth is flat |
 | `factual_misaligned_earth` | static | The earth is flat | The earth is round |
-| `token_countries_states` | token_pattern | European country | US state |
-| `token_states_countries` | token_pattern | US state | European country |
 | `language_ru_fr` | language | Russian | French |
 | `language_fr_ru` | language | French | Russian |
 | `persona_casual_formal` | persona | Casual with emoji | Formal academic |
 | `persona_formal_casual` | persona | Formal academic | Casual with emoji |
 | `style_lowercase_uppercase` | style | lowercase | UPPERCASE |
 | `style_uppercase_lowercase` | style | UPPERCASE | lowercase |
-| `style_long_short` | style | Long response | Short response |
-| `style_short_long` | style | Short response | Long response |
 | `style_javascript_python` | code | JavaScript | Python |
 | `style_python_javascript` | code | Python | JavaScript |
 | `preference_aligned_cats` | preference | Love cats (weaved) | Hate cats (weaved) |
 | `preference_misaligned_cats` | preference | Hate cats (weaved) | Love cats (weaved) |
+| `preference_aligned_helpful` | preference | Likes being helpful (weaved) | Dislikes being helpful (weaved) |
+| `preference_misaligned_helpful` | preference | Dislikes being helpful (weaved) | Likes being helpful (weaved) |
+| `variety_geography_animals` | variety | Sentence about an animal | Sentence about geography |
+| `variety_animals_geography` | variety | Sentence about geography | Sentence about an animal |
+| `classify_sh_economics` | classify_question | Classify as science/humanities | economics |
 
-Conditions with types `language`, `persona`, `code`, `preference`, and `style_long` require pre-generated hardcoded responses in `data/hardcoded_responses/`. Static, token_pattern, and case/short style conditions work out of the box.
+Conditions with types `language`, `persona`, `code`, `preference`, and `variety` require pre-generated hardcoded responses in `data/hardcoded_responses/`. Static, case-style (`style_*case*`), and `classify_question` conditions work out of the box.
 
 ## Protocols
 
@@ -242,16 +227,17 @@ Generate visualization notebooks from eval logs using `just`:
 # List available log folders
 just logs
 
-# Generate report for a log folder
-just report olmo-32b-static behavioral
+# Generate reports for a log folder (renders whichever of the
+# behavioral / prediction / judge notebooks the folder has data for)
+just report olmo-32b-static
 
-# Preview the report
+# Preview a report (defaults to the behavioral_analysis notebook)
 just preview olmo-32b-static
 
-# Publish to GitHub Pages
-just publish olmo-32b-static
+# Combined behavioral-vs-prediction report from two folders
+just report-prediction olmo-32b-static olmo-32b-prediction
 ```
 
-Reports are generated at `outputs/notebooks/<folder>/report.qmd`.
+Reports are rendered to `outputs/notebooks/<folder>/`, with the underlying viz data written to `outputs/viz/<folder>/`.
 
 Dependencies: `just`, `quarto-cli`, `inspect-viz`, `pyarrow`
