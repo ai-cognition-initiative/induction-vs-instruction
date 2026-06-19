@@ -4,15 +4,19 @@
 |
 +-- notebooks\marimo/
 |   +-- Analysis_dynamic_conditions.py
-|   |   _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _
+|   |   _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _
 |   +-- Analysis_static_conditions.py
 |   |   _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _
 |   +-- Appendix_hint_temperature.py
 |   |   _, _, _, _, _, _, _, _, _, _, _, _, _, _, _
+|   +-- Appendix_per_model_curves.py
+|   |   _, _, _, _, _
 |   +-- inspect_log_viewer.py
 |   |   _, _, _, _, _, _, _
+|   +-- Inter_rater_agreement.py
+|   |   _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _
 |   +-- Paper_statistics.py
-|   |   _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _
+|   |   _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _
 |   +-- paper_stats_config.py
 |   |   CORE_MODELS, REASONING_MODELS, TRAINING_MODELS
 |   +-- Question_variation_analysis.py
@@ -35,10 +39,14 @@
 |   |   MAX_WORKERS, DATA_DIR, OUTPUT_DIR, DEFAULT_MODEL, load_questions, _call_llm, generate_llm_responses, save_responses, main
 |   +-- generate_report_from_config.py
 |   |   load_config, validate_config, get_quarto_python, render_notebook, main
+|   +-- plot_hint_effect.py
+|   |   CORE, FIXED, ROOT, OUT, NO_HINT_COLOR, HINT_COLOR, UP_COLOR, DOWN_COLOR, per_model, make_figure, main
 |   +-- prepare_viz_data.py
-|   |   CONDITION_PAIR_MAP, ALIGNED_CONDITIONS, MISALIGNED_CONDITIONS, ALIGNMENT_AXIS_PAIRS, BEHAVIORAL_SCORE_RENAME, PREDICTION_SCORE_RENAME, _n_turns_to_string, _get_reasoning_suffix_from_config, _load_model_args_map, _get_reasoning_suffix, _get_reasoning_tokens, load_reasoning_tokens, add_pairing_columns, _coalesce_scores, _rename_prediction_scores, _common_prep, prepare_behavioral, prepare_prediction, prepare_combined, load_evals_from_folders, process_raw_evals, process_behavioral_df, process_prediction_df, _merge_behavioral_prediction, prepare_behavioral_multi, prepare_prediction_multi, prepare_combined_multi
+|   |   CONDITION_PAIR_MAP, ALIGNED_CONDITIONS, MISALIGNED_CONDITIONS, ALIGNMENT_AXIS_PAIRS, MODEL_CANONICAL, BEHAVIORAL_SCORE_RENAME, PREDICTION_SCORE_RENAME, _n_turns_to_string, _get_reasoning_suffix_from_config, _load_model_args_map, _get_reasoning_suffix, _get_reasoning_tokens, load_reasoning_tokens, add_pairing_columns, _coalesce_scores, _rename_prediction_scores, _common_prep, prepare_behavioral, prepare_prediction, prepare_combined, load_evals_from_folders, process_raw_evals, process_behavioral_df, process_prediction_df, _merge_behavioral_prediction, prepare_behavioral_multi, prepare_prediction_multi, prepare_combined_multi, _parse_meta, _explode_judges, prepare_judges
 |   +-- repomap.py
 |   |   extract_symbols, generate_repomap
+|   +-- rescore_multijudge.py
+|   |   _needs_multi_judge, main
 |   +-- summarize_evals.py
 |   |   find_eval_set_files, parse_eval_set, shorten_model, main
 |   `-- viz_helpers.py
@@ -64,13 +72,13 @@
 |   +-- behavioral.py
 |   |   behavioral_scorer
 |   +-- classify.py
-|   |   DATA_DIR, GRADER_MODEL, LANGUAGE_RUBRIC, CODE_LANGUAGE_RUBRIC, PERSONA_RUBRIC, PREFERENCE_RUBRIC, TOPIC_RUBRIC, PREDICTION_RUBRIC, _load_set, _normalize_answer, _extract_answer, _exact_match, classify_question, classify_static, classify_set_membership, classify_language, classify_format, classify_format_async, _classify_code_language, _call_llm_judge, classify_llm_actual, classify_llm_prediction, classify_actual, classify_prediction
+|   |   DATA_DIR, GRADER_MODEL, LANGUAGE_RUBRIC, CODE_LANGUAGE_RUBRIC, PERSONA_RUBRIC, PREFERENCE_RUBRIC, TOPIC_RUBRIC, PREDICTION_RUBRIC, _load_set, _normalize_answer, _extract_answer, _exact_match, classify_question, classify_static, classify_set_membership, classify_language, classify_language_multi, classify_format, classify_format_async, classify_format_multi, _classify_code_language, _call_llm_judge, majority_vote_with_agreement, _call_llm_judges_multi, _select_rubric, classify_llm_actual, classify_llm_actual_multi, classify_llm_prediction, classify_llm_prediction_multi, classify_actual, _deterministic_judge_dict, classify_actual_multi, classify_prediction, classify_prediction_multi
 |   +-- classify_question.py
 |   |   _normalize, classify_question_scorer
 |   +-- format_check.py
-|   |   CODE_LANGUAGE_RUBRIC, _check_uppercase, _check_lowercase, _check_short, _check_long, _classify_code_language, format_scorer
+|   |   CODE_LANGUAGE_RUBRIC, _check_uppercase, _check_lowercase, _check_short, _check_long, _classify_code_language_single, _classify_code_language_multi, format_scorer
 |   +-- language_detect.py
-|   |   language_scorer
+|   |   _judge_scorer, language_scorer
 |   +-- pattern_match.py
 |   |   pattern_match
 |   +-- prediction.py
@@ -78,7 +86,7 @@
 |   +-- set_membership.py
 |   |   DATA_DIR, _load_set, _normalize, _extract_answer, _exact_set_match, set_membership_scorer
 |   `-- style_judge.py
-|       style_scorer
+|       _judge_scorer, style_scorer
 |
 +-- src\solvers/
 |   +-- __init__.py
