@@ -20,11 +20,13 @@ DYNAMIC_PATH = ROOT / "outputs" / "viz" / "dynamic"
 TOKEN_CONDITIONS = ["token_states_countries", "token_countries_states"]
 
 MODEL_ALIASES: dict[str, str] = {
-    "claude-sonnet-4.6": "claude-4.6-sonnet",
+    "claude-4.6-sonnet": "claude-sonnet-4.6",  # Gradient/legacy spelling
+    "kimi-k2-instruct": "kimi-k2",  # Nebius/old OpenRouter spelling
+    "kimi-k2-0905": "kimi-k2",  # OpenRouter 09-05 release spelling
 }
 
 DISPLAY_NAMES: dict[str, str] = {
-    "claude-4.6-sonnet": "Claude 4.6 Sonnet",
+    "claude-sonnet-4.6": "Claude 4.6 Sonnet",
     "claude-opus-4.6": "Claude Opus 4.6",
     "gemini-2.5-flash": "Gemini 2.5 Flash",
     "gemma-3-12b-it": "Gemma-3 12B",
@@ -33,7 +35,7 @@ DISPLAY_NAMES: dict[str, str] = {
     "gpt-5.2-medium": "GPT-5.2 (medium)",
     "hermes-4-70b": "Hermes-4 70B",
     "hermes-4-70b-reasoning": "Hermes-4 70B (reasoning)",
-    "kimi-k2-instruct": "Kimi K2",
+    "kimi-k2": "Kimi K2",
     "llama-3.1-70b-instruct": "Llama 3.1 70B",
     "llama-3.3-70b-instruct": "Llama 3.3 70B",
     "olmo-3.1-32b-instruct": "OLMo 3.1 32B",
@@ -44,9 +46,9 @@ DISPLAY_NAMES: dict[str, str] = {
 }
 
 CORE_MODELS = [
-    "claude-4.6-sonnet", "claude-opus-4.6", "gemini-2.5-flash",
+    "claude-sonnet-4.6", "claude-opus-4.6", "gemini-2.5-flash",
     "gemma-3-12b-it", "gemma-3-27b-it", "gpt-5.2",
-    "hermes-4-70b", "kimi-k2-instruct",
+    "hermes-4-70b", "kimi-k2",
     "llama-3.1-70b-instruct",
     "llama-3.3-70b-instruct",
     "olmo-3.1-32b-instruct", "qwen3-235b-a22b-instruct-2507",

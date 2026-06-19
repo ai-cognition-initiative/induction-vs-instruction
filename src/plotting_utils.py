@@ -11,7 +11,8 @@ import pandas as pd
 COLOR_SCHEME = "set2"
 
 DISPLAY_NAMES: dict[str, str] = {
-    "claude-4.6-sonnet": "Claude 4.6 Sonnet",
+    "claude-sonnet-4.6": "Claude 4.6 Sonnet",
+    "claude-4.6-sonnet": "Claude 4.6 Sonnet",  # legacy alias (pre-canonicalization)
     "claude-opus-4.6": "Claude 4.6 Opus",
     "gemini-2.5-flash": "Gemini 2.5 Flash",
     "gemma-3-12b-it": "Gemma-3 12B",
@@ -20,7 +21,9 @@ DISPLAY_NAMES: dict[str, str] = {
     "gpt-5.2-medium": "GPT-5.2 (medium)",
     "hermes-4-70b": "Hermes-4 70B",
     "hermes-4-70b-reasoning": "Hermes-4 70B (reasoning)",
-    "kimi-k2-instruct": "Kimi K2",
+    "kimi-k2": "Kimi K2",
+    "kimi-k2-instruct": "Kimi K2",  # legacy alias (Nebius/old OpenRouter name)
+    "kimi-k2-0905": "Kimi K2",  # legacy alias (OpenRouter 09-05 release name)
     "llama-3.1-70b-instruct": "Llama 3.1 70B",
     "llama-3.3-70b-instruct": "Llama 3.3 70B",
     "olmo-3.1-32b-instruct": "OLMo 3.1 32B",
