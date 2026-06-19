@@ -74,6 +74,7 @@ Evaluations are configured with YAML files in `configs/` and run through `run.py
 ```bash
 uv run python run.py configs/example.yaml --models-yaml configs/models/models.yaml
 ```
+Note: the models-yaml only works with a few models at a time.
 
 Custom log directory (defaults to `logs/<timestamp>`):
 
