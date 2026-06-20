@@ -1,10 +1,17 @@
 # induction-vs-instruction
 
-Research project (FIG Fellowship, Winter 25) investigating whether language models follow global instructions versus local autoregressive (induction) patterns.
+Research project (FIG Fellowship, Winter 25) studying what happens when two capabilities a language model acquires at different stages of training are forced into direct conflict: obeying an explicit instruction versus continuing an in-context pattern.
 
 > **Paper:** [Do as I Say, Not as I Do: Instruction-Induction Conflict in LLMs](https://arxiv.org/abs/2605.20382) — Carolina Camassa, Derek Shiller ([arXiv:2605.20382](https://arxiv.org/abs/2605.20382))
 
-The core experiment places a user instruction to behave in a target way `T` (e.g., always output a specific token, answer in a particular language, or adopt a persona) in conflict with `N` hardcoded assistant turns demonstrating a competing pattern `P`. As `N` increases, induction pressure can override instruction-following. We measure instruction-following (IF) rates across 13 models and 16 instructions: average IF ranges from 1% to 99% across models, the transition from instruction- to pattern-following is universal but highly model-dependent, and output diversity — not semantic engagement with the input — is the primary factor predicting robustness.
+**Why study this?** Modern LLMs are shaped by two objectives installed at different phases of training, and in most situations they agree — so we can't tell which one is actually driving a given response:
+
+- **Induction** — continuing the local, in-context pattern. This emerges during *pretraining*, from next-token prediction over large corpora.
+- **Instruction-following** — obeying an explicit global instruction. This is installed during *post-training* (instruction tuning and RLHF).
+
+We pull these two apart by engineering a controlled conflict between them. A system/user instruction says to always produce a target behavior `T` (e.g., output a specific token, answer in a particular language, or adopt a persona), while the preceding conversation hardcodes `N` assistant turns that instead demonstrate a competing pattern `P`. Holding everything else fixed and sweeping `N` isolates the contribution of each objective: the model's output reveals which goal wins, and the transition point reveals how much induction pressure it takes to override the instruction — measured per model and per instruction type, rather than as one aggregate "instruction-following" number.
+
+As `N` increases, induction pressure can override instruction-following. Across 13 models and 16 instructions, average IF ranges from 1% to 99% across models, the transition from instruction- to pattern-following is universal but highly model-dependent, and output diversity — not semantic engagement with the input — is the primary factor predicting robustness.
 
 ## Setup
 
