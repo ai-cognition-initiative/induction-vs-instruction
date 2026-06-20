@@ -520,8 +520,8 @@ def _(alt, evals_all_filtered, pd, plots_dir):
     _cond_chart = (
         (_cond_bars + _cond_err)
         .properties(
-            width=500,
-            height=alt.Step(20),
+            width=300,
+            height=alt.Step(32),
             title=f"IF Rate per Condition — average over models & N",
         )
         .configure_axisY(labelLimit=500)
@@ -619,6 +619,7 @@ def _(alt, evals_filtered, plots_dir):
                 "if_rate:Q",
                 scale=alt.Scale(scheme="redyellowgreen", domain=[0, 1]),
                 title="IF Rate",
+                legend=None,
             ),
             tooltip=[
                 "model",
@@ -629,7 +630,7 @@ def _(alt, evals_filtered, plots_dir):
     )
     _texts = (
         alt.Chart(_hm)
-        .mark_text(fontSize=13)
+        .mark_text(fontSize=16)
         .encode(
             x=alt.X("n_turns:O", sort=_n_order),
             y=alt.Y(
@@ -644,10 +645,15 @@ def _(alt, evals_filtered, plots_dir):
             ),
         )
     )
-    _hm_chart = (_rects + _texts).properties(
-        width=max(500, len(_n_order) * 28),
-        height=max(200, _hm["model"].nunique() * 30),
-        title="Instruction-following rate by model for task-based conditions",
+    # Title dropped: the LaTeX subcaption already labels this panel.
+    # Larger fonts keep labels legible when the panel is scaled to ~0.48\linewidth.
+    _hm_chart = (
+        (_rects + _texts)
+        .properties(
+            width=max(500, len(_n_order) * 28),
+            height=max(200, _hm["model"].nunique() * 30),
+        )
+        .configure_axis(labelFontSize=16, titleFontSize=17)
     )
     _hm_chart.save(str(plots_dir / "a4_if_rate_heatmap.png"), scale_factor=2)
     _hm_chart
@@ -1636,6 +1642,71 @@ def _(alt, comparison_df_by_model, plots_dir):
     )
     _bars.save(str(plots_dir / "f3_followup_by_model.png"), scale_factor=2)
     _bars
+    return
+
+
+@app.cell
+def _(alt, comparison_df_by_model, pd, plots_dir):
+    # F4: aggregate transition curves — 4 condition groups vs N, averaged over the 13 models.
+    # Compact main-text figure replacing the per-model grid (f3, now appendix-only).
+    def _f4_group(cg):
+        c = str(cg).lower()
+        if "neutral" in c or "fixed-output" in c:
+            return "neutral"
+        if "classif" in c:
+            return "classify"
+        if "variety" in c or "random" in c:
+            return "random-facts"
+        if "task-based" in c:
+            return "task-based"
+        return None
+
+    _f4 = comparison_df_by_model.copy()
+    _f4["group"] = _f4["condition_group"].map(_f4_group)
+    _f4 = _f4.dropna(subset=["group"])
+    # Collapse the two random-facts directions to one value per (model, group, N),
+    # then summarize across the 13 models per (group, N): mean and +/- 1 SE band.
+    _f4_pm = (
+        _f4.groupby(["model", "group", "n_turns_int"])["if_rate"]
+        .mean()
+        .reset_index()
+    )
+    _f4_agg = (
+        _f4_pm.groupby(["group", "n_turns_int"])["if_rate"]
+        .agg(mean="mean", std="std", n="count")
+        .reset_index()
+    )
+    _f4_agg["se"] = _f4_agg["std"] / _f4_agg["n"] ** 0.5
+    _f4_agg["lo"] = (_f4_agg["mean"] - _f4_agg["se"]).clip(0, 1)
+    _f4_agg["hi"] = (_f4_agg["mean"] + _f4_agg["se"]).clip(0, 1)
+    _f4_order = ["neutral", "classify", "random-facts", "task-based"]
+    _f4_colors = ["#999999", "#7fc97f", "#ff7f00", "#386cb0"]
+    _f4_color = alt.Color(
+        "group:N",
+        sort=_f4_order,
+        scale=alt.Scale(domain=_f4_order, range=_f4_colors),
+        legend=alt.Legend(title=None),
+    )
+    _f4_base = alt.Chart(_f4_agg)
+    _f4_band = _f4_base.mark_area(opacity=0.15).encode(
+        x=alt.X("n_turns_int:Q", title="N turns"),
+        y=alt.Y("lo:Q", title="Mean IF rate", scale=alt.Scale(domain=[0, 1])),
+        y2="hi:Q",
+        color=_f4_color,
+    )
+    _f4_lines = _f4_base.mark_line(point=True).encode(
+        x="n_turns_int:Q",
+        y=alt.Y("mean:Q", scale=alt.Scale(domain=[0, 1])),
+        color=_f4_color,
+    )
+    _f4_rule = (
+        alt.Chart(pd.DataFrame({"y": [0.5]}))
+        .mark_rule(color="#ccc", strokeDash=[4, 2])
+        .encode(y="y:Q")
+    )
+    _f4_chart = (_f4_band + _f4_lines + _f4_rule).properties(width=320, height=240)
+    _f4_chart.save(str(plots_dir / "f4_followup_curves.png"), scale_factor=2)
+    _f4_chart
     return
 
 

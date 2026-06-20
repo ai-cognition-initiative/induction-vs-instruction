@@ -596,8 +596,8 @@ def _(alt, evals_all_filtered, instruction_dropdown, pd, plots_dir):
         )
     )
     _a6_chart = (_a6_bars + _a6_err).properties(
-        width=500,
-        height=alt.Step(30),
+        width=300,
+        height=alt.Step(42),
         title=f"IF Rate per Condition — average over models & N",
     )
     _a6_chart.save(str(plots_dir / "a6_per_condition_if_rate.png"), scale_factor=2)
@@ -631,6 +631,7 @@ def _(alt, evals_filtered, plots_dir):
                 "if_rate:Q",
                 scale=alt.Scale(scheme="redyellowgreen", domain=[0, 1]),
                 title="IF Rate",
+                legend=None,
             ),
             tooltip=[
                 "model",
@@ -641,7 +642,7 @@ def _(alt, evals_filtered, plots_dir):
     )
     _texts = (
         alt.Chart(_hm)
-        .mark_text(fontSize=13)
+        .mark_text(fontSize=16)
         .encode(
             x=alt.X("n_turns:O", sort=_n_order),
             y=alt.Y(
@@ -656,10 +657,15 @@ def _(alt, evals_filtered, plots_dir):
             ),
         )
     )
-    _hm_chart = (_rects + _texts).properties(
-        width=max(500, len(_n_order) * 28),
-        height=max(200, _hm["model"].nunique() * 30),
-        title="Instruction-following rate by model for fixed-output conditions",
+    # Title dropped: the LaTeX subcaption already labels this panel.
+    # Larger fonts keep labels legible when the panel is scaled to ~0.48\linewidth.
+    _hm_chart = (
+        (_rects + _texts)
+        .properties(
+            width=max(500, len(_n_order) * 28),
+            height=max(200, _hm["model"].nunique() * 30),
+        )
+        .configure_axis(labelFontSize=16, titleFontSize=17)
     )
     _hm_chart.save(str(plots_dir / "a4_if_rate_heatmap.png"), scale_factor=2)
     _hm_chart
@@ -1797,6 +1803,60 @@ def _(alt, combined_errors_filtered, pd, plots_dir):
         str(plots_dir / "e2_prediction_changes_behavior.png"), scale_factor=2
     )
     _e2_chart
+    return
+
+
+@app.cell
+def _(alt, evals_filtered, pd, plots_dir):
+    # D5: aggregate transition curves — aligned vs misaligned instructions vs N,
+    # averaged over models and the value/factual condition pairs (fixed-output).
+    # Compact main-text figure beside the per-model alignment-gap table.
+    _d5 = evals_filtered[evals_filtered["instruction_aligned"].notna()].copy()
+    _d5["alignment"] = _d5["instruction_aligned"].map(
+        {True: "aligned", False: "misaligned"}
+    )
+    # Per-model mean per (alignment, N), then mean and +/- 1 SE band across models.
+    _d5_pm = (
+        _d5.groupby(["model", "alignment", "n_turns_int"])["score"]
+        .mean()
+        .reset_index(name="if_rate")
+    )
+    _d5_agg = (
+        _d5_pm.groupby(["alignment", "n_turns_int"])["if_rate"]
+        .agg(mean="mean", std="std", n="count")
+        .reset_index()
+    )
+    _d5_agg["se"] = _d5_agg["std"] / _d5_agg["n"] ** 0.5
+    _d5_agg["lo"] = (_d5_agg["mean"] - _d5_agg["se"]).clip(0, 1)
+    _d5_agg["hi"] = (_d5_agg["mean"] + _d5_agg["se"]).clip(0, 1)
+    _d5_color = alt.Color(
+        "alignment:N",
+        scale=alt.Scale(
+            domain=["aligned", "misaligned"],
+            range=["#4daf4a", "#e41a1c"],
+        ),
+        legend=alt.Legend(title=None),
+    )
+    _d5_base = alt.Chart(_d5_agg)
+    _d5_band = _d5_base.mark_area(opacity=0.15).encode(
+        x=alt.X("n_turns_int:Q", title="N turns"),
+        y=alt.Y("lo:Q", title="Mean IF rate", scale=alt.Scale(domain=[0, 1])),
+        y2="hi:Q",
+        color=_d5_color,
+    )
+    _d5_lines = _d5_base.mark_line(point=True).encode(
+        x="n_turns_int:Q",
+        y=alt.Y("mean:Q", scale=alt.Scale(domain=[0, 1])),
+        color=_d5_color,
+    )
+    _d5_rule = (
+        alt.Chart(pd.DataFrame({"y": [0.5]}))
+        .mark_rule(color="#ccc", strokeDash=[4, 2])
+        .encode(y="y:Q")
+    )
+    _d5_chart = (_d5_band + _d5_lines + _d5_rule).properties(width=320, height=240)
+    _d5_chart.save(str(plots_dir / "d5_alignment_curves.png"), scale_factor=2)
+    _d5_chart
     return
 
 

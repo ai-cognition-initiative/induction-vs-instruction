@@ -161,7 +161,7 @@ def _(alt):
         )
         _line = (
             alt.Chart(data)
-            .mark_line(interpolate="monotone", strokeWidth=1.6)
+            .mark_line(interpolate="monotone", strokeWidth=2.6)
             .encode(
                 x="n_turns_int:Q",
                 y=alt.Y(f"{y_col}:Q", scale=alt.Scale(domain=[0, 1])),
@@ -174,7 +174,7 @@ def _(alt):
         )
         _dots = (
             alt.Chart(data)
-            .mark_point(size=28, filled=True)
+            .mark_point(size=65, filled=True)
             .encode(
                 x="n_turns_int:Q",
                 y=alt.Y(f"{y_col}:Q", scale=alt.Scale(domain=[0, 1])),
@@ -191,17 +191,17 @@ def _(alt):
         )
         _rule = (
             alt.Chart(alt.InlineData(values=[{"y": 0.5}]))
-            .mark_rule(color="#aaa", strokeDash=[3, 3], strokeWidth=0.8)
+            .mark_rule(color="#aaa", strokeDash=[3, 3], strokeWidth=1.2)
             .encode(y=alt.Y("y:Q"))
         )
         return (_band + _line + _dots + _rule).properties(
-            width=500, height=270, title=title,
+            width=420, height=300, title=title,
         ).configure_axis(
-            labelFontSize=14, titleFontSize=15,
+            labelFontSize=20, titleFontSize=22,
         ).configure_legend(
-            labelFontSize=13, titleFontSize=14,
+            labelFontSize=19, titleFontSize=20, labelLimit=320,
         ).configure_title(
-            fontSize=16,
+            fontSize=23,
         )
 
     return (make_transition_panel,)
@@ -330,7 +330,7 @@ def _(alt, olmo_pred, pd, plots_dir):
     )
     _line = (
         alt.Chart(_olmo_pred_long)
-        .mark_line(interpolate="monotone", strokeWidth=1.6)
+        .mark_line(interpolate="monotone", strokeWidth=2.6)
         .encode(
             x="n_turns_int:Q",
             y=alt.Y("value:Q", scale=alt.Scale(domain=[0, 1])),
@@ -339,7 +339,7 @@ def _(alt, olmo_pred, pd, plots_dir):
     )
     _dots = (
         alt.Chart(_olmo_pred_long)
-        .mark_point(size=28, filled=True)
+        .mark_point(size=65, filled=True)
         .encode(
             x="n_turns_int:Q",
             y=alt.Y("value:Q", scale=alt.Scale(domain=[0, 1])),
@@ -354,17 +354,17 @@ def _(alt, olmo_pred, pd, plots_dir):
     )
     _rule = (
         alt.Chart(alt.InlineData(values=[{"y": 0.5}]))
-        .mark_rule(color="#aaa", strokeDash=[3, 3], strokeWidth=0.8)
+        .mark_rule(color="#aaa", strokeDash=[3, 3], strokeWidth=1.2)
         .encode(y=alt.Y("y:Q"))
     )
     _olmo_pred_chart = (
         (_band + _line + _dots + _rule)
-        .facet(facet=alt.Facet("metric:N", title=None, header=alt.Header(labelFontSize=14)), columns=3)
+        .facet(facet=alt.Facet("metric:N", title=None, header=alt.Header(labelFontSize=19)), columns=3)
         .resolve_scale(y="shared")
         .properties(title="OLMo 3.1 32B — Self-prediction by training stage")
-        .configure_axis(labelFontSize=14, titleFontSize=15)
-        .configure_legend(labelFontSize=13, titleFontSize=14)
-        .configure_title(fontSize=16)
+        .configure_axis(labelFontSize=19, titleFontSize=21)
+        .configure_legend(labelFontSize=18, titleFontSize=19, labelLimit=320)
+        .configure_title(fontSize=23)
     )
     _olmo_pred_chart.save(str(plots_dir / "olmo_prediction.png"), scale_factor=2)
     _olmo_pred_chart
@@ -406,7 +406,7 @@ def _(alt, llama_pred, pd, plots_dir):
     )
     _line = (
         alt.Chart(_llama_pred_long)
-        .mark_line(interpolate="monotone", strokeWidth=1.6)
+        .mark_line(interpolate="monotone", strokeWidth=2.6)
         .encode(
             x="n_turns_int:Q",
             y=alt.Y("value:Q", scale=alt.Scale(domain=[0, 1])),
@@ -415,7 +415,7 @@ def _(alt, llama_pred, pd, plots_dir):
     )
     _dots = (
         alt.Chart(_llama_pred_long)
-        .mark_point(size=28, filled=True)
+        .mark_point(size=65, filled=True)
         .encode(
             x="n_turns_int:Q",
             y=alt.Y("value:Q", scale=alt.Scale(domain=[0, 1])),
@@ -430,17 +430,17 @@ def _(alt, llama_pred, pd, plots_dir):
     )
     _rule = (
         alt.Chart(alt.InlineData(values=[{"y": 0.5}]))
-        .mark_rule(color="#aaa", strokeDash=[3, 3], strokeWidth=0.8)
+        .mark_rule(color="#aaa", strokeDash=[3, 3], strokeWidth=1.2)
         .encode(y=alt.Y("y:Q"))
     )
     _llama_pred_chart = (
         (_band + _line + _dots + _rule)
-        .facet(facet=alt.Facet("metric:N", title=None, header=alt.Header(labelFontSize=14)), columns=3)
+        .facet(facet=alt.Facet("metric:N", title=None, header=alt.Header(labelFontSize=19)), columns=3)
         .resolve_scale(y="shared")
         .properties(title="Llama 70B — Self-prediction by version")
-        .configure_axis(labelFontSize=14, titleFontSize=15)
-        .configure_legend(labelFontSize=13, titleFontSize=14)
-        .configure_title(fontSize=16)
+        .configure_axis(labelFontSize=19, titleFontSize=21)
+        .configure_legend(labelFontSize=18, titleFontSize=19, labelLimit=320)
+        .configure_title(fontSize=23)
     )
     _llama_pred_chart.save(str(plots_dir / "llama_prediction.png"), scale_factor=2)
     _llama_pred_chart
