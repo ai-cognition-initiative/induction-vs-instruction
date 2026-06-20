@@ -1,0 +1,26 @@
+\begin{figure}[t]
+\begin{minipage}[b]{0.44\linewidth}
+  \centering
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{l c}
+  \toprule
+  \textbf{Condition group} & \textbf{Mean IF} \\
+  \midrule
+  \emph{Neutral}       & $31$~\textit{[10--52]}\% \\
+  \emph{Classify}      & $38$~\textit{[21--56]}\% \\
+  \emph{Random-facts}  & $50$~\textit{[35--66]}\% \\
+  \emph{Task-based}    & $43$~\textit{[31--56]}\% \\
+  \bottomrule
+  \end{tabular}
+  \captionof{table}{Mean instruction-following across the 13 models for the $2\times2$ engagement~$\times$~diversity follow-up ($T{=}0$, no-hint, 35 trials/cell; 95\% CI across models in brackets). This suggests that output diversity and length, not question engagement, accounts for the \emph{task-based} robustness gap.}
+  \label{tab:followup-main}
+\end{minipage}%
+\hfill
+\begin{minipage}[b]{0.52\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{\plotsroot/dynamic/f4_followup_curves.png}
+  \caption{Mean IF rate vs.\ $N$ by condition group, averaged over the 13 models (bands: $\pm1$ SE across models). \emph{random-facts} (output diversity) tracks the \emph{task-based} curve, whereas \emph{classify} (question engagement) stays near the \emph{neutral}, \emph{fixed-output} condition baseline.}
+  \label{fig:followup-curves}
+\end{minipage}
+\end{figure}

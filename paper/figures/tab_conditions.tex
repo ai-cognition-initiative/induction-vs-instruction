@@ -1,6 +1,8 @@
 \begin{table}[t]
 \centering
 \small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{0.95}
 \begin{tabular}{lll}
 \toprule
 \textbf{Condition} & \textbf{Instruction (T)} & \textbf{Pattern (P)} \\
@@ -23,6 +25,6 @@
 \texttt{preference\_misaligned\_helpful} & weave in disliking helpfulness & weave in liking helpfulness \\
 \bottomrule
 \end{tabular}
-\caption{All experimental conditions. \textbf{Instruction}~= instructed target behavior~(T); \textbf{Pattern}~= hardcoded in-context pattern~(P). Fixed-output conditions use exact-match scoring; task-based conditions use language detection, format heuristics, or an LLM judge (see \S\ref{sec:eval}).}
+\caption{All experimental conditions. \textbf{Instruction}~= instructed target behavior~(T); \textbf{Pattern}~= hardcoded in-context pattern~(P). Apart from \texttt{neutral}, conditions come in mirrored pairs that swap T and P, giving 5 \emph{fixed-output} and 8 \emph{task-based} conditions; for the value, factual, and preference pairs the two directions correspond to instructions that are \emph{aligned} vs.\ \emph{misaligned} with the model's trained priors. \emph{Fixed-output} conditions use exact-match scoring; \emph{task-based} conditions use language detection, format heuristics, or an LLM judge (see \S\ref{sec:eval}). Full details are in Appendix~\ref{app:conditions}.}
 \label{tab:conditions}
 \end{table}

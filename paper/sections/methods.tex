@@ -8,7 +8,7 @@
   \centering
 
   \includegraphics[width=\textwidth]{figures/diagram.png}
-  \caption{Experimental paradigm. A system instruction directs the model to always output~$T$, while $N$ hardcoded conversation turns show the assistant producing pattern~$P$ instead. We measure the instruction-following rate as $N$ increases, across a variety of instruction.}
+  \caption{Experimental paradigm. An instruction directs the model to always output~$T$, while $N$ hardcoded conversation turns show the assistant producing pattern~$P$ instead. We measure the instruction-following rate as $N$ increases, across a variety of instructions.}
   \label{fig:diagram}
 \end{figure}
 
@@ -18,9 +18,9 @@
 \subsection{Core paradigm}
 \label{sec:paradigm}
 
-Each trial presents a model with a conversation consisting of three parts. First, a system prompt (``You are a helpful assistant.'') establishes a generic assistant role. Second, a combined user message concatenates an \emph{instruction} with an initial factual question; the instruction takes the form ``I want you to \texttt{[target description]} as your answer to each one of my questions in this conversation.'' Third, $N$ hardcoded turns follow, each consisting of a factual question paired with a hardcoded assistant response that outputs pattern~P instead of the instructed target~T. Finally, a free-generation turn poses a new factual question for which the model generates its own response. In a secondary analysis, we test an alternative instruction that explicitly informs the model about the hardcoding. All main results use the \emph{no-hint} instruction; hint results are shown in Appendix~\ref{app:hint}.
+Each trial presents a model with a conversation consisting of three parts. First, a system prompt (``You are a helpful assistant.'') establishes a generic assistant role. Second, a combined user message concatenates an \emph{instruction} with an initial factual question; the instruction takes the form ``I want you to \texttt{[target description]} as your answer to each one of my questions in this conversation.'' Third, $N$ hardcoded turns follow, each consisting of a factual question paired with a hardcoded assistant response that outputs pattern~P instead of the instructed target~T. Finally, a free-generation turn poses a new factual question for which the model generates its own response. In a secondary analysis, we test an alternative instruction that explicitly informs the model about the hardcoding. All main results use the \emph{no-hint} instruction; hint results are discussed in Section~\ref{sec:hint}.
 Our main independent variable is $N$, the number of hardcoded turns. We test $N \in \{1, 2, 3, 4, 6, 8, 11, 16, 22, 31, 43, 50\}$ (twelve values, approximately log-spaced). As $N$ increases, the in-context pattern grows stronger while the original instruction recedes in context. We then evaluate whether the model's free-generation response to the last sampled question matches T~(instruction-following, scored~1) or P~(induction-following, scored~0).
-We evaluate 35 question sets per (model, condition, $N$) cell, with decoding temperature set to 0 (Additional T=1 results in Appendix \ref{app:temperature}). Questions drawn from a question bank using deterministic seeds shared across models, for a total of $35 \times 12 = 420$ trials per (model, condition).
+We evaluate 35 question sets per (model, condition, $N$) cell, with decoding temperature set to 0 (Additional T=1 results in Appendix \ref{app:temperature}). Questions drawn from a question bank (see Appendix~\ref{app:conditions}) using deterministic seeds shared across models, for a total of $35 \times 12 = 420$ trials per (model, condition).
 
 
 
@@ -33,15 +33,14 @@ We evaluate 35 question sets per (model, condition, $N$) cell, with decoding tem
 
 \input{figures/tab_conditions}
 
-We test two families of conditions that vary the \emph{content} of P and T while holding the paradigm structure constant (Table~\ref{tab:conditions}).
+We test two families of conditions that vary the content of P and T while holding the paradigm structure constant (Table~\ref{tab:conditions}).
 
-\paragraph{Fixed-output conditions.}
-P and T are fixed tokens; the instruction asks the model to ``always output X'' regardless of the question. This isolates instruction robustness from content generation difficulty. We use five conditions varying whether the instruction aligns with the model's trained values and factual knowledge (neutral, value-aligned/misaligned, factual-aligned/misaligned).
+\begin{itemize}[nosep, topsep=2pt, leftmargin=*]
+  \item \textbf{\emph{Fixed-output} conditions.} P and T are fixed tokens; the instruction asks the model to ``always output X'' regardless of the question. This isolates instruction robustness from content generation difficulty. We use five conditions varying whether the instruction aligns with the model's trained values and factual knowledge (\emph{neutral}, \emph{value-aligned/misaligned}, \emph{factual-aligned/misaligned}).
+  \item \textbf{\emph{Task-based} conditions.} P and T are tasks rather than fixed tokens. The model must perform a meaningful operation on the question content---translating, reformatting, or adopting a persona---and generate a full response. We use eight conditions across four behavior types: translation (2), persona adoption (2), code generation (2), and preference weaving (2). Hardcoded turns use pre-generated LLM responses; further details in Appendix \ref{app:capability}.
+\end{itemize}
 
-\paragraph{Task-based conditions.}
-P and T are tasks rather than fixed tokens. The model must perform a meaningful operation on the question content---translating, reformatting, or adopting a persona---and generate a full response. We use eight conditions across four behavior types: translation (2), persona adoption (2), code generation (2), and preference weaving (2). Hardcoded turns use pre-generated LLM responses; further details in Appendix \ref{app:capability}.
-
-The aligned/misaligned framing applies to both families. A condition is \emph{aligned} when the instruction asks for behavior consistent with the model's trained preferences (e.g., helpfulness-affirming, factually true) and \emph{misaligned} when it conflicts with those priors. Two additional follow-up conditions are introduced in Appendix \ref{app:followup} and discussed in Section \ref{sec:results} to disentangle the factors driving the robustness gap between condition families
+The aligned/misaligned framing applies to both families. A condition is \emph{aligned} when the instruction asks for behavior consistent with the model's trained preferences (e.g., helpfulness-affirming, factually true) and \emph{misaligned} when it conflicts with those priors. Two additional follow-up conditions---a classification condition and a random-facts condition run in two directions, three instructions in total---are introduced in Appendix~\ref{app:followup} and discussed in Section~\ref{sec:results} to disentangle the factors driving the robustness gap between condition families. Together with the 13 main conditions, these make up the 16 instructions evaluated.
 
 
 % ============================================================
@@ -58,7 +57,7 @@ Hermes-4~70B (NousResearch);
 Kimi-K2-Instruct (Moonshot AI);
 Llama~3.1~70B-Instruct and Llama~3.3~70B-Instruct (Meta);
 OLMo~3.1~32B-Instruct (Allen Institute for AI);
-and Qwen3~30B-A3B and Qwen3~235B-A22B (AliBaba). Full model list in Appendix \ref{app:models}.
+and Qwen3~30B-A3B and Qwen3~235B-A22B (Alibaba). Full model list in Appendix \ref{app:models}.
 
 We run two additional comparisons to study specific factors:
 \begin{itemize}[nosep,topsep=2pt]
@@ -78,8 +77,5 @@ We run two additional comparisons to study specific factors:
 \subsection{Evaluation protocol}
 \label{sec:eval}
 
-Each (model, condition, $N$) cell is evaluated with 35 independently seeded question sets under greedy decoding. The score for each trial is binary (1~=~instruction-followed, 0~=~pattern-followed), and cell scores are averaged to yield IF rates. We report aggregate results across conditions and models; per-condition heatmaps appear in Appendix~\ref{app:percondition}.
-
-Scoring uses a per-condition-type scorer (exact match, set-membership, or a panel of three LLM judges reduced by majority vote for language, persona, preference, and code-style conditions); details and inter-rater agreement statistics appear in Appendices~\ref{app:conditions} and~\ref{app:judges}.
-
-We also run a \emph{self-prediction} variant, in which the model is asked to predict whether it will follow the instruction or the pattern before generating its response; results are reported in Appendix~\ref{app:prediction}.
+Each (model, condition, $N$) cell is evaluated with 35 independently seeded question sets under greedy decoding. The score for each trial is binary (1~=~instruction-followed, 0~=~pattern-followed), and cell scores are averaged to yield IF rates. We report aggregate results across conditions and models; per-condition heatmaps appear in Appendix~\ref{app:percondition}. Scoring uses a per-condition-type scorer: exact match (\emph{fixed-output} conditions), automatic language detection (language conditions), a code-format heuristic (code-style conditions), and a panel of three LLM judges reduced by majority vote (persona and preference conditions); details and inter-rater agreement statistics appear in Appendices~\ref{app:conditions} and~\ref{app:judges}.
+% We also run a \emph{self-prediction} variant, in which the model is asked to predict whether it will follow the instruction or the pattern before generating its response; results are reported in Appendix~\ref{app:prediction}.

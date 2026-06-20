@@ -12,51 +12,24 @@
 \subsection{The transition is universal but model-dependent}
 \label{sec:transition}
 
-Every model we tested eventually shows greatly reduced instruction-following as the number of hardcoded turns~$N$ increases, in at least some of the experimental conditions, confirming that induction pressure is a universal phenomenon. However, the transition point varies considerably across models (Table~\ref{tab:results}; Figure ~\ref{fig:heatmaps}; individual model results in Appendix~\ref{app:permodel}). In fixed-output conditions, average instruction-following (IF) rates across all $N$ values range from 0.99 (Llama~3.3~70B) to 0.01 (Qwen3~235B). At $N{=}1$, nearly all models follow instructions at high rates, but by $N{=}3$ only six of thirteen models remain above 50\%. The transition boundary---the first $N$ at which IF rate drops to or below 50\%---spans from $N{=}1$ (GPT-5.2, Hermes-4~70B, Gemini~2.5~Flash, Qwen3~235B) to never crossing the threshold within our range for Llama~3.3~70B, which maintains near-perfect instruction-following at every $N$ tested, including $N{=}50$.
+Every model we tested eventually shows greatly reduced instruction-following as the number of hardcoded turns~$N$ increases, in at least some of the experimental conditions, confirming that induction pressure is a universal phenomenon. However, the transition point varies considerably across models (Table~\ref{tab:results}; Figure ~\ref{fig:heatmaps}; individual model results in Appendix~\ref{app:permodel}). In \emph{fixed-output} conditions, average instruction-following (IF) rates across all $N$ values range from 99\% (Llama~3.3~70B) to 1\% (Qwen3~235B). At $N{=}1$, nearly all models follow instructions at high rates, but by $N{=}3$ only six of thirteen models remain above 50\%. The transition boundary---the first $N$ at which IF rate drops to or below 50\%---spans from $N{=}1$ (GPT-5.2, Hermes-4~70B, Gemini~2.5~Flash, Qwen3~235B) to never crossing the threshold within our range for Llama~3.3~70B, which maintains near-perfect instruction-following at every $N$ tested, including $N{=}50$.
 
 \paragraph{Ranking is consistent across condition families.}
-The model ranking is broadly preserved between fixed-output and task-based conditions, though task-based conditions, which require the model to generate full responses rather than single tokens, show higher average IF rates overall. In these conditions, GPT-5.2 maintains the latest transition point ($N{=}43$), followed by Claude~Opus~4.6 ($N{=}31$), then Claude~Sonnet~4.6 and Llama~3.3~70B ($N{=}22$).
+The model ranking is broadly preserved between \emph{fixed-output} and \emph{task-based} conditions, though \emph{task-based} conditions, which require the model to generate full responses rather than single tokens, show higher average IF rates overall. In these conditions, GPT-5.2 maintains the latest transition point ($N{=}43$), followed by Claude~Opus~4.6 ($N{=}31$), then Claude~Sonnet~4.6 and Llama~3.3~70B ($N{=}22$).
 
 \subsection{Robustness is easier for task-based instructions.}
 \label{sec:diversity}
 
-Task-based conditions consistently produce higher instruction-following rates than fixed-output conditions (Figure \ref{fig:heatmap-dynamic}; Table~\ref{tab:results}).
-Two properties distinguish these condition families: task-based conditions require the model to engage with the question content to produce a well-formed response, and their outputs are varied and natural-sounding across turns, whereas fixed-output conditions require only a single repeated token, a rather unnatural response for a language model. Either property, or both, could explain the robustness gap; we design two follow-up conditions to disentangle these factors.
-In the \emph{classify-question} condition, the model reads each question and classifies it as ``science'' or ``humanities''. This task requires engagement with the user's question but produces single-token outputs matching the format of fixed-output conditions. The \emph{random-facts} condition produces 1--3 sentence free-text responses about a fixed topic, unrelated to the input question.
-We evaluate all 13 core models on the new conditions (Table~\ref{tab:followup-main}; per-model breakdown in Appendix~\ref{app:followup}). The results suggest that content engagement is not the primary driver: the \emph{classify-question} condition gives only a modest improvement over the fixed-output baseline ($\Delta{=}{+}0.07$ IF, $p{=}0.034$) and remains below task-based, while the \emph{random-facts} condition matches or slightly exceeds task-based robustness ($\Delta{=}{+}0.07$ vs.\ task-based, $p{=}0.10$). See Section \ref{sec:discussion} for possible interpretations of these findings.
-
-\begin{table}[h]
-\centering
-\small
-\begin{tabular}{lc}
-\toprule
-\textbf{Condition group} & \textbf{Mean IF} \\
-\midrule
-Fixed-output (neutral) & 0.31 \\
-Classify --- single-token, question-engaged & 0.38 \\
-Random-facts --- diverse, question-ignored & 0.50 \\
-Task-based (avg) & 0.43 \\
-\bottomrule
-\end{tabular}
-\caption{Mean instruction-following across the 13 core models for the $2\times2$ engagement~$\times$~diversity follow-up ($T{=}0$, no-hint, 35 trials/cell, averaged over both random-facts directions). Output diversity (random-facts), not question engagement (classify), accounts for the task-based robustness gap.}
-\label{tab:followup-main}
-\end{table}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.85\linewidth]{\plotsroot/dynamic/f3_followup_by_model.png}
-\caption{Mean IF rate by condition group for all 13 core models. Orange bars are the follow-up conditions (random-facts and classify); grey bars are the fixed-output and task-based baselines. Random-facts (output diversity) tracks the task-based level, whereas classify (question engagement, single-token output) stays near the fixed-output baseline.}
-\label{fig:followup-by-model}
-\end{figure}
+\emph{Task-based} conditions consistently produce higher instruction-following rates than \emph{fixed-output} conditions (Figure \ref{fig:heatmap-dynamic}; Table~\ref{tab:results}). We show in \S\ref{sec:diversity-followup} that this gap is driven by \emph{output diversity} rather than engagement with the question content.
 
 \paragraph{Capability predicts task-based but not fixed-output robustness.}
-We correlate each model's average IF rate with two external benchmarks: GPQA \citep{rein_gpqa_2023} and IFBench \citep{pyatkin_generalizing_2025} (Figure~\ref{fig:capability}; additional analysis in Appendix~\ref{app:capability}). Once again, the results differ between fixed-output and task-based conditions. In fixed-output conditions, neither benchmark achieves a significant correlation (all $p > 0.28$). In task-based conditions, both correlations are positive, with IFBench approaching significance ($r{=}0.55$, $p{=}0.052$) and GPQA showing a moderate trend ($r{=}0.35$, $p{=}0.24$). This divergence suggests that task-based robustness draws on some of the same capabilities measured by general benchmarks, whereas fixed-output robustness is a distinct property unrelated to general intelligence.
+We correlate each model's average IF rate with two external benchmarks: GPQA \citep{rein_gpqa_2023} and IFBench \citep{pyatkin_generalizing_2025} (Figure~\ref{fig:capability}; additional analysis in Appendix~\ref{app:capability}). Once again, the results differ between \emph{fixed-output} and \emph{task-based} conditions. In \emph{fixed-output} conditions, neither benchmark achieves a significant correlation (all $p > 0.28$). In \emph{task-based} conditions, both correlations are positive, with IFBench approaching significance ($r{=}0.55$, $p{=}0.052$) and GPQA showing a moderate trend ($r{=}0.35$, $p{=}0.24$). This divergence suggests that \emph{task-based} robustness draws on some of the same capabilities measured by general benchmarks, whereas \emph{fixed-output} robustness is a distinct property unrelated to general intelligence.
 
 \input{figures/fig_heatmaps}
 % \input{figures/fig_capability}
 
 \paragraph{The Llama anomaly.}
-Both Llama~3.1 and 3.3~70B perform substantially above the next best model in fixed-output conditions. Even at $N{=}50$, Llama~3.3 maintains an IF rate of 0.95. This outlier performance persists across all condition types and is not explained by model scale or intelligence (both are 70B parameters). Possible explanations include Meta's emphasis on system prompt adherence during post-training, chat template effects, or training data composition. We consider this an open question warranting further investigation. Appendix \ref{app:training} shows further comparison between the two Llama versions.
+Both Llama~3.1 and 3.3~70B perform substantially above the next best model in \emph{fixed-output} conditions. Even at $N{=}50$, Llama~3.3 maintains an IF rate of 95\%. This outlier behavior persists across all condition types and is not explained by model scale or intelligence (both are 70B parameters, smaller than the largest models tested). Possible explanations include Meta's emphasis on instruction adherence during post-training, chat template effects, or training data composition. We consider this an open question warranting further investigation. Appendix \ref{app:training} shows further comparison between the two Llama versions.
 
 
 % ============================================================
@@ -69,12 +42,19 @@ Both Llama~3.1 and 3.3~70B perform substantially above the next best model in fi
 \subsection{Content alignment modulates the transition}
 \label{sec:alignment}
 
-\input{figures/fig_per_condition}
 \input{figures/tab_alignment_gap}
 
-Models are not neutral instruction-followers: the \emph{content} of the instruction modulates how strongly they adhere to it under induction pressure (Table~\ref{tab:alignment-gap}; per-model plot in Figure~\ref{fig:alignment-gap}, Appendix~\ref{app:percondition}). In fixed-output conditions, value-aligned instructions (``always respond with `I love being helpful'\,'') yield a mean IF rate of 0.32, compared to 0.18 for value-misaligned instructions (``always respond with `I hate being helpful'\,''), a gap of 14 percentage points. Factual alignment shows a similar pattern: factually correct instructions (0.32) sustain higher IF than factually false ones (0.22), a 10-point gap.
+We find that the content of the instruction modulates how strongly models adhere to it under induction pressure (Table~\ref{tab:alignment-gap}, Figure~\ref{fig:alignment-curves}; per-model plot in Figure~\ref{fig:alignment-gap}, Appendix~\ref{app:percondition}). In \emph{fixed-output} conditions, \emph{value-aligned} instructions (such as ``always respond with `I love being helpful'\,'') yield a mean IF rate of 32\%, compared to 18\% for \emph{value-misaligned} instructions (``always respond with `I hate being helpful'\,''), a gap of 14 percentage points. We also test a factual alignment condition which shows a similar pattern: factually correct instructions lead to higher IF rates than factually false ones (32\% vs 22\%).
 
-The alignment effect is highly uneven across models. Claude~Opus~4.6 shows the largest gap: 0.87 aligned vs.\ 0.06 misaligned (an 81-point difference). Claude~Sonnet~4.6 (28-point gap) and GPT-5.2 (22-point gap) also show large effects. In contrast, Llama~3.3~70B (1-point gap) and Gemma-3~27B (0-point gap) are effectively alignment-neutral, either because they follow instructions regardless (Llama) or because they do not (Gemma).
+The alignment effect is highly uneven across models. Claude~Opus~4.6 shows the largest gap: 87\% aligned vs.\ 6\% misaligned (an 81-point difference). Claude~Sonnet~4.6 (28-point gap) and GPT-5.2 (22-point gap) also show large effects. In contrast, Llama~3.3~70B (1-point gap) and Gemma-3~27B (0-point gap) are effectively alignment-neutral, either because they follow instructions regardless (Llama) or because they do not (Gemma).
+
+
+\subsection{Output diversity, not task engagement, explains the gap}
+\label{sec:diversity-followup}
+
+Two properties distinguish \emph{task-based} from \emph{fixed-output} conditions in our experiment: \emph{task-based} conditions require the model to engage with the question content to produce a well-formed response, and their outputs are varied and natural-sounding across turns, whereas \emph{fixed-output} conditions require only a single repeated token. Either property, or both, could explain the robustness gap, so we design two follow-up conditions to disentangle them. In the \emph{classify-question} condition the model reads each question and classifies it (single-token output, but question-engaged); the \emph{random-facts} condition produces 1--3 sentence free-text responses about a fixed topic, unrelated to the input question (longer, diverse output, question-ignored). Evaluated on all 13 core models (Table~\ref{tab:followup-main}, Figure~\ref{fig:followup-curves}; per-model breakdown in Appendix~\ref{app:followup}), content engagement is not the primary driver: \emph{classify} gives only a modest improvement over the \emph{fixed-output} baseline ($+7$ percentage points, $p{=}0.034$) and stays below \emph{task-based}, while \emph{random-facts} matches or slightly exceeds \emph{task-based} robustness ($+7$ points vs.\ \emph{task-based}, $p{=}0.10$). Output diversity, not semantic engagement with the input, is therefore the primary factor distinguishing robust from fragile conditions; see \S\ref{sec:discussion} for interpretation.
+
+\input{figures/tab_followup_main}
 
 
 
@@ -101,19 +81,17 @@ The alignment effect is highly uneven across models. Claude~Opus~4.6 shows the l
 \subsection{Flagging the hardcoding mitigates but does not resolve the conflict}
 \label{sec:hint}
 
-\input{figures/fig_hint}
+% \input{figures/fig_hint}  % hint figure removed for now; per-model gains are in Table~\ref{tab:results}
 
-The main results use an instruction that says nothing about the structure of the conversation. We test whether \emph{explicitly flagging} the manipulation helps: a \emph{hint} instruction tells the model that the preceding assistant turns were artificially hardcoded and that it should still produce~$T$ (full wording in Appendix~\ref{app:hint}). Sweeping all 13 core models across all conditions at $T{=}0$, the hint raises instruction-following in both families---by $+0.14$ on fixed-output ($0.27 \to 0.41$; paired $t(12){=}1.78$, $p{=}0.10$; 9 of 13 models improve) and $+0.11$ on task-based ($0.43 \to 0.54$; $t(12){=}3.74$, $p{=}0.003$; 10 of 13 improve). The gain is large for some models (OLMo~3.1~32B $+0.69$ fixed-output, Claude~Opus~4.6 $+0.46$, Gemma-3~12B $+0.45$) but strongly heterogeneous (Figure~\ref{fig:hint}); the two Llama models, already near ceiling without the hint, regress slightly ($-0.27$ and $-0.26$), which is what keeps the fixed-output effect short of significance. Per-model values for both families are in Appendix~\ref{app:hint}.
-
-Crucially, the hint \emph{mitigates but does not resolve} the conflict: even when the prior turns are explicitly flagged as hardcoded and to be discounted, mean instruction-following stays at 0.41 and 0.54---far below~1---so models keep drifting toward the pattern as $N$ grows. The behaviour we measure is therefore not a model resolving a genuine ambiguity in its favour, but induction pressure overriding an instruction the model has been told, unambiguously, to keep.
+The main results use an instruction that says nothing about the structure of the conversation. We test whether \emph{explicitly flagging} the manipulation helps: a \emph{hint} instruction tells the model that the preceding assistant turns were artificially hardcoded and that it should still produce~$T$. Sweeping all 13 models across all conditions at $T{=}0$, the hint raises instruction-following in both families---by 14 percentage points on \emph{fixed-output} ($27\% \to 41\%$; paired $t(12){=}1.78$, $p{=}0.10$; 9 of 13 models improve) and 11 points on \emph{task-based} ($43\% \to 54\%$; $t(12){=}3.74$, $p{=}0.003$; 10 of 13 improve). The gain is large for some models (OLMo~3.1~32B $+69$ \emph{fixed-output}, Claude~Opus~4.6 $+46$, Gemma-3~12B $+45$) but strongly heterogeneous (per-model gains in Table~\ref{tab:results}); the two Llama models, already near ceiling without the hint, regress slightly ($-27$ and $-26$ points), which is what keeps the \emph{fixed-output} effect short of significance. The per-condition breakdown is in Appendix~\ref{app:hint}. Overall, we find that the hint mitigates but does not resolve the conflict: even when the prior turns are explicitly flagged as hardcoded and to be discounted, mean instruction-following stays at 41\% and 54\%---far below ceiling---so models keep drifting toward the pattern as $N$ grows. %The behaviour we measure is therefore not a model resolving a genuine ambiguity in its favour, but induction pressure overriding an instruction the model has been told, unambiguously, to keep.
 
 \subsection{Reasoning lengthens but does not eliminate the transition}
 \label{sec:reasoning}
 
 \input{figures/tab_reasoning}
 
-In the two models tested, reasoning raises instruction-following rates (Table~\ref{tab:reasoning}). GPT-5.2-medium (reasoning) achieves an average IF of 0.65 in fixed-output conditions and 0.88 in task-based conditions, compared to 0.17 and 0.56 for GPT-5.2 (non-reasoning). Hermes-4~70B-reasoning (0.68 fixed-output) dramatically outperforms Hermes-4~70B (0.03). In task-based conditions, GPT-5.2-medium never crosses the 50\% threshold within our $N$ range, maintaining higher IF than any non-reasoning model.
-Qualitative analysis of Hermes-4~70B reasoning traces reveals cases of deliberation-output dissociation: the model sometimes reasons correctly through the conflict and then outputs the pattern token regardless. See Appendix \ref{app:traces} for examples of reasoning traces. 
+In the two models tested, reasoning raises instruction-following rates (Table~\ref{tab:reasoning}). GPT-5.2-medium (reasoning) achieves an average IF of 53\% in \emph{fixed-output} conditions and 88\% in \emph{task-based} conditions, compared to 10\% and 56\% for GPT-5.2 (non-reasoning). Hermes-4~70B-reasoning (72\% \emph{fixed-output}) dramatically outperforms Hermes-4~70B (2\%). In \emph{task-based} conditions, GPT-5.2-medium never crosses the 50\% threshold within our $N$ range, maintaining higher IF than any non-reasoning model.
+Qualitative analysis of Hermes-4~70B reasoning traces reveals cases of deliberation-output dissociation: the model sometimes works through the conflict and commits to the instructed target~T in its reasoning, then outputs the pattern token~P regardless. See Appendix \ref{app:traces} for examples of reasoning traces. 
 
 
 % (Self-prediction is reported in Appendix~\ref{app:prediction}.)

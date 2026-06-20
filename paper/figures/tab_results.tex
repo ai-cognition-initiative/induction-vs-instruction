@@ -2,31 +2,32 @@
 \centering
 \small
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{l rr rr}
+\renewcommand{\arraystretch}{0.92}
+\begin{tabular}{l rrr rrr}
 \toprule
- & \multicolumn{2}{c}{Fixed-output} & \multicolumn{2}{c}{Task-based} \\
-\cmidrule(lr){2-3} \cmidrule(lr){4-5}
+ & \multicolumn{3}{c}{\emph{Fixed-output}} & \multicolumn{3}{c}{\emph{Task-based}} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7}
 \textbf{Model}
-  & \textbf{Avg IF} & \textbf{$N_{50\%}$}
-  & \textbf{Avg IF} & \textbf{$N_{50\%}$} \\
+  & \textbf{Avg IF} & \textbf{$N_{50\%}$} & \textbf{Hint $\Delta$}
+  & \textbf{Avg IF} & \textbf{$N_{50\%}$} & \textbf{Hint $\Delta$} \\
 \midrule
-Llama 3.3 70B         & $99${~[98--100]}\%  & ---  & $70${~[62--78]}\%  & 22 \\
-Llama 3.1 70B         & $89${~[82--96]}\%   & 50   & $57${~[48--66]}\%  & 16 \\
-Claude Opus 4.6       & $49${~[38--60]}\%   & 16   & $71${~[64--78]}\%  & 31 \\
-Claude Sonnet 4.6     & $41${~[30--53]}\%   & 8    & $62${~[55--70]}\%  & 22 \\
-Gemma-3 12B           & $26${~[16--35]}\%   & 3    & $31${~[23--39]}\%  & 3  \\
-Kimi K2               & $13${~[5--20]}\%    & 2    & $54${~[46--62]}\%  & 11 \\
-OLMo 3.1 32B          & $11${~[4--18]}\%    & 2    & $22${~[16--29]}\%  & 3  \\
-GPT-5.2               & $10${~[5--15]}\%    & 1    & $57${~[52--63]}\%  & 43 \\
-Gemma-3 27B           & $8${~[1--15]}\%     & 2    & $38${~[30--47]}\%  & 6  \\
-Qwen3 30B A3B         & $4${~[0--9]}\%      & 2    & $42${~[33--50]}\%  & 6  \\
-Gemini 2.5 Flash      & $2${~[0--6]}\%      & 1    & $19${~[13--26]}\%  & 2  \\
-Hermes-4 70B          & $2${~[0--5]}\%      & 1    & $4${~[1--7]}\%     & 1  \\
-Qwen3 235B A22B       & $1${~[0--3]}\%      & 1    & $32${~[25--40]}\%  & 6  \\
+Llama 3.3 70B     & $99$~\textit{[98--100]}\% & ---  & $-27$\% & $70$~\textit{[62--78]}\% & 22 & $0$\%   \\
+Llama 3.1 70B     & $89$~\textit{[82--96]}\%  & 50   & $-26$\% & $57$~\textit{[48--66]}\% & 16 & $+4$\%  \\
+Claude Opus 4.6   & $49$~\textit{[38--60]}\%  & 16   & $+46$\% & $71$~\textit{[64--78]}\% & 31 & $+18$\% \\
+Claude Sonnet 4.6 & $41$~\textit{[30--53]}\%  & 8    & $+15$\% & $62$~\textit{[55--70]}\% & 22 & $+18$\% \\
+Gemma-3 12B       & $26$~\textit{[16--35]}\%  & 3    & $+45$\% & $31$~\textit{[23--39]}\% & 3  & $+8$\%  \\
+Kimi K2           & $13$~\textit{[5--20]}\%   & 2    & $+17$\% & $53$~\textit{[46--62]}\% & 11 & $+10$\% \\
+OLMo 3.1 32B      & $11$~\textit{[4--18]}\%   & 2    & $+69$\% & $23$~\textit{[16--29]}\% & 3  & $+38$\% \\
+GPT-5.2           & $10$~\textit{[5--15]}\%   & 1    & $+4$\%  & $56$~\textit{[52--63]}\% & 43 & $-1$\%  \\
+Gemma-3 27B       & $8$~\textit{[1--15]}\%    & 2    & $+22$\% & $39$~\textit{[30--47]}\% & 6  & $+14$\% \\
+Qwen3 30B A3B     & $4$~\textit{[0--9]}\%     & 2    & $-4$\%  & $41$~\textit{[33--50]}\% & 6  & $+12$\% \\
+Gemini 2.5 Flash  & $2$~\textit{[0--6]}\%     & 1    & $+7$\%  & $20$~\textit{[13--26]}\% & 2  & $+20$\% \\
+Hermes-4 70B      & $2$~\textit{[0--5]}\%     & 1    & $-2$\%  & $4$~\textit{[1--7]}\%    & 1  & $-2$\%  \\
+Qwen3 235B A22B   & $1$~\textit{[0--3]}\%     & 1    & $+11$\% & $33$~\textit{[25--40]}\% & 6  & $+8$\%  \\
 \midrule
-\textit{Grand mean}   & \textit{27\%} & \textit{7} & \textit{43\%} & \textit{13} \\
+\textit{Grand mean} & \textit{27\%} & \textit{7} & \textit{$+14$\%} & \textit{43\%} & \textit{13} & \textit{$+11$\%} \\
 \bottomrule
 \end{tabular}
-\caption{Per-model results. \textbf{Avg IF}: average instruction-following rate across all $N$ values and conditions; 95\% CIs in brackets. \textbf{$N_{50\%}$}: first $N$ at which mean IF rate $\leq 50\%$; ``---'' = never crossed within $N \leq 50$.}
+\caption{Per-model results. \textbf{Avg IF}: average instruction-following rate across all $N$ values and conditions; 95\% CIs in brackets. \textbf{$N_{50\%}$}: first $N$ at which mean IF rate $\leq 50\%$; ``---'' = never crossed within $N \leq 50$. \textbf{Hint $\Delta$}: change in average IF (percentage points) when the instruction warns the model about the presence of prefilled turns (\S\ref{sec:hint}); the per-condition breakdown is in Appendix~\ref{app:hint}.}
 \label{tab:results}
 \end{table}

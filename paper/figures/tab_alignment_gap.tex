@@ -1,7 +1,8 @@
-\begin{table}[t]
+\begin{figure}[t]
+\begin{minipage}[c]{0.5\linewidth}
   \centering
   \small
-  \setlength{\tabcolsep}{6pt}
+  \setlength{\tabcolsep}{5pt}
   \begin{tabular}{l rr}
   \toprule
   \textbf{Model} & \textbf{Fixed} & \textbf{Task} \\
@@ -23,6 +24,14 @@
   \textit{Grand mean}   & \textit{$+12$\%} & \textit{$+4$\%} \\
   \bottomrule
   \end{tabular}
-  \caption{Alignment gap per model (aligned$-$misaligned IF rate). \textbf{Fixed} = value$+$factual condition pairs; \textbf{Task} = preference condition pairs. Positive values indicate the model follows aligned instructions more often. The corresponding per-model plot is in Figure~\ref{fig:alignment-gap} (Appendix~\ref{app:percondition}).}
+  \captionof{table}{Alignment gap per model (aligned$-$misaligned IF rate). \textbf{Fixed} = value$+$factual condition pairs; \textbf{Task} = preference condition pairs. Positive values indicate the model follows aligned instructions more often. The per-model plot is in Figure~\ref{fig:alignment-gap}.}
   \label{tab:alignment-gap}
-\end{table}
+\end{minipage}%
+\hfill
+\begin{minipage}[c]{0.46\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{\plotsroot/static/d5_alignment_curves.png}
+  \caption{Mean IF rate vs.\ $N$ for aligned vs.\ misaligned instructions, averaged over the value and factual condition pairs and the 13 models (bands: $\pm1$ SE across models). Aligned instructions sustain a higher instruction-following rate than misaligned ones at every $N$.}
+  \label{fig:alignment-curves}
+\end{minipage}
+\end{figure}

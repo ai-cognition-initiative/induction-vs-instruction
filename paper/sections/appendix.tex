@@ -94,7 +94,7 @@ Task-based conditions require the model to generate full responses in a target b
 \end{itemize}
 
 \paragraph{Pre-generated data.}
-Task-based conditions require pre-generated hardcoded responses stored in \texttt{data/hardcoded\_responses/}. Language conditions use LLM-translated questions. Persona conditions use LLM-generated responses in the target persona style. Style case conditions are computed deterministically by applying \texttt{.upper()} or \texttt{.lower()} to a base set of neutral LLM-generated answers (\texttt{style\_base.json}). Code language conditions use LLM-generated solutions in each language. Preference weaving conditions use LLM-generated answers that naturally incorporate the stated preference. All pre-generation is performed once before evaluation and held fixed across all models and runs.
+Task-based conditions require pre-generated hardcoded responses stored in \texttt{data/hardcoded\_responses/}. Language conditions use LLM-translated questions. Persona conditions use LLM-generated responses in the target persona style. Code language conditions use LLM-generated solutions in each language. Preference weaving conditions use LLM-generated answers that naturally incorporate the stated preference. All pre-generation is performed once before evaluation and held fixed across all models and runs.
 
 \paragraph{Question banks.}
 Most conditions draw from a shared bank of factual questions. Code language conditions use a dedicated bank of programming questions, and preference weaving conditions use a bank of subjective questions (\texttt{questions\_subjective.json}) to provide natural opportunities for preference expression. Each question bank has around 200 questions. Examples from each:
@@ -159,6 +159,10 @@ The SFT+DPO+RLVR variant is served via OpenRouter. The SFT-only and SFT+DPO chec
 \section{Per-condition results}
 \label{app:percondition}
 
+Figure~\ref{fig:per-condition} shows the average instruction-following rate for each individual condition (averaged over all $N$ values and models); within both families, value- and factual-aligned instructions sustain modestly higher IF than their misaligned counterparts.
+
+\input{figures/fig_per_condition}
+
 Figures~\ref{fig:app-percond-static} and~\ref{fig:app-percond-dynamic} show average instruction-following rates broken down by condition and model. Error bars show $\pm 1$ standard error across question seeds. Models are sorted by overall IF rate (highest at top).
 
 \begin{figure}[H]
@@ -195,6 +199,155 @@ Transition curves for each model individually, averaged across fixed-output cond
 \noindent\includegraphics[width=\linewidth]{\plotsroot/appendix-per-model/per_model_row_06.png}\\[-2pt]
 \noindent\includegraphics[width=\linewidth]{\plotsroot/appendix-per-model/per_model_row_07.png}\\[4pt]
 \noindent\includegraphics[width=0.5\linewidth]{\plotsroot/appendix-per-model/per_model_row_08.png}
+
+\section{Follow-up conditions}
+\label{app:followup}
+
+Under the initial 13 conditions we evaluated, models resist induction pressure more in task-based conditions  than fixed-output conditions. Two properties distinguish task-based from fixed-output conditions: (1)~the model must \emph{engage with the question content} to produce a well-formed response, and (2)~the responses themselves are \emph{long and varied} across turns. Either property, or both jointly, could explain the increased robustness. We design two follow-up conditions to disentangle these factors.
+
+\subsection{Random facts condition}
+
+This tests whether response naturalness and diversity, without question engagement, confers instruction resistance. The model is instructed to produce 1--3 sentences on a fixed topic (either geography or animals), ignoring the user's question entirely. Hardcoded turns contain pre-generated passages on the pattern topic. The model's output is scored by an LLM judge that classifies whether the response is about the target topic or the pattern topic.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lllp{5.5cm}}
+\toprule
+\textbf{Condition} & \textbf{T (Target)} & \textbf{P (Pattern)} & \textbf{Instruction} \\
+\midrule
+\texttt{random\_geography\_animals} & animals & geography & ``write 1--3 sentences about a random animal'' \\
+\texttt{random\_animals\_geography} & geography & animals & ``write 1--3 sentences about a random geography topic'' \\
+\bottomrule
+\end{tabular}
+\caption{Random facts conditions. T~= instructed target topic; P~= hardcoded pattern topic. Both conditions use an LLM judge scorer and draw from the factual question bank (questions are ignored by design).}
+\label{tab:randomfacts-conditions}
+\end{table}
+
+If these conditions show the same high resistance as task-based conditions, despite not needing any engagement with the user's question, then the naturalness of the response might be the primary driver of robustness.
+
+\subsection{Classification condition}
+
+The classification condition tests the converse: whether question engagement alone, with single-token output, confers instruction resistance. The model must read each question, classify it into one of two categories, and respond with only that category word. This requires engagement with the question content, but the output format is as constrained as a fixed-output condition. The hardcoded pattern is ``economics''---a plausible category label that no question in the factual bank actually falls under, ensuring clean separation between correct classification and pattern-following.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lllp{5.5cm}}
+\toprule
+\textbf{Condition} & \textbf{T (Target)} & \textbf{P (Pattern)} & \textbf{Instruction} \\
+\midrule
+\texttt{classify\_sh\_economics} & science / humanities & economics & ``classify each question as either `science' or `humanities' and respond with ONLY that one word'' \\
+\bottomrule
+\end{tabular}
+\caption{Classification condition. T~= any valid category; P~= hardcoded pattern token. Scored by exact match against the valid category set (target) or the pattern token.}
+\label{tab:classify-conditions}
+\end{table}
+
+If the classification condition resists induction like task-based conditions despite single-token output, then question engagement---not response diversity---is the key factor. Together with the random-facts condition, the $2 \times 2$ design (engagement $\times$ diversity) isolates each factor's contribution.
+
+\subsection{Results}
+\label{app:followup-results}
+
+All 13 core models were evaluated on both follow-up conditions.
+Table~\ref{tab:followup} reports average IF rates per model alongside the neutral (fixed-output) and task-based baselines.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+\textbf{Model} & \textbf{Neutral} & \textbf{Classify} & \textbf{RF (a$\to$g)} & \textbf{RF (g$\to$a)} & \textbf{Task-based} \\
+\midrule
+Claude Opus 4.6    & 60\% & 73\% & 93\% & 85\% & 71\% \\
+Claude Sonnet 4.6  & 48\% & 51\% & 76\% & 85\% & 62\% \\
+Gemini 2.5 Flash   & 8\%  & 11\% & 19\% & 23\% & 20\% \\
+Gemma-3 12B        & 22\% & 25\% & 27\% & 32\% & 31\% \\
+Gemma-3 27B        & 9\%  & 18\% & 42\% & 40\% & 39\% \\
+GPT-5.2            & 6\%  & 17\% & 79\% & 94\% & 56\% \\
+Hermes-4 70B       & 8\%  & 9\%  & 10\% & 18\% & 4\%  \\
+Kimi K2            & 23\% & 33\% & 49\% & 71\% & 53\% \\
+Llama 3.1 70B      & 100\% & 88\% & 57\% & 67\% & 57\% \\
+Llama 3.3 70B      & 100\% & 93\% & 51\% & 73\% & 70\% \\
+OLMo 3.1 32B       & 11\% & 41\% & 47\% & 64\% & 23\% \\
+Qwen3 235B A22B    & 6\%  & 22\% & 32\% & 31\% & 33\% \\
+Qwen3 30B A3B      & 8\%  & 18\% & 16\% & 30\% & 41\% \\
+\midrule
+\textbf{Mean}      & 31\% & 38\% & 46\% & 55\% & 43\% \\
+\bottomrule
+\end{tabular}
+\caption{Average IF rates for follow-up conditions and baselines (13 models; $T{=}0$, no-hint, 35 trials/cell). Neutral is the fixed-output baseline (\texttt{neutral}); Task-based is the average across all task-based dynamic conditions. RF (a$\to$g)~= \texttt{random\_animals\_geography}; RF (g$\to$a)~= \texttt{random\_geography\_animals}. Mean is unweighted across models.}
+\label{tab:followup}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\linewidth]{\plotsroot/dynamic/f3_followup_by_model.png}
+  \caption{Mean IF rate by condition group for all 13 core models. Orange bars are the follow-up conditions (random-facts and classify); grey bars are the fixed-output and task-based baselines. Random-facts (output diversity) tracks the task-based level, whereas classify (question engagement, single-token output) stays near the fixed-output baseline.}
+  \label{fig:followup-by-model}
+\end{figure}
+
+\paragraph{Classify condition.}
+The classify condition, which requires reading each question to produce a single-token response, sits between the fixed-output baseline and the task-based average. Its grand mean of 0.38 is significantly above the neutral baseline of 0.31 (paired $t(12){=}2.40$, $p{=}0.034$, $\Delta{=}{+}0.07$), but not significantly different from the task-based average of 0.43 ($t(12){=}{-}0.86$, $p{=}0.41$). The median model crosses the 50\% IF threshold at $N{=}4$ on classify, compared to $N{=}2$ on neutral and $N{=}8$ on task-based, placing classify roughly midway. For most models the absolute gap to neutral is small: GPT-5.2 ($N_{50}{=}2$), Gemini~2.5~Flash ($N_{50}{=}2$), and Qwen3~235B ($N_{50}{=}4$) collapse almost as quickly as on neutral, while OLMo~3.1 ($N_{50}{=}8$) and Claude~Opus~4.6 ($N_{50}{=}22$) show meaningful resistance. Question engagement alone provides only a modest boost over fixed-output, much smaller than the boost provided by output diversity (below).
+
+\paragraph{Random-facts condition.}
+The random-facts condition, which produces 1--3 sentence responses on a fixed topic while \emph{ignoring} the question, shows substantially stronger instruction-following than the fixed-output baseline and slightly exceeds the task-based average. Averaged over both directions the grand mean is 0.50, $\Delta{=}{+}0.19$ above neutral (paired $t(12){=}2.16$, $p{=}0.052$) and $\Delta{=}{+}0.07$ above task-based ($t(12){=}1.81$, $p{=}0.096$). The g$\to$a direction (mean 0.55) crosses the 50\% threshold at $N{=}16$ across models, later than task-based ($N{=}8$) and much later than neutral ($N{=}2$). GPT-5.2 and Claude~Opus~4.6 maintain high IF rates across all $N$ values, never crossing 50\% on either direction; even relatively weak models like Gemma-3~27B and OLMo~3.1 sustain above-chance instruction-following through $N{=}8$--16, a stark contrast with the $N_{50}{=}3$ they show on neutral.
+
+\paragraph{Interpretation.}
+The $2{\times}2$ design isolates the responsible factor: response diversity without question engagement (random-facts) replicates---and slightly exceeds---the robustness of task-based conditions, while question engagement without diversity (classify) produces only a modest improvement over the fixed-output baseline. \emph{Output diversity}, not semantic engagement with the input, appears to be the primary mechanism by which task-based conditions resist induction pressure. A plausible explanation is that single-token outputs present the same surface structure as the hardcoded pattern turns, making the induction signal maximally salient; diverse multi-sentence outputs break this structural regularity and reduce the effective strength of the pattern.
+
+Two ceiling-bound models (Llama~3.1~70B and Llama~3.3~70B) are partial exceptions: their near-perfect instruction-following on neutral and classify (1.00 and ${\sim}0.90$ respectively) leaves limited room to detect differential effects. The contrast is clearest in the mid-range models---GPT-5.2, OLMo~3.1, Claude~Sonnet, Kimi~K2---where neutral and classify collapse early while random-facts holds up.
+
+% ============================================================
+% D. REPRODUCIBILITY AND DISCLOSURE
+% ============================================================
+
+\section{Effect of the hardcoding hint}
+\label{app:hint}
+
+The standard instruction used in all main results gives no information about the structure of the conversation: the model is not told that the preceding assistant turns were artificially hardcoded.
+We additionally test a \emph{hint} instruction that makes the hardcoding explicit:
+``\ldots I'm going to include a series of questions and answers where I hardcode the assistant's outputs to \texttt{[pattern description]}. At some point the hardcoding will stop and your answer will no longer be forced. Take care to always \texttt{[target description]}.''
+This tests whether meta-awareness of the manipulation changes how strongly models adhere to the original instruction. The headline effect is reported in the main text (\S\ref{sec:hint}, Table~\ref{tab:results}); here we give the per-condition breakdown.
+
+\paragraph{Setup.}
+The hint is evaluated at $T{=}0$ with 35 trials per cell on all 13 core models, across all 13 conditions (5 fixed-output, 8 task-based), on the same $N$ grid as the no-hint baseline, so hint vs.\ no-hint is a matched comparison.
+
+\paragraph{Results.}
+Table~\ref{tab:hint} reports per-model average IF without and with the hint, separately for the two condition families. The hint raises mean IF by $+0.14$ on fixed-output ($0.27 \to 0.41$; paired $t(12){=}1.78$, $p{=}0.10$; 9/13 models improve) and by $+0.11$ on task-based ($0.43 \to 0.54$; $t(12){=}3.74$, $p{=}0.003$; 10/13 improve). The effect is strongly model-dependent: OLMo~3.1~32B gains most ($+0.69$ fixed-output, $+0.38$ task-based), followed by Claude~Opus~4.6 ($+0.46$ / $+0.18$) and Gemma-3~12B ($+0.45$ fixed-output). The two Llama models are the exception: already near ceiling on fixed-output without the hint (0.89 and 0.99), they regress under it ($-0.26$ and $-0.27$), which is what keeps the fixed-output mean effect short of significance. Even with the hint, mean IF remains 0.41 and 0.54---far below~1: flagging the hardcoded turns helps but does not make models robust.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+ & \multicolumn{3}{c}{\textbf{Fixed-output}} & \multicolumn{3}{c}{\textbf{Task-based}} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+\textbf{Model} & No hint & Hint & $\Delta$ & No hint & Hint & $\Delta$ \\
+\midrule
+Claude Sonnet 4.6 & 41\% & 56\% & $+15$\% & 62\% & 80\% & $+18$\% \\
+Claude Opus 4.6   & 49\% & 96\% & $+46$\% & 71\% & 89\% & $+18$\% \\
+Gemini 2.5 Flash  & 2\%  & 9\%  & $+7$\%  & 20\% & 40\% & $+20$\% \\
+Gemma-3 12B       & 26\% & 71\% & $+45$\% & 31\% & 39\% & $+8$\%  \\
+Gemma-3 27B       & 8\%  & 30\% & $+22$\% & 39\% & 53\% & $+14$\% \\
+GPT-5.2           & 10\% & 14\% & $+4$\%  & 56\% & 55\% & $-1$\%  \\
+Hermes-4 70B      & 2\%  & 0\%  & $-2$\%  & 4\%  & 2\%  & $-2$\%  \\
+Kimi K2           & 13\% & 30\% & $+17$\% & 53\% & 63\% & $+10$\% \\
+Llama 3.1 70B     & 89\% & 64\% & $-26$\% & 57\% & 61\% & $+4$\%  \\
+Llama 3.3 70B     & 99\% & 72\% & $-27$\% & 70\% & 70\% & $0$\%   \\
+OLMo 3.1 32B      & 11\% & 80\% & $+69$\% & 23\% & 61\% & $+38$\% \\
+Qwen3 235B A22B   & 1\%  & 12\% & $+11$\% & 33\% & 40\% & $+8$\%  \\
+Qwen3 30B A3B     & 4\%  & 0\%  & $-4$\%  & 41\% & 53\% & $+12$\% \\
+\midrule
+\textit{Mean}     & 27\% & 41\% & $+14$\% & 43\% & 54\% & $+11$\% \\
+\bottomrule
+\end{tabular}
+\caption{Per-model effect of the hardcoding hint ($T{=}0$, 35 trials/cell, no-hint instruction as baseline) for the fixed-output (5 conditions) and task-based (8 conditions) families. Positive $\Delta$ indicates the hint raised instruction-following.}
+\label{tab:hint}
+\end{table}
+
+In short, explicit meta-awareness that the preceding responses were hardcoded lets many models discount them more effectively, but the benefit is heterogeneous, interacts with baseline robustness, and never restores reliable instruction-following.
+
 
 \section{Capability correlations}
 \label{app:capability}
@@ -234,12 +387,12 @@ Transition curves for each model individually, averaged across fixed-output cond
   \label{fig:app-capability-calibration}
 \end{figure}
 
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=\linewidth]{\plotsroot/static/c1_prediction_rate_vs_capability.png}
-  \caption{Rate of predicting instruction-following vs.\ capability benchmarks --- fixed-output conditions.}
-  \label{fig:app-capability-pred-rate}
-\end{figure}
+% \begin{figure}[H]
+%   \centering
+%   \includegraphics[width=\linewidth]{\plotsroot/static/c1_prediction_rate_vs_capability.png}
+%   \caption{Rate of predicting instruction-following vs.\ capability benchmarks --- fixed-output conditions.}
+%   \label{fig:app-capability-pred-rate}
+% \end{figure}
 
 % \begin{figure}[H]
 %   \centering
@@ -250,10 +403,14 @@ Transition curves for each model individually, averaged across fixed-output cond
 
 \clearpage
 
+\iffalse % ===== self-prediction results commented out per request =====
 \section{Self-prediction results}
 \label{app:prediction}
 
 In the self-prediction protocol, immediately before the free-generation question we insert a prediction request asking the model whether it will follow the instruction or the pattern; it answers, and then we pose the final question for free generation, yielding a paired (prediction, behaviour) observation per trial. Across the 13 core models and 5 fixed-output conditions, self-prediction accuracy averages 83.6\%, but this largely reflects most models correctly predicting that they will follow the pattern: the predicted instruction-following rate (14.3\% on average) falls well below the actual rate (26.8\%), so models systematically \emph{under}-predict their own resistance to induction. Asking the model to predict before responding can itself shift its behaviour, but the effect is strongly heterogeneous across models and small on average ($\Delta\text{IF} \approx -0.026$, $p = 0.004$). This appendix provides the per-model breakdowns of prediction accuracy, calibration, and the effect of self-prediction on behaviour.
+
+\paragraph{Related work.}
+Our self-prediction setting connects to a growing body of work on whether language models have privileged access to their own internal states. Prior studies have shown that models finetuned to predict their own behavior outperform cross-model baselines \citep{binderLookingInwardLanguage2024}, though they still lag behind humans in recognizing their own behavioral tendencies \citep{laineMeMyselfAI2024}. More recent findings suggest that models may display emergent introspective abilities, such as distinguishing their own text from artificial prefills \citep{lindseyEmergentIntrospectiveAwareness2026}, as well as articulating implicit behavioral policies that were never explicitly described in training data \citep{betleyTELLMEYOURSELF, plunkettSelfInterpretabilityLLMsCan2025}. We extend these works by testing prospective self-prediction in a zero-shot, dynamic setting, in which models must predict their sensitivity to the instruction-induction conflict.
 
 \input{figures/fig_prediction}
 
@@ -335,10 +492,12 @@ GPT-5.2           & 0.100 & 0.333 & $+$0.233 \\
 The effect is strongly heterogeneous across models. Six models show a negative shift, where the prediction step---which typically predicts pattern-following---may prime the model to continue doing so. The largest negative effect is Claude~Sonnet~4.6 ($\Delta{=}{-}0.27$), which drops from 41.2\% behavioral IF to 14.0\% after predicting. Six models show a positive shift, where self-prediction appears to remind the model of the instruction; GPT-5.2 shows the largest positive effect ($\Delta{=}{+}0.23$), rising from 10.0\% to 33.3\%.
 
 
+\fi % ===== end self-prediction results =====
+
 \section{Training stage and version comparison}
 \label{app:training}
 
-Appendix~\ref{app:training} reports the headline results from two natural comparisons that isolate the contribution of post-training method: OLMo~3.1~32B at three training stages (SFT, SFT+DPO, SFT+DPO+RLVR) and Llama~3.1 vs.\ 3.3~70B. This appendix presents the full transition curves for both fixed-output and task-based conditions, as well as self-prediction results.
+Appendix~\ref{app:training} reports the headline results from two natural comparisons that isolate the contribution of post-training method: OLMo~3.1~32B at three training stages (SFT, SFT+DPO, SFT+DPO+RLVR) and Llama~3.1 vs.\ 3.3~70B. This appendix presents the full transition curves for both fixed-output and task-based conditions.
 
 \subsection{Behavioral results}
 
@@ -384,6 +543,7 @@ In task-based conditions the separation is more dramatic. Both models start at 1
   \label{fig:app-llama-behavioral}
 \end{figure}
 
+\iffalse % ===== training self-prediction subsection commented out per request =====
 \subsection{Self-prediction results}
 
 Self-prediction data is available for all five OLMo checkpoints and both Llama versions. Figures~\ref{fig:app-olmo-pred} and~\ref{fig:app-llama-pred} show three metrics: the actual IF rate after predicting, prediction accuracy (how often the model correctly predicted its own output), and the rate at which the model predicted it would follow the instruction.
@@ -407,12 +567,13 @@ The Llama comparison reveals a more interesting pattern (Figure~\ref{fig:app-lla
   \caption{Llama~70B self-prediction by version. Same format as Figure~\ref{fig:app-olmo-pred}.}
   \label{fig:app-llama-pred}
 \end{figure}
+\fi % ===== end training self-prediction subsection =====
 
 
 \section{Reasoning trace examples}
 \label{app:traces}
 
-Three Hermes-4~70B traces illustrating failure modes described in Section~\ref{sec:reasoning}.
+Three Hermes-4~70B traces illustrating distinct ways reasoning interacts with the conflict described in Section~\ref{sec:reasoning}: Trace~1 rationalizes following the pattern as the user's true intent, Trace~2 infers an incapacity to produce the target, and Trace~3 is a pure deliberation--output dissociation, committing to the target in its reasoning and then emitting the pattern.
 
 \medskip
 \noindent\textbf{Trace~1.} \texttt{language\_ru\_fr}, $N{=}43$. Model concludes the instruction was a mistake and the examples reveal true intent.
@@ -531,7 +692,7 @@ The user's repeated questions are likely to demonstrate the assistant's inabilit
 \end{tcolorbox}
 
 \medskip
-\noindent\textbf{Trace~3.} \texttt{neutral}, $N{=}8$. Pure deliberation--output dissociation: model correctly identifies the conflict, commits to the instruction, then outputs the pattern regardless.
+\noindent\textbf{Trace~3.} \texttt{neutral}, $N{=}8$. Pure deliberation--output dissociation: model identifies the conflict, commits to the instruction, then outputs the pattern regardless.
 
 \input{figures/tab_reasoning_trace}
 
@@ -542,153 +703,11 @@ The user's repeated questions are likely to demonstrate the assistant's inabilit
 \section{Question content analysis}
 \label{app:seeds}
 
-Each (model, condition, $N$) cell aggregates 35 independently-seeded questions under greedy decoding ($T{=}0$). Because decoding is deterministic, the only quantity that varies across a cell's 35 trials is the question itself, so any genuine ``question-content'' effect must manifest as the \emph{same} seeds being systematically followed (or not) across the $N$ sweep. We test this directly.
+Each (model, condition, $N$) cell aggregates 35 independently-seeded questions under greedy decoding ($T{=}0$). Because decoding is deterministic, the only quantity that varies across a cell's 35 trials is the question itself, so any ``question-content'' effect must manifest as the \emph{same} seeds being systematically followed (or not) across the $N$ sweep. We test this directly.
 
 Of the 13 core models, 9 are saturated---their IF rate is near 0 or near 1 across almost the entire $N$ range, leaving at most one transition-zone $N$ value, so question identity is irrelevant by construction. For the 4 models with a genuine transition zone, we measure the cross-$N$ stability of per-seed residuals (each seed's IF centered by the model's mean IF at that $N$) using a one-way intraclass correlation (ICC). If question content shifted the transition, seeds would be consistently followed or abandoned across $N$, yielding a high ICC. Instead the ICC is negligible for three of the four models---GPT-5.2 ($+0.003$), Kimi~K2 ($-0.014$), and Hermes-4~70B ($+0.046$), all below the conventional 0.05 threshold---and only Gemma-3~12B shows a non-trivial value (0.28), which rests on just two transition-zone $N$ points and is underpowered.
 
 The per-cell standard error is correspondingly small: bounded by $0.5/\sqrt{35}=0.085$, with a 90th-percentile of 0.074 within the transition zone and essentially zero outside it---far below the 50+ percentage-point gaps between models that carry our main claims. We conclude that \emph{which} questions we ask does not move the transition point, so 35 seeds per cell are sufficient; this is what justifies the reduced cell counts used in the follow-up and temperature appendices.
-
-\section{Follow-up conditions}
-\label{app:followup}
-
-Under the initial 13 conditions we evaluated, models resist induction pressure more in task-based conditions  than fixed-output conditions. Two properties distinguish task-based from fixed-output conditions: (1)~the model must \emph{engage with the question content} to produce a well-formed response, and (2)~the responses themselves are \emph{long and varied} across turns. Either property, or both jointly, could explain the increased robustness. We design two follow-up conditions to disentangle these factors.
-
-\subsection{Random facts condition}
-
-This tests whether response naturalness and diversity, without question engagement, confers instruction resistance. The model is instructed to produce 1/3 sentences on a fixed topic (either geography or animals), ignoring the user's question entirely. Hardcoded turns contain pre-generated passages on the pattern topic. The model's output is scored by an LLM judge that classifies whether the response is about the target topic or the pattern topic.
-
-\begin{table}[h]
-\centering
-\small
-\begin{tabular}{lllp{5.5cm}}
-\toprule
-\textbf{Condition} & \textbf{T (Target)} & \textbf{P (Pattern)} & \textbf{Instruction} \\
-\midrule
-\texttt{random\_geography\_animals} & animals & geography & ``write 1--3 sentences about a random animal'' \\
-\texttt{random\_animals\_geography} & geography & animals & ``write 1--3 sentences about a random geography topic'' \\
-\bottomrule
-\end{tabular}
-\caption{Random facts conditions. T~= instructed target topic; P~= hardcoded pattern topic. Both conditions use an LLM judge scorer and draw from the factual question bank (questions are ignored by design).}
-\label{tab:randomfacts-conditions}
-\end{table}
-
-If these conditions show the same high resistance as task-based conditions, despite not needing any engagement with the user's question, then the naturalness of the response might be the primary driver of robustness.
-
-\subsection{Classification condition}
-
-The classification condition tests the converse: whether question engagement alone, with single-token output, confers instruction resistance. The model must read each question, classify it into one of two categories, and respond with only that category word. This requires genuine engagement with the question content, but the output format is as constrained as a fixed-output condition. The hardcoded pattern is ``economics''---a plausible category label that no question in the factual bank actually falls under, ensuring clean separation between correct classification and pattern-following.
-
-\begin{table}[h]
-\centering
-\small
-\begin{tabular}{lllp{5.5cm}}
-\toprule
-\textbf{Condition} & \textbf{T (Target)} & \textbf{P (Pattern)} & \textbf{Instruction} \\
-\midrule
-\texttt{classify\_sh\_economics} & science / humanities & economics & ``classify each question as either `science' or `humanities' and respond with ONLY that one word'' \\
-\bottomrule
-\end{tabular}
-\caption{Classification condition. T~= any valid category; P~= hardcoded pattern token. Scored by exact match against the valid category set (target) or the pattern token.}
-\label{tab:classify-conditions}
-\end{table}
-
-If the classification condition resists induction like task-based conditions despite single-token output, then question engagement---not response diversity---is the key factor. Together with the random-facts condition, the $2 \times 2$ design (engagement $\times$ diversity) isolates each factor's contribution.
-
-\subsection{Results}
-\label{app:followup-results}
-
-All 13 core models were evaluated on both follow-up conditions.
-Table~\ref{tab:followup} reports average IF rates per model alongside the neutral (fixed-output) and task-based baselines.
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{lrrrrr}
-\toprule
-\textbf{Model} & \textbf{Neutral} & \textbf{Classify} & \textbf{RF (a$\to$g)} & \textbf{RF (g$\to$a)} & \textbf{Task-based} \\
-\midrule
-Claude 4.6 Opus    & 0.60 & 0.73 & 0.93 & 0.85 & 0.71 \\
-Claude 4.6 Sonnet  & 0.48 & 0.51 & 0.76 & 0.85 & 0.62 \\
-Gemini 2.5 Flash   & 0.08 & 0.11 & 0.19 & 0.23 & 0.20 \\
-Gemma-3 12B        & 0.22 & 0.25 & 0.27 & 0.32 & 0.31 \\
-Gemma-3 27B        & 0.09 & 0.18 & 0.42 & 0.40 & 0.39 \\
-GPT-5.2            & 0.06 & 0.17 & 0.79 & 0.94 & 0.56 \\
-Hermes-4 70B       & 0.08 & 0.09 & 0.10 & 0.18 & 0.04 \\
-Kimi K2            & 0.23 & 0.33 & 0.49 & 0.71 & 0.53 \\
-Llama 3.1 70B      & 1.00 & 0.88 & 0.57 & 0.67 & 0.57 \\
-Llama 3.3 70B      & 1.00 & 0.93 & 0.51 & 0.73 & 0.70 \\
-OLMo 3.1 32B       & 0.11 & 0.41 & 0.47 & 0.64 & 0.23 \\
-Qwen3 235B A22B    & 0.06 & 0.22 & 0.32 & 0.31 & 0.33 \\
-Qwen3 30B A3B      & 0.08 & 0.18 & 0.16 & 0.30 & 0.41 \\
-\midrule
-\textbf{Mean}      & 0.31 & 0.38 & 0.46 & 0.55 & 0.43 \\
-\bottomrule
-\end{tabular}
-\caption{Average IF rates for follow-up conditions and baselines (13 models; $T{=}0$, no-hint, 35 trials/cell). Neutral is the fixed-output baseline (\texttt{neutral}); Task-based is the average across all task-based dynamic conditions. RF (a$\to$g)~= \texttt{random\_animals\_geography}; RF (g$\to$a)~= \texttt{random\_geography\_animals}. Mean is unweighted across models.}
-\label{tab:followup}
-\end{table}
-
-\paragraph{Classify condition.}
-The classify condition, which requires reading each question to produce a single-token response, sits between the fixed-output baseline and the task-based average. Its grand mean of 0.38 is significantly above the neutral baseline of 0.31 (paired $t(12){=}2.40$, $p{=}0.034$, $\Delta{=}{+}0.07$), but not significantly different from the task-based average of 0.43 ($t(12){=}{-}0.86$, $p{=}0.41$). The median model crosses the 50\% IF threshold at $N{=}4$ on classify, compared to $N{=}2$ on neutral and $N{=}8$ on task-based, placing classify roughly midway. For most models the absolute gap to neutral is small: GPT-5.2 ($N_{50}{=}2$), Gemini~2.5~Flash ($N_{50}{=}2$), and Qwen3~235B ($N_{50}{=}4$) collapse almost as quickly as on neutral, while OLMo~3.1 ($N_{50}{=}8$) and Claude~Opus~4.6 ($N_{50}{=}22$) show meaningful resistance. Question engagement alone provides only a modest boost over fixed-output, much smaller than the boost provided by output diversity (below).
-
-\paragraph{Random-facts condition.}
-The random-facts condition, which produces 1--3 sentence responses on a fixed topic while \emph{ignoring} the question, shows substantially stronger instruction-following than the fixed-output baseline and slightly exceeds the task-based average. Averaged over both directions the grand mean is 0.50, $\Delta{=}{+}0.19$ above neutral (paired $t(12){=}2.16$, $p{=}0.052$) and $\Delta{=}{+}0.07$ above task-based ($t(12){=}1.81$, $p{=}0.096$). The g$\to$a direction (mean 0.55) crosses the 50\% threshold at $N{=}16$ across models, later than task-based ($N{=}8$) and much later than neutral ($N{=}2$). GPT-5.2 and Claude~Opus~4.6 maintain high IF rates across all $N$ values, never crossing 50\% on either direction; even relatively weak models like Gemma-3~27B and OLMo~3.1 sustain above-chance instruction-following through $N{=}8$--16, a stark contrast with the $N_{50}{=}3$ they show on neutral.
-
-\paragraph{Interpretation.}
-The $2{\times}2$ design isolates the responsible factor: response diversity without question engagement (random-facts) replicates---and slightly exceeds---the robustness of task-based conditions, while question engagement without diversity (classify) produces only a modest improvement over the fixed-output baseline. \emph{Output diversity}, not semantic engagement with the input, appears to be the primary mechanism by which task-based conditions resist induction pressure. A plausible explanation is that single-token outputs present the same surface structure as the hardcoded pattern turns, making the induction signal maximally salient; diverse multi-sentence outputs break this structural regularity and reduce the effective strength of the pattern.
-
-Two ceiling-bound models (Llama~3.1~70B and Llama~3.3~70B) are partial exceptions: their near-perfect instruction-following on neutral and classify (1.00 and ${\sim}0.90$ respectively) leaves limited room to detect differential effects. The contrast is clearest in the mid-range models---GPT-5.2, OLMo~3.1, Claude~Sonnet, Kimi~K2---where neutral and classify collapse early while random-facts holds up.
-
-% ============================================================
-% D. REPRODUCIBILITY AND DISCLOSURE
-% ============================================================
-
-\section{Effect of the hardcoding hint}
-\label{app:hint}
-
-The standard instruction used in all main results gives no information about the structure of the conversation: the model is not told that the preceding assistant turns were artificially hardcoded.
-We additionally test a \emph{hint} instruction that makes the hardcoding explicit:
-``\ldots I'm going to include a series of questions and answers where I hardcode the assistant's outputs to \texttt{[pattern description]}. At some point the hardcoding will stop and your answer will no longer be forced. Take care to always \texttt{[target description]}.''
-This tests whether meta-awareness of the manipulation changes how strongly models adhere to the original instruction. The headline effect is reported in the main text (\S\ref{sec:hint}, Figure~\ref{fig:hint}); here we give the per-model breakdown.
-
-\paragraph{Setup.}
-The hint is evaluated at $T{=}0$ with 35 trials per cell on all 13 core models, across all 13 conditions (5 fixed-output, 8 task-based), on the same $N$ grid as the no-hint baseline, so hint vs.\ no-hint is a matched comparison.
-
-\paragraph{Results.}
-Table~\ref{tab:hint} reports per-model average IF without and with the hint, separately for the two condition families. The hint raises mean IF by $+0.14$ on fixed-output ($0.27 \to 0.41$; paired $t(12){=}1.78$, $p{=}0.10$; 9/13 models improve) and by $+0.11$ on task-based ($0.43 \to 0.54$; $t(12){=}3.74$, $p{=}0.003$; 10/13 improve). The effect is strongly model-dependent: OLMo~3.1~32B gains most ($+0.69$ fixed-output, $+0.38$ task-based), followed by Claude~Opus~4.6 ($+0.46$ / $+0.18$) and Gemma-3~12B ($+0.45$ fixed-output). The two Llama models are the exception: already near ceiling on fixed-output without the hint (0.89 and 0.99), they regress under it ($-0.26$ and $-0.27$), which is what keeps the fixed-output mean effect short of significance. Even with the hint, mean IF remains 0.41 and 0.54---far below~1: flagging the hardcoded turns helps but does not make models robust.
-
-\begin{table}[h]
-\centering
-\small
-\begin{tabular}{lrrrrrr}
-\toprule
- & \multicolumn{3}{c}{\textbf{Fixed-output}} & \multicolumn{3}{c}{\textbf{Task-based}} \\
-\cmidrule(lr){2-4}\cmidrule(lr){5-7}
-\textbf{Model} & No hint & Hint & $\Delta$ & No hint & Hint & $\Delta$ \\
-\midrule
-Claude 4.6 Sonnet & 0.41 & 0.56 & $+$0.15 & 0.62 & 0.80 & $+$0.18 \\
-Claude 4.6 Opus   & 0.49 & 0.96 & $+$0.46 & 0.71 & 0.89 & $+$0.18 \\
-Gemini 2.5 Flash  & 0.02 & 0.09 & $+$0.07 & 0.20 & 0.40 & $+$0.20 \\
-Gemma-3 12B       & 0.26 & 0.71 & $+$0.45 & 0.31 & 0.39 & $+$0.08 \\
-Gemma-3 27B       & 0.08 & 0.30 & $+$0.22 & 0.39 & 0.53 & $+$0.14 \\
-GPT-5.2           & 0.10 & 0.14 & $+$0.04 & 0.56 & 0.55 & $-$0.01 \\
-Hermes-4 70B      & 0.02 & 0.00 & $-$0.02 & 0.04 & 0.02 & $-$0.02 \\
-Kimi K2           & 0.13 & 0.30 & $+$0.17 & 0.53 & 0.63 & $+$0.10 \\
-Llama 3.1 70B     & 0.89 & 0.64 & $-$0.26 & 0.57 & 0.61 & $+$0.04 \\
-Llama 3.3 70B     & 0.99 & 0.72 & $-$0.27 & 0.70 & 0.70 & $-$0.00 \\
-OLMo 3.1 32B      & 0.11 & 0.80 & $+$0.69 & 0.23 & 0.61 & $+$0.38 \\
-Qwen3 235B A22B   & 0.01 & 0.12 & $+$0.11 & 0.33 & 0.40 & $+$0.08 \\
-Qwen3 30B A3B     & 0.04 & 0.00 & $-$0.04 & 0.41 & 0.53 & $+$0.12 \\
-\midrule
-\textit{Mean}     & 0.27 & 0.41 & $+$0.14 & 0.43 & 0.54 & $+$0.11 \\
-\bottomrule
-\end{tabular}
-\caption{Per-model effect of the hardcoding hint ($T{=}0$, 35 trials/cell, no-hint instruction as baseline) for the fixed-output (5 conditions) and task-based (8 conditions) families. Positive $\Delta$ indicates the hint raised instruction-following.}
-\label{tab:hint}
-\end{table}
-
-In short, explicit meta-awareness that the preceding responses were hardcoded lets many models discount them more effectively, but the benefit is heterogeneous, interacts with baseline robustness, and never restores reliable instruction-following.
-
 
 \section{Temperature comparison}
 \label{app:temperature}
@@ -698,10 +717,10 @@ In short, explicit meta-awareness that the preceding responses were hardcoded le
 All main results use greedy decoding ($T{=}0$). This appendix validates that the qualitative findings are not an artifact of this choice by comparing $T{=}0$ and $T{=}1$ transition profiles on the six models for which both datasets are available.
 
 \paragraph{Setup.}
-$T{=}0$ data uses 35 trials per (model, condition, $N$) cell; $T{=}1$ uses 15 trials. Both use the no-hint instruction. We compare average IF rates across all conditions and $N$ values. For GPT-5.2 we use the medium-reasoning variant ($T{=}0$) as the baseline, since the no-reasoning variant at $T{=}0$ is not representative of the model's primary behavior.
+$T{=}0$ data uses 35 trials per (model, condition, $N$) cell; $T{=}1$ uses 15 trials. Both use the no-hint instruction. We compare average IF rates across the five fixed-output conditions and all $N$ values (the $T{=}1$ sweep covers only fixed-output conditions). For GPT-5.2 we use the medium-reasoning variant ($T{=}0$) as the baseline, since the no-reasoning variant at $T{=}0$ is not representative of the model's primary behavior.
 
 \paragraph{Results.}
-Figure~\ref{fig:temperature} and Table~\ref{tab:temperature} show the comparison. All six models show $|\Delta|\leq 0.15$. The mean shift is $\Delta_{\mathrm{T1}-\mathrm{T0}}{=}{-}0.05$ ($t(5){=}{-}1.96$, $p{=}0.11$), with small dispersion ($\mathrm{SD}{=}0.06$) and near-perfect rank preservation ($r{=}0.99$, $p{<}0.001$).
+Figure~\ref{fig:temperature} and Table~\ref{tab:temperature} show the comparison. All six models show $|\Delta|\leq 0.15$. The mean shift is $\Delta_{\mathrm{T1}-\mathrm{T0}}{=}{-}0.04$ ($t(5){=}{-}1.97$, $p{=}0.11$), with small dispersion ($\mathrm{SD}{=}0.06$) and near-perfect rank preservation ($r{=}0.99$, $p{<}0.001$).
 
 \begin{table}[h]
 \centering
@@ -710,14 +729,14 @@ Figure~\ref{fig:temperature} and Table~\ref{tab:temperature} show the comparison
 \toprule
 \textbf{Model} & $T{=}0$ & $T{=}1$ & $\Delta$ \\
 \midrule
-Llama 3.3 70B     & 0.99 & 0.96 & $-$0.03 \\
-GPT-5.2           & 0.53 & 0.52 & $-$0.02 \\
-Claude Sonnet 4.6 & 0.41 & 0.26 & $-$0.15 \\
-Gemma-3 12B       & 0.26 & 0.17 & $-$0.09 \\
-Gemma-3 27B       & 0.08 & 0.07 & $-$0.01 \\
-Gemini 2.5 Flash  & 0.02 & 0.03 & $+$0.01 \\
+Llama 3.3 70B     & 99\% & 97\% & $-2$\%  \\
+GPT-5.2           & 53\% & 51\% & $-2$\%  \\
+Claude Sonnet 4.6 & 41\% & 27\% & $-14$\% \\
+Gemma-3 12B       & 26\% & 18\% & $-8$\%  \\
+Gemma-3 27B       & 8\%  & 7\%  & $-1$\%  \\
+Gemini 2.5 Flash  & 2\%  & 4\%  & $+1$\%  \\
 \midrule
-\textit{Mean}     & 0.38 & 0.34 & $-$0.05 \\
+\textit{Mean}     & 38\% & 34\% & $-4$\%  \\
 \bottomrule
 \end{tabular}
 \caption{Average IF rate at $T{=}0$ (35 trials) vs.\ $T{=}1$ (15 trials, no-hint) per model. $\Delta{=}T_1{-}T_0$. GPT-5.2 uses the medium-reasoning variant for $T{=}0$.}
@@ -731,7 +750,7 @@ Temperature has negligible effect on instruction-following for all six models ($
 \section{LLM-judge panel and inter-rater agreement}
 \label{app:judges}
 
-Five condition families in our task-based conditions are scored by LLM judges rather than a deterministic rule: \texttt{language\_*}, \texttt{persona\_*}, \texttt{preference\_*}, and the code-style conditions \texttt{style\_python\_javascript} / \texttt{style\_javascript\_python} (the case- and length-based style conditions remain deterministic). For each scored sample we run a panel of three judges in parallel, each receiving the same rubric-based prompt that classifies the output as \emph{target}, \emph{pattern}, or \emph{unknown}, and reduce to a majority vote. Per-judge votes and the resulting agreement statistics are stored in the score metadata so we can audit the judge panel after the fact.
+A three-judge LLM panel is run on the four task-based condition families that involve a semantic classification of the output: \texttt{language\_*}, \texttt{persona\_*}, \texttt{preference\_*}, and the code-style conditions \texttt{style\_python\_javascript} / \texttt{style\_javascript\_python}. For the persona and preference conditions the panel's majority vote is the score of record; for the language and code-style conditions the score of record is deterministic (\texttt{langdetect} and a code-format heuristic, respectively) and the panel serves as a validation cross-check. Each of the three judges receives the same rubric-based prompt that classifies the output as \emph{target}, \emph{pattern}, or \emph{unknown}, and we reduce the three votes to a majority. Per-judge votes and the resulting agreement statistics are stored in the score metadata so we can audit the judge panel after the fact.
 
 A single judge panel scores all samples reported in the main text: \texttt{gpt-5-nano}, \texttt{deepseek-chat}, and \texttt{gemini-2.5-flash-lite}, all at $T{=}0$. We use the same rubric across all judged conditions and reduce the three votes to a majority.
 
@@ -765,7 +784,7 @@ Condition & Fleiss' $\kappa$ & unanimous \\
 Agreement is almost perfect on language and code-style conditions, where the class boundary is essentially objective (e.g., ``is this text Russian or French?''). It drops on the persona and preference conditions, which require judges to read tone and stance --- exactly the conditions where the underlying construct itself is fuzzy. The single weakest cell is \texttt{preference\_aligned\_helpful} ($\kappa{=}0.36$): when the instruction asks the model to express the preference it would naturally express anyway (liking being helpful), the resulting outputs are often subtle expressions of helpfulness that judges legitimately classify differently. Reassuringly, the majority-vote reduction is robust to this --- 50\% of samples are still unanimous on this condition, and disagreement among the panel is most often a 2-vs-1 split rather than three-way disagreement.
 
 \paragraph{Effect on reported results.}
-Across the entire behavioral dataset, 11.2\% of samples are non-unanimous, with disagreement concentrated in \texttt{preference\_aligned\_helpful} (48.5\% non-unanimous) and the two persona conditions (10--15\%). Even on the worst-case condition, disagreements are almost always 2-vs-1 splits rather than three-way ties, so the majority-vote reduction remains well-defined. Removing \texttt{preference\_aligned\_helpful} entirely shifts the dataset-wide mean IF rate by 0.7 percentage points (43.1\% $\to$ 43.8\%); we therefore retain the condition in the main results but flag its lower inter-judge agreement here.
+Across the entire behavioral dataset, 11.2\% of samples are non-unanimous, with disagreement concentrated in \texttt{preference\_aligned\_helpful} (50\% non-unanimous) and the two persona conditions (10--15\%). Even on the worst-case condition, disagreements are almost always 2-vs-1 splits rather than three-way ties, so the majority-vote reduction remains well-defined. Removing \texttt{preference\_aligned\_helpful} entirely shifts the dataset-wide mean IF rate by 0.7 percentage points (43.1\% $\to$ 43.8\%); we therefore retain the condition in the main results but flag its lower inter-judge agreement here.
 
 
 \section{LLM usage disclosure}
@@ -775,6 +794,6 @@ Large language models were used in three roles in this work.
 
 \paragraph{Data generation.} Claude Haiku 4.5 was used to generate the pre-built hardcoded responses for task-based conditions (translated questions, persona-style answers, code solutions, and preference-weaving answers) stored in the fixed dataset before evaluation.
 
-\paragraph{Automated scoring.} A panel of three LLM judges (\texttt{gpt-5-nano}, \texttt{deepseek-chat}, \texttt{gemini-2.5-flash-lite}) classifies each sample for the language, persona, preference, and code-style conditions. The rubric-based scoring protocol is described in Appendix~\ref{app:conditions} and inter-rater agreement is reported in Appendix~\ref{app:judges}.
+\paragraph{Automated scoring.} A panel of three LLM judges (\texttt{gpt-5-nano}, \texttt{deepseek-chat}, \texttt{gemini-2.5-flash-lite}) scores the persona and preference conditions and serves as a validation cross-check on the deterministically scored language and code-style conditions. The rubric-based scoring protocol is described in Appendix~\ref{app:conditions} and inter-rater agreement is reported in Appendix~\ref{app:judges}.
 
 \paragraph{Writing assistance.} AI assistance was used during manuscript preparation at the level of expanding author-written sentences and bullet points into prose paragraphs. All scientific contributions, claims, and conclusions are the authors' own.
