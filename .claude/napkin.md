@@ -178,6 +178,12 @@
 - `\plotsroot` = `../outputs/plots/` (figures live in `outputs/plots/`). Build either wrapper with `latexmk -pdf <wrapper>.tex` from `paper/`.
 - `paper/arxiv_submission/` (the DIR) is **OBSOLETE** — it was a hand-maintained duplicate that caused drift. The arXiv upload bundle is now **generated** by `build_arxiv.sh` into `paper/arxiv_build/` → `paper/arxiv_submission.tar.gz` (assembles from the shared source, flattens `\plotsroot` to `plots/`, pre-builds `arxiv.bbl`). Safe to delete the `arxiv_submission/` dir.
 
+### Regenerating marimo plots (Altair)
+- The analysis notebooks (`notebooks/marimo/Analysis_{static,dynamic}_conditions.py`, etc.) save plot PNGs to `outputs/plots/{static,dynamic}/` via `.save(scale_factor=2)`.
+- Regenerate headlessly with **`PYTHONPATH=. uv run python notebooks/marimo/<nb>.py`** (the `PYTHONPATH=.` is REQUIRED — without it `from src.plotting_utils import …` fails because the script dir, not repo root, is on `sys.path`). Running executes all cells incl. the `.save()` side effects; verify via PNG mtimes.
+- Add a new plot = add an `@app.cell def _(alt, <deps>, plots_dir): … .save(...)` cell; marimo wires deps by function args (must be names defined in other cells). Condition-group labels differ between cells — match by substring, not exact string.
+- The matplotlib hint figure is the exception: `scripts/plot_hint_effect.py` (runs directly, saves to `docs/rebuttals/figures/`, copy to `outputs/plots/hint/`).
+
 ### Scripts & Key Files
 - `prepare_viz_data.py`: distinguishes behavioral vs prediction logs via `task_name` column ("behavioral_baseline" vs "self_prediction") — NOT by score column names. Also filters to the relevant task rows so mixed folders work correctly.
 - `format_check.py` and `classify_format()`: naming is `{instruction}_{pattern}` so instruction=first word=target. `style_uppercase_lowercase` = instruction=uppercase = target=UPPERCASE.
